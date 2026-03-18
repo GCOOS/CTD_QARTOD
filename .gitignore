@@ -1,0 +1,4 @@
+.cursorrule
+.DS_Store
+*.pyc
+/datasets

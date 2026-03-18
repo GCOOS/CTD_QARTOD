@@ -1,0 +1,19 @@
+{
+  "sea_water_temperature": "sbe_3plus_temperature",
+  "sea_water_temperature_2": "sbe_3plus_temperature",
+  "sea_water_electrical_conductivity": "sbe_4c_conductivity",
+  "sea_water_electrical_conductivity_2": "sbe_4c_conductivity",
+  "sea_water_pressure": "sbe_911plus_pressure",
+  "dissolved_oxygen": "sbe_43_oxygen",
+  "oxygen_saturation": "sbe_43_oxygen",
+  "oxygen_saturation_2": "sbe_43_oxygen",
+  "photosynthetically_available_radiation": "par_sensor",
+  "surface_photosynthetically_available_radiation": "spar_sensor",
+  "chlorophyll_concentration": "chlorophyll_fluorometer",
+  "chlorophyll_fluorescence": "chlorophyll_fluorometer",
+  "CDOM": "cdom_fluorometer",
+  "sea_water_turbidity": "turbidity_meter",
+  "beam_attenuation": "transmissometer",
+  "sea_water_salinity": "derived_salinity",
+  "sea_water_salinity_2": "derived_salinity"
+}

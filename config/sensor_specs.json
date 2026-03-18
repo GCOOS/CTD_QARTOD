@@ -1,0 +1,325 @@
+{
+  "metadata": {
+    "description": "Sensor definitions with identifiers and unit-aware gross range limits",
+    "sources": [
+      "commented_instrument_info_wo_id.json",
+      "sensor_qc_ranges.json"
+    ]
+  },
+  "sensors": {
+    "sbe_3plus_temperature": {
+      "description": "SBE 3plus Premium CTD Temperature Sensor",
+      "identifiers": {
+        "long_names": ["Temperature Sensor 1", "Temperature Sensor 2"],
+        "make_models": ["Seabird"],
+        "serial_numbers": [
+          "1241",
+          "1241 MTG 095",
+          "1241 MTG:95",
+          "2317",
+          "2462",
+          "2462 MTG 173",
+          "2462 MTG:173",
+          "2659",
+          "2659 MTG 176",
+          "2659 MTGID176",
+          "2659 -mtg-176",
+          "2684",
+          "2946",
+          "4097",
+          "4097 MTG 177",
+          "4097 MTGID177",
+          "4097 mtg 177",
+          "4346",
+          "4346-MTG#178",
+          "4346 mtg 178",
+          "4363",
+          "5140",
+          "6190",
+          "6623",
+          "MTG #177 Sn.: 4097",
+          "MTG #178 Sn.: 4346",
+          "MTG#105-2555",
+          "MTG#106-2317",
+          "MTG#173 - 2462",
+          "MTG#173-2462",
+          "MTG#177",
+          "MTG#178",
+          "MTG#178 (S/N:4346)",
+          "MTG-095-031241",
+          "MTG-173 sn.:32462",
+          "mtg 106 - 2317",
+          "mtg 176 sn 2659"
+        ]
+      },
+      "ranges": {
+        "degree_C": { "min": -5, "max": 35 },
+        "degree_Celsius": { "min": -5, "max": 35 }
+      }
+    },
+    "sbe_4c_conductivity": {
+      "description": "Seabird SBE 4C Conductivity Sensor",
+      "identifiers": {
+        "long_names": ["Conductivity Sensor 1", "Conductivity Sensor 2"],
+        "make_models": ["Seabird"],
+        "serial_numbers": [
+          "0953-MTG#091",
+          "0955",
+          "0955 MTG 099",
+          "0955 MTG:99",
+          "0955 mtg 099",
+          "1387",
+          "1466",
+          "1847",
+          "1851",
+          "1851 MTG 053",
+          "1851 mtg 053",
+          "1876",
+          "1876 MTG 090",
+          "1876-MTGID90",
+          "1876-mtg # 090",
+          "2171",
+          "2310",
+          "2745",
+          "2855",
+          "2855-mtg-061",
+          "2856",
+          "2856 MTG:62",
+          "2868",
+          "2870",
+          "2870 MTGID64",
+          "2870 mtg 064",
+          "2973",
+          "4638",
+          "5077",
+          "MTG #053 Sn.: 1851",
+          "MTG #090 Sn.: 1876",
+          "MTG #099 Sn.: 0955",
+          "MTG#052-1847",
+          "MTG#060-2745",
+          "MTG#090 Sn.: 1876",
+          "MTG#092",
+          "MTG#099-0955",
+          "MTG-062-042856",
+          "MTG-099-040955",
+          "Mtg 64 - sn 2870",
+          "SN 0955",
+          "mtg 061 - 2855",
+          "mtg 061 - sn 2855",
+          "mtg - 092 - 2171",
+          "mtg 090 sn 1876"
+        ]
+      },
+      "ranges": {
+        "S m-1": { "min": 0, "max": 7 }
+      }
+    },
+    "sbe_911plus_pressure": {
+      "description": "SBE 911plus CTD (Pressure Sensor)",
+      "identifiers": {
+        "long_names": ["Pressure Sensor"],
+        "make_models": ["Seabird"],
+        "serial_numbers": [
+          "0441",
+          "0441 MTG 190",
+          "0692",
+          "0692 MTG 193",
+          "0692 MTGID193",
+          "0692 mtg 193",
+          "09-1256",
+          "1138",
+          "1230",
+          "50409",
+          "89091",
+          "MTG# 190 - 0441",
+          "MTG# 191 SN: 0468",
+          "MTG# 191 sn 0468",
+          "MTG# 191 sn 0692",
+          "MTG# 193 sn 0692",
+          "MTG# 193 sn.:0692"
+        ]
+      },
+      "ranges": {
+        "dbar": { "min": 0, "max": 6800 }
+      }
+    },
+    "sbe_43_oxygen": {
+      "description": "SBE 43 Dissolved Oxygen Sensor",
+      "identifiers": {
+        "long_names": ["Oxygen Sensor"],
+        "make_models": ["Seabird"],
+        "serial_numbers": [
+          "0040 MTG:66",
+          "0053",
+          "0433",
+          "0433 MTG 069",
+          "0520",
+          "0520 mtg 156",
+          "0522 MTG 157",
+          "0522 mtg 157",
+          "0556 mtg 158",
+          "0639",
+          "0641",
+          "0641 MTG083",
+          "0641-mtg-083",
+          "1348",
+          "1959",
+          "MTG #156 sn.: 0520",
+          "MTG #157 Sn.:522",
+          "MTG #157 sn.: 0522",
+          "MTG #158 sn.: 0556",
+          "MTG#157-0522",
+          "MTG#67-0053",
+          "MTG-065-430037",
+          "mtg 083 sn 0641",
+          "mtg 157 sn. 0522"
+        ]
+      },
+      "ranges": {
+        "ml l-1": { "min": 0, "max": 9.5 }
+      }
+    },
+    "par_sensor": {
+      "description": "Biospherical QSP2300 / Chelsea PAR Sensor",
+      "identifiers": {
+        "long_names": ["Par Sensor"],
+        "make_models": ["Chelsea"],
+        "serial_numbers": [
+          "4542",
+          "4542 mtg # 108",
+          "4580",
+          "4661 MTGID: 031",
+          "4672",
+          "4720  MTGID: 590",
+          "4720 - mtg 590",
+          "4720 MTGID: 590",
+          "70420  MTGID:3119",
+          "70420 MTGID: 3119",
+          "70420 MTGID:3119",
+          "70577 MTGID:3233",
+          "70649",
+          "MTG #108 - 4542",
+          "sn - 4672 - mtg 109"
+        ]
+      },
+      "ranges": {
+        "umol m-2 s-1": { "min": 0, "max": 5000 },
+        "Watt m-2": { "min": 0, "max": 1100 }
+      }
+    },
+    "spar_sensor": {
+      "description": "SPAR Sensor (Surface PAR)",
+      "identifiers": {
+        "long_names": ["SPAR Sensor"],
+        "make_models": ["unknown", "other"],
+        "serial_numbers": [
+          "20355 MTGID: 2479",
+          "6347",
+          "6411",
+          "6424",
+          "MTG#2479-20355",
+          "20146",
+          "20146 MTGID: 32",
+          "20355",
+          "20355 MTGID: 2479"
+        ]
+      },
+      "ranges": {
+        "umol m-2 s-1": { "min": 0, "max": 2500 },
+        "umol photons m-2 s-1": { "min": 0, "max": 2500 }
+      }
+    },
+    "chlorophyll_fluorometer": {
+      "description": "Chlorophyll Fluorometer (Seapoint / WET Labs ECO-AFL/Fl)",
+      "identifiers": {
+        "long_names": ["fluorometer"],
+        "make_models": ["Seapoint", "WET Labs ECO-AFL/Fl", "WET Labs C-Star"],
+        "serial_numbers": [
+          "273S",
+          "2258",
+          "2282",
+          "2323",
+          "2403",
+          "2403 MTGID107",
+          "2612 Mtg 202",
+          "2613",
+          "2812",
+          "MTG#195",
+          "MTG#202",
+          "2022",
+          "6994",
+          "6994 MTG#3539"
+        ]
+      },
+      "ranges": {
+        "ug l-1": { "min": 0, "max": 125 },
+        "mg m-3": { "min": 0, "max": 125 }
+      }
+    },
+    "cdom_fluorometer": {
+      "description": "WET Labs ECO CDOM Fluorometer",
+      "identifiers": {
+        "long_names": ["fluorometer CDOM"],
+        "make_models": ["WET Labs ECO CDOM"],
+        "serial_numbers": [
+          "1156",
+          "1925",
+          "1925 MTG #2658",
+          "2011",
+          "FCDRTD-2012"
+        ]
+      },
+      "ranges": {
+        "mg m-3": { "min": 0, "max": 500 }
+      }
+    },
+    "turbidity_meter": {
+      "description": "WET Labs ECO-NTU / ECO FLNTU",
+      "identifiers": {
+        "long_names": ["turbidity meter"],
+        "make_models": ["WET Labs ECO-NTU"],
+        "serial_numbers": [
+          "2022",
+          "305"
+        ]
+      },
+      "ranges": {
+        "NTU": { "min": 0, "max": 25 }
+      }
+    },
+    "transmissometer": {
+      "description": "Transmissometer (WET Labs C-Star / Chelsea / Seatech)",
+      "identifiers": {
+        "long_names": ["Transmissometer"],
+        "make_models": ["WET Labs C-Star", "Chelsea", "Chelsea/Seatech"],
+        "serial_numbers": [
+          "32434",
+          "CST-2554DR MTGID:3551",
+          "CST-393DR MTGID:207",
+          "CST-667DR",
+          "CST-724DR",
+          "418",
+          "CST-1481PR",
+          "CST-721DR MTGID213",
+          "cst-417DR -mtg# 209",
+          "cst-487DR -mtg# 209",
+          "cst-487DR -mtg# 210",
+          "cst-487DR -mtg# 211"
+        ]
+      },
+      "ranges": {
+        "m-1": { "min": 0, "max": 5 }
+      }
+    },
+    "derived_salinity": {
+      "description": "Derived practical salinity",
+      "requires_instrument": false,
+      "identifiers": {
+        "long_names": [],
+        "make_models": [],
+        "serial_numbers": []
+      },
+      "ranges": {}
+    }
+  }
+}
