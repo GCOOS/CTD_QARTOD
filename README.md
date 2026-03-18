@@ -25,7 +25,7 @@
 - `sensor_specs.json`: Sensor definitions with identifiers (long_name, make_model, serials) and unit-aware ranges.
 - `variable_sensor_map.json`: Variable → sensor mapping used for gross range resolution.
 - `Station_Mean_Coords.csv`: Expected lat/lon for each station (used by location test).
-- `station_climatology_config.json`: Station-specific climatology limits by station type (deep_cast, shallow_cast, shallow_stable).
+- `station_climatology_config.json`: Station-specific climatology limits by station type (deep_cast, shallow_cast, shallow_stable).(Placeholder value)
 
 ### QC Flags
 
