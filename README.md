@@ -38,9 +38,9 @@
 | 9 | MISSING |
 
 ### Tests
-
 All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps to the set of variable categories it applies to.
 
+#### Required Test
 | Test | Description | Categories |
 |------|-------------|------------|
 | `gap_test` | Placeholder (all NOT_EVALUATED) | All |
@@ -48,7 +48,20 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 | `location_test` | Compares lon/lat to expected station coordinates | All |
 | `gross_range_test` | Uses `ioos_qc.qartod.gross_range_test` with sensor-aware limits | All |
 | `decreasing_radiance_test` | Checks that values decrease with increasing depth | PAR, in_water_radiance_irradiance |
-| `climatology_test` | Uses `ioos_qc.qartod.climatology_test` with station-type limits | temperature, practical_salinity, conductivity, pressure, oxygen_dissolved_oxygen |
+| `climatology_test` | Uses `ioos_qc.qartod.climatology_test` with station-type limits | temperature, practical_salinity, oxygen_dissolved_oxygen |
+
+#### Strongly recommended tests
+| Test | Description | Categories |
+|------|-------------|------------|
+| `photic_zone_limit_test` | ... | PAR, in_water_radiance_irradiance |
+| `spike_test` | ... | All |
+| `rate_of_change_test` | ... | All |
+| `flat_line_test` | ... | All |
+| `climatology_test` | ... |     "in_water_radiance_irradiance","above_water_radiance_irradiance","beam_attenuation","turbidity","PAR","chlorophyll","CDOM","FDOM","backscattering_volume_scattering", |
+
+
+
+
 
 ### Running via CLI
 
