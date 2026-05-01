@@ -153,3 +153,45 @@ def decreasing_radiance_test(
     return flags.astype(int)
 
 
+def spike_test(
+    data: xr.DataArray | np.ndarray,
+    depth: xr.DataArray | np.ndarray | None = None,
+    threshold: float = 3.0,
+) -> np.ndarray:
+    """
+    Run the ioos_qc spike test.
+    """
+    flags = qartod.spike_test(np.asarray(data), depth=np.asarray(depth), threshold=threshold)
+    return _to_int_flags(flags)
+
+
+
+
+def rate_of_change_test(
+    data: xr.DataArray | np.ndarray,
+    depth: xr.DataArray | np.ndarray | None = None,
+    threshold: float = 3.0,
+) -> np.ndarray:
+    """
+    Run the ioos_qc rate of change test.
+    """
+    flags = qartod.rate_of_change_test(np.asarray(data), depth=np.asarray(depth), threshold=threshold)
+    return _to_int_flags(flags)
+
+
+
+
+def flat_line_test(
+    data: xr.DataArray | np.ndarray,
+    depth: xr.DataArray | np.ndarray | None = None,
+    threshold: float = 3.0,
+) -> np.ndarray:
+    """
+    Run the ioos_qc flat line test.
+    """
+    flags = qartod.flat_line_test(np.asarray(data), depth=np.asarray(depth), threshold=threshold)
+    return _to_int_flags(flags)
+
+
+
+

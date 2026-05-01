@@ -22,7 +22,7 @@
 ### Config files (`config/`)
 
 - `walton_mapping.json`: Variable categories used to decide which tests to run.
-- `sensor_specs.json`: Sensor definitions with identifiers (long_name, make_model, serials) and unit-aware ranges.
+- `sensor_specs.json`: Sensor definitions with identifiers (long_name) and unit-aware ranges.
 - `variable_sensor_map.json`: Variable → sensor mapping used for gross range resolution.
 - `Station_Mean_Coords.csv`: Expected lat/lon for each station (used by location test).
 - `station_climatology_config.json`: Station-specific climatology limits by station type (deep_cast, shallow_cast, shallow_stable).
@@ -141,7 +141,7 @@ Individual tests return `QCTestResult` objects with:
   2. Dynamic (instrument + unit from `instrument_resolver.py` using `sensor_specs.json` + `variable_sensor_map.json`)
   3. Static defaults (`GROSS_RANGE_CONFIG` in `qc_config.py`)
 - **Variable-to-sensor mapping**: edit `config/variable_sensor_map.json`
-- **Sensor identifiers and limits**: edit `config/sensor_specs.json`
+- **Sensor identifiers and limits**: edit `config/sensor_specs.json` (`identifiers.long_names` is used for sensor matching)
 - **Location tolerance**: edit `LOCATION_TOLERANCE` in `qc_config.py`
 - **Test-to-category mapping**: edit `TEST_CATEGORIES` in `qc_config.py`
 - **Climatology limits**: edit `config/station_climatology_config.json` or pass `climatology_overrides` to runners

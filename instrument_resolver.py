@@ -81,24 +81,14 @@ def _normalize_values(values: Iterable[str]) -> set[str]:
 def _sensor_present(
     sensor_spec: Mapping[str, object],
     instrument_long_names: set[str],
-    instrument_make_models: set[str],
-    instrument_serials: set[str],
 ) -> bool:
     if sensor_spec.get("requires_instrument", True) is False:
         return True
 
     identifiers = sensor_spec.get("identifiers", {}) or {}
     long_names = _normalize_values(identifiers.get("long_names", []))
-    make_models = _normalize_values(identifiers.get("make_models", []))
-    serial_numbers = _normalize_values(identifiers.get("serial_numbers", []))
 
-    if long_names.intersection(instrument_long_names):
-        return True
-    if make_models.intersection(instrument_make_models):
-        return True
-    if serial_numbers.intersection(instrument_serials):
-        return True
-    return False
+    return bool(long_names.intersection(instrument_long_names))
 
 
 def _find_unit_range(unit: Optional[str], ranges: Mapping[str, Mapping[str, float]]) -> Optional[Tuple[float, float]]:
@@ -138,8 +128,6 @@ def resolve_gross_ranges(
 
     instruments = extract_instruments(ds)
     instrument_long_names = _normalize_values(inst.get("long_name", "") for inst in instruments)
-    instrument_make_models = _normalize_values(inst.get("make_model", "") for inst in instruments)
-    instrument_serials = _normalize_values(inst.get("serial_number", "") for inst in instruments)
 
     for var_name, sensor_keys in variable_map.items():
         if var_name not in ds:
@@ -150,7 +138,7 @@ def resolve_gross_ranges(
             sensor_spec = sensor_specs.get(sensor_key)
             if not sensor_spec:
                 continue
-            if not _sensor_present(sensor_spec, instrument_long_names, instrument_make_models, instrument_serials):
+            if not _sensor_present(sensor_spec, instrument_long_names):
                 continue
             unit = get_variable_unit(ds, var_name)
             ranges = sensor_spec.get("ranges", {}) or {}
