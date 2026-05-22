@@ -1,0 +1,16 @@
+{
+  "data_root": "datasets/SFER_CTD_SOAK_REMOVED_NO_LEGACY_QC",
+  "output": {
+    "mode": "duplicate",
+    "directory": "output/SFER_QC_NO_LEGACY"
+  },
+  "metadata": {
+    "station": "station",
+    "cruise_id": "cruiseID",
+    "longitude": ["longitude", "lon"],
+    "latitude": ["latitude", "lat"],
+    "depth": ["depth"],
+    "time": ["time"],
+    "sample_dimension": "z"
+  }
+}

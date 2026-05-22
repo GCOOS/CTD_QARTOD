@@ -1,0 +1,41 @@
+{
+  "metadata": {
+    "description": "Template sensor definitions. Copy and extend for each instrument in your dataset.",
+    "notes": [
+      "identifiers.long_names must match instrument long_name values in NetCDF files",
+      "ranges keys must match the units attribute on each data variable",
+      "Set requires_instrument to false only for derived variables with no instrument match"
+    ]
+  },
+  "sensors": {
+    "example_temperature_sensor": {
+      "description": "Replace with your temperature sensor model",
+      "identifiers": {
+        "long_names": ["Temperature Sensor 1"]
+      },
+      "ranges": {
+        "degree_C": { "min": -2, "max": 40 },
+        "degree_Celsius": { "min": -2, "max": 40 }
+      }
+    },
+    "example_conductivity_sensor": {
+      "description": "Replace with your conductivity sensor model",
+      "identifiers": {
+        "long_names": ["Conductivity Sensor 1"]
+      },
+      "ranges": {
+        "S m-1": { "min": 0, "max": 7 }
+      }
+    },
+    "example_derived_salinity": {
+      "description": "Derived salinity without a dedicated instrument variable",
+      "requires_instrument": false,
+      "identifiers": {
+        "long_names": []
+      },
+      "ranges": {
+        "1": { "min": 0, "max": 45 }
+      }
+    }
+  }
+}

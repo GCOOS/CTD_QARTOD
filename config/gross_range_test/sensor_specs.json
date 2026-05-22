@@ -1,11 +1,4 @@
 {
-  "metadata": {
-    "description": "Sensor definitions with long_name identifiers and unit-aware gross range limits",
-    "sources": [
-      "commented_instrument_info_wo_id.json",
-      "sensor_qc_ranges.json"
-    ]
-  },
   "sensors": {
     "sbe_3plus_temperature": {
       "description": "SBE 3plus Premium CTD Temperature Sensor",

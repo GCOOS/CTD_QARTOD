@@ -1,0 +1,34 @@
+{
+  "deep_cast_limits": {
+    "sea_water_temperature": [
+      {
+        "tspan": [1, 12],
+        "vspan": [10.0, 30.0],
+        "period": "month"
+      }
+    ],
+    "sea_water_salinity": [
+      {
+        "tspan": [1, 12],
+        "vspan": [25.0, 40.0],
+        "period": "month"
+      }
+    ]
+  },
+  "shallow_cast_limits": {
+    "sea_water_temperature": [
+      {
+        "tspan": [1, 12],
+        "vspan": [15.0, 32.0],
+        "period": "month"
+      }
+    ],
+    "sea_water_salinity": [
+      {
+        "tspan": [1, 12],
+        "vspan": [25.0, 40.0],
+        "period": "month"
+      }
+    ]
+  }
+}

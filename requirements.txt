@@ -3,5 +3,5 @@ matplotlib
 numpy
 ioos_qc
 netCDF4
-pandas
 lxml
+pytest

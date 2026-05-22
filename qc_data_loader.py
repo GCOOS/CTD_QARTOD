@@ -1,9 +1,4 @@
-"""
-Utilities for loading NetCDF data and identifying variables to QC.
-
-Station and cruise identifiers are read from the ``station`` and ``cruiseID``
-variables embedded in each NetCDF file (SFER_CTD dataset format).
-"""
+"""Utilities for loading NetCDF data and identifying variables to QC."""
 
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set
@@ -11,12 +6,20 @@ from typing import Dict, Iterable, List, Optional, Set
 import json
 import xarray as xr
 
+from dataset_profile import MetadataConfig, default_profile
+
 
 def load_nc_file(path: Path | str) -> xr.Dataset:
     """
     Open a NetCDF file and return the xarray Dataset.
+
+    Uses decode_cf=False 
     """
-    return xr.open_dataset(Path(path))
+    return xr.open_dataset(
+        Path(path),
+        decode_cf=False,
+        mask_and_scale=True,
+    )
 
 
 def load_mapping(json_path: Path | str) -> Dict[str, List[str]]:
@@ -56,63 +59,93 @@ def get_variable_category(var_name: str, mapping: Dict[str, Iterable[str]]) -> O
     return None
 
 
-def get_lon_lat(ds: xr.Dataset) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
+def _metadata_or_default(metadata: MetadataConfig | None) -> MetadataConfig:
+    return metadata or default_profile().metadata
+
+
+def _first_value(value: object) -> object:
+    if hasattr(value, "flat"):
+        value = value.flat[0]
+    if hasattr(value, "item"):
+        value = value.item()
+    return value
+
+
+def get_scalar_var(ds: xr.Dataset, names: str | Iterable[str]) -> Optional[str]:
     """
-    Attempt to retrieve longitude and latitude arrays from common variable names.
+    Return the first value from the first matching variable name.
     """
+    candidates = (names,) if isinstance(names, str) else tuple(names)
+    for name in candidates:
+        if name not in ds:
+            continue
+        value = _first_value(ds[name].values)
+        text = str(value).strip()
+        return text or None
+    return None
+
+
+def get_lon_lat(
+    ds: xr.Dataset,
+    metadata: MetadataConfig | None = None,
+) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
+    """
+    Attempt to retrieve longitude and latitude arrays from configured variable names.
+    """
+    meta = _metadata_or_default(metadata)
     lon = None
     lat = None
-    #should be lon and lat, try other name just in case
-    for candidate in ("longitude", "lon", "LONGITUDE", "LON"):
+    for candidate in meta.longitude:
         if candidate in ds:
             lon = ds[candidate]
             break
-    for candidate in ("latitude", "lat", "LATITUDE", "LAT"):
+    for candidate in meta.latitude:
         if candidate in ds:
             lat = ds[candidate]
             break
     return lon, lat
 
 
-def get_station_id(ds: xr.Dataset) -> Optional[str]:
+def get_station_id(ds: xr.Dataset, metadata: MetadataConfig | None = None) -> Optional[str]:
     """
-    Return the station ID from the ``station`` variable inside the NetCDF file.
+    Return the station ID from the configured variable inside the NetCDF file.
 
     The variable may be scalar or an array (all values identical).  We take
     the first element, strip whitespace, lower-case it and drop a trailing
     ".0" that some numeric stations acquire during conversion.
     """
-    if "station" not in ds:
+    meta = _metadata_or_default(metadata)
+    station_id = get_scalar_var(ds, meta.station)
+    if not station_id:
         return None
-
-    station_value = ds["station"].values
-    # Flatten to a single value (take the first element for array variables)
-    if hasattr(station_value, "flat"):
-        station_value = station_value.flat[0]
-    if hasattr(station_value, "item"):
-        station_value = station_value.item()
-
-    station_id = str(station_value).strip().lower()
+    station_id = station_id.lower()
     if station_id.endswith(".0"):
         station_id = station_id[:-2]
 
     return station_id or None
 
 
-def get_cruise_id(ds: xr.Dataset) -> Optional[str]:
+def get_cruise_id(ds: xr.Dataset, metadata: MetadataConfig | None = None) -> Optional[str]:
     """
-    Return the cruise ID from the ``cruiseID`` variable inside the NetCDF file.
+    Return the cruise ID from the configured variable inside the NetCDF file.
 
     Works analogously to :func:`get_station_id`.
     """
-    if "cruiseID" not in ds:
-        return None
+    meta = _metadata_or_default(metadata)
+    return get_scalar_var(ds, meta.cruise_id)
 
-    cruise_value = ds["cruiseID"].values
-    if hasattr(cruise_value, "flat"):
-        cruise_value = cruise_value.flat[0]
-    if hasattr(cruise_value, "item"):
-        cruise_value = cruise_value.item()
 
-    cruise_id = str(cruise_value).strip()
-    return cruise_id or None
+def get_coord_for_var(
+    ds: xr.Dataset,
+    data_var: xr.DataArray,
+    names: Iterable[str],
+) -> Optional[xr.DataArray]:
+    """
+    Return a configured coordinate/variable for *data_var*, preferring coordinates.
+    """
+    for name in names:
+        if name in data_var.coords:
+            return data_var.coords[name]
+        if name in ds:
+            return ds[name]
+    return None

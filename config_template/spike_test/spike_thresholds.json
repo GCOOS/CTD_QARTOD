@@ -1,0 +1,10 @@
+{
+  "sea_water_temperature": {
+    "suspect_threshold": 0.5,
+    "fail_threshold": 2.0
+  },
+  "sea_water_salinity": {
+    "suspect_threshold": 0.05,
+    "fail_threshold": 0.2
+  }
+}

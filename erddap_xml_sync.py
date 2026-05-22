@@ -3,13 +3,11 @@
 Sync ERDDAP datasets XML from NetCDF files.
 
 This script updates EDDTableFromNcCFFiles <dataset> blocks so that:
-1) fileDir/fileNameRegex point to the selected data root layout, and
-2) dataVariable entries match variables currently present in each NetCDF file
-   (including QC variables like *_qc_*).
+1) fileDir/fileNameRegex point to the selected data root layout,
+2) dataVariable entries (names, types, and addAttributes) match NetCDF contents, and
+3) optionally removes dataset blocks with no matching NetCDF under --data-root.
 
-It can also optionally create missing dataset blocks for new NetCDF files.
 
-** can't generate new xml for new datasets rn
 """
 
 from __future__ import annotations
@@ -20,14 +18,32 @@ import logging
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
 import numpy as np
 import xarray as xr
 from lxml import etree
 
+from dataset_profile import DatasetProfile, default_profile
+from qc_config import (
+    ERDDAP_DATASETS_XML,
+    ERDDAP_DATASETS_XML_OUTPUT,
+    ERDDAP_FILEDIR_BASE,
+)
 
 logger = logging.getLogger("erddap_xml_sync")
+
+# ERDDAP display attributes not present in NetCDF; preserved when --preserve-erddap-ui is set.
+ERDDAP_UI_ATTR_NAMES = frozenset(
+    {
+        "colorBarMaximum",
+        "colorBarMinimum",
+        "colorBarScale",
+        "colorBarType",
+    }
+)
+
+NC_ATTRS_SKIP = frozenset({"_ChunkSizes"})
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -81,13 +97,109 @@ def scan_nc_files(data_root: Path) -> Dict[Tuple[str, str], Path]:
     return indexed
 
 
-def read_nc_schema(nc_path: Path) -> List[Tuple[str, str]]:
-    """Return ordered (variable_name, erddap_dataType) from a NetCDF file."""
+def _normalize_attr_value(value: object) -> object:
+    if isinstance(value, (np.generic,)):
+        value = value.item()
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return value.item()
+        if value.dtype.kind in ("U", "S", "O"):
+            return [str(v) for v in value.tolist()]
+        return value.tolist()
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _format_attr_text(value: object) -> str:
+    value = _normalize_attr_value(value)
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, float):
+                parts.append(repr(float(item)))
+            elif isinstance(item, (int, np.integer)):
+                parts.append(str(int(item)))
+            else:
+                parts.append(str(item))
+        return ", ".join(parts)
+    if isinstance(value, float):
+        if np.isnan(value):
+            return "NaN"
+        return repr(float(value))
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if value is None:
+        return "null"
+    return str(value)
+
+
+def _erddap_attr_type(name: str, value: object) -> str | None:
+    value = _normalize_attr_value(value)
+    if isinstance(value, list):
+        if value and all(isinstance(v, (int, np.integer)) for v in value):
+            return "intList" if len(value) > 1 else "int"
+        if value and all(isinstance(v, (float, int, np.floating, np.integer)) for v in value):
+            return "doubleList" if len(value) > 1 else "double"
+        return None
+    if isinstance(value, (int, np.integer)):
+        return "int"
+    if isinstance(value, (float, np.floating)):
+        return "double"
+    return None
+
+
+def _infer_ioos_category(var_name: str, attrs: Mapping[str, object]) -> str | None:
+    if attrs.get("ioos_category"):
+        return str(attrs["ioos_category"])
+    standard_name = str(attrs.get("standard_name") or "")
+    if standard_name.endswith("_quality_flag") or standard_name == "aggregate_quality_flag":
+        return "Quality"
+    if "_qc" in var_name:
+        return "Quality"
+    return None
+
+
+def nc_attrs_to_add_attributes(
+    nc_attrs: Mapping[str, object],
+    var_name: str,
+    preserved_ui: Mapping[str, str] | None = None,
+) -> etree.Element:
+    """Build <addAttributes> from NetCDF variable attributes."""
+    add_attrs = etree.Element("addAttributes")
+    merged: dict[str, object] = dict(nc_attrs)
+
+    ioos = _infer_ioos_category(var_name, merged)
+    if ioos:
+        merged["ioos_category"] = ioos
+
+    for key, text in (preserved_ui or {}).items():
+        if key not in merged:
+            merged[key] = text
+
+    for name in sorted(merged):
+        if name in NC_ATTRS_SKIP:
+            continue
+        value = merged[name]
+        if value is None:
+            continue
+        att = etree.SubElement(add_attrs, "att")
+        att.set("name", name)
+        attr_type = _erddap_attr_type(name, value)
+        if attr_type:
+            att.set("type", attr_type)
+        att.text = _format_attr_text(value)
+    return add_attrs
+
+
+def read_nc_variable_metadata(nc_path: Path) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """Return ordered (variable_name, erddap_dataType, attrs) from a NetCDF file."""
     with xr.open_dataset(nc_path, decode_cf=False, mask_and_scale=False) as ds:
-        result: List[Tuple[str, str]] = []
+        result: List[Tuple[str, str, Dict[str, Any]]] = []
         for name in ds.variables:
-            dtype = ds.variables[name].dtype
-            result.append((name, erddap_data_type(dtype)))
+            var = ds[name]
+            attrs = {k: _normalize_attr_value(v) for k, v in dict(var.attrs).items()}
+            result.append((name, erddap_data_type(var.dtype), attrs))
         return result
 
 
@@ -106,29 +218,48 @@ def _ensure_child_text(elem: etree._Element, child_tag: str, value: str) -> etre
     return child
 
 
-def _build_new_datavariable(source_name: str, data_type: str) -> etree._Element:
+def _extract_erddap_ui_attrs(data_var_elem: etree._Element) -> Dict[str, str]:
+    """Pull ERDDAP UI-only attributes from an existing dataVariable node."""
+    add_attrs = data_var_elem.find("addAttributes")
+    if add_attrs is None:
+        return {}
+    ui: Dict[str, str] = {}
+    for att in add_attrs.findall("att"):
+        name = att.get("name")
+        if name in ERDDAP_UI_ATTR_NAMES and att.text is not None:
+            ui[name] = att.text.strip()
+    return ui
+
+
+def _replace_add_attributes(data_var_elem: etree._Element, new_add_attrs: etree.Element) -> None:
+    for child in list(data_var_elem):
+        if child.tag == "addAttributes":
+            data_var_elem.remove(child)
+    data_var_elem.append(new_add_attrs)
+
+
+def _build_datavariable(
+    source_name: str,
+    data_type: str,
+    nc_attrs: Mapping[str, object],
+    preserved_ui: Mapping[str, str] | None = None,
+) -> etree._Element:
     dv = etree.Element("dataVariable")
     etree.SubElement(dv, "sourceName").text = source_name
     etree.SubElement(dv, "destinationName").text = source_name
     etree.SubElement(dv, "dataType").text = data_type
-
-    add_attrs = etree.SubElement(dv, "addAttributes")
-    att_comment = etree.SubElement(add_attrs, "att")
-    att_comment.set("name", "comment")
-    att_comment.text = "null"
-
-    att_ioos = etree.SubElement(add_attrs, "att")
-    att_ioos.set("name", "ioos_category")
-    att_ioos.text = "Unknown"
+    _replace_add_attributes(dv, nc_attrs_to_add_attributes(nc_attrs, source_name, preserved_ui))
     return dv
 
 
 def _sync_datavariables_for_dataset(
     dataset_elem: etree._Element,
-    nc_schema: Iterable[Tuple[str, str]],
+    nc_metadata: Iterable[Tuple[str, str, Dict[str, Any]]],
+    *,
+    preserve_erddap_ui: bool = True,
 ) -> Tuple[int, int]:
     """
-    Sync dataset dataVariable list to match NetCDF schema.
+    Sync dataset dataVariable list to match NetCDF schema and attributes.
 
     Returns:
         (reused_existing_count, created_new_count)
@@ -145,15 +276,21 @@ def _sync_datavariables_for_dataset(
 
     reused = 0
     created = 0
-    for source_name, data_type in nc_schema:
-        if source_name in existing_by_source:
+    for source_name, data_type, nc_attrs in nc_metadata:
+        preserved_ui = None
+        if preserve_erddap_ui and source_name in existing_by_source:
+            preserved_ui = _extract_erddap_ui_attrs(existing_by_source[source_name])
             dv = copy.deepcopy(existing_by_source[source_name])
             _ensure_child_text(dv, "sourceName", source_name)
             _ensure_child_text(dv, "destinationName", source_name)
             _ensure_child_text(dv, "dataType", data_type)
+            _replace_add_attributes(
+                dv,
+                nc_attrs_to_add_attributes(nc_attrs, source_name, preserved_ui),
+            )
             reused += 1
         else:
-            dv = _build_new_datavariable(source_name, data_type)
+            dv = _build_datavariable(source_name, data_type, nc_attrs, preserved_ui)
             created += 1
         dataset_elem.append(dv)
 
@@ -169,6 +306,39 @@ def _guess_cruise_from_filedir(file_dir: str | None) -> str | None:
     return p.parts[-1]
 
 
+def _dataset_match_key(dataset_elem: etree._Element) -> Tuple[str, str] | None:
+    """Return (cruise, fileNameRegex) when both can be parsed from a dataset block."""
+    cruise = _guess_cruise_from_filedir(_get_child_text(dataset_elem, "fileDir"))
+    file_name_regex = _get_child_text(dataset_elem, "fileNameRegex")
+    if not cruise or not file_name_regex:
+        return None
+    return cruise, file_name_regex
+
+
+def _remove_orphan_datasets(
+    root: etree._Element,
+    nc_index: Mapping[Tuple[str, str], Path],
+    *,
+    dataset_type: str,
+) -> int:
+    """
+    Remove EDDTableFromNcCFFiles blocks whose (cruise, fileNameRegex) is absent from nc_index.
+
+    Blocks missing fileDir/fileNameRegex or an unparseable cruise are left unchanged.
+    """
+    to_remove: list[etree._Element] = []
+    for dataset in root.findall("dataset"):
+        if dataset.get("type") != dataset_type:
+            continue
+        key = _dataset_match_key(dataset)
+        if key is None or key not in nc_index:
+            if key is not None:
+                to_remove.append(dataset)
+    for dataset in to_remove:
+        root.remove(dataset)
+    return len(to_remove)
+
+
 def _create_dataset_from_template(
     template: etree._Element,
     nc_path: Path,
@@ -181,6 +351,39 @@ def _create_dataset_from_template(
     return dataset
 
 
+def resolve_erddap_data_root(
+    profile: DatasetProfile | None = None,
+    override: Path | str | None = None,
+) -> Path:
+    """NetCDF tree used for XML sync (QC duplicate output when configured)."""
+    if override is not None:
+        return Path(override)
+    prof = profile or default_profile()
+    if prof.output.mode == "duplicate":
+        return prof.output.directory
+    return prof.data_root
+
+
+def _filedir_prefix_from_data_root(data_root: Path) -> str:
+    """Map a local data root to the ERDDAP server path under data/erddap/."""
+    dataset_name = data_root.name
+    if not dataset_name:
+        raise ValueError(f"Cannot derive ERDDAP fileDir prefix from data root: {data_root}")
+    return f"{ERDDAP_FILEDIR_BASE}/{dataset_name}"
+
+
+def resolve_filedir_prefix(data_root: Path, filedir_prefix: str | None = None) -> str:
+    """Resolve the ERDDAP fileDir prefix.
+
+    If the caller did not explicitly set --filedir-prefix, use
+    ``data/erddap/<dataset_folder_name>`` derived from --data-root
+    (e.g. ``output/SFER_QC`` → ``data/erddap/SFER_QC``).
+    """
+    if filedir_prefix:
+        return filedir_prefix.rstrip("/")
+    return _filedir_prefix_from_data_root(data_root)
+
+
 def sync_xml(
     input_xml: Path,
     output_xml: Path,
@@ -188,8 +391,10 @@ def sync_xml(
     filedir_prefix: str,
     dataset_type: str = "EDDTableFromNcCFFiles",
     create_missing_datasets: bool = False,
+    remove_orphan_datasets: bool = True,
+    preserve_erddap_ui: bool = True,
 ) -> None:
-    parser = etree.XMLParser(remove_blank_text=True)
+    parser = etree.XMLParser(remove_blank_text=True, strip_cdata=False)
     tree = etree.parse(str(input_xml), parser)
     root = tree.getroot()
 
@@ -204,40 +409,49 @@ def sync_xml(
     datasets = [d for d in root.findall("dataset") if d.get("type") == dataset_type]
     template_dataset = datasets[0] if datasets else None
 
-    nc_schema_cache: Dict[Path, List[Tuple[str, str]]] = {}
+    nc_metadata_cache: Dict[Path, List[Tuple[str, str, Dict[str, Any]]]] = {}
 
     updated_count = 0
     skipped_count = 0
+    removed_count = 0
     created_count = 0
     reused_vars_total = 0
     created_vars_total = 0
 
     for dataset in datasets:
-        file_dir = _get_child_text(dataset, "fileDir")
-        file_name_regex = _get_child_text(dataset, "fileNameRegex")
-        cruise = _guess_cruise_from_filedir(file_dir)
-        if not cruise or not file_name_regex:
+        key = _dataset_match_key(dataset)
+        if key is None:
             skipped_count += 1
             continue
 
-        key = (cruise, file_name_regex)
         nc_path = nc_index.get(key)
         if nc_path is None:
-            skipped_count += 1
+            if not remove_orphan_datasets:
+                skipped_count += 1
             continue
 
         matched_keys.add(key)
-        if nc_path not in nc_schema_cache:
-            nc_schema_cache[nc_path] = read_nc_schema(nc_path)
-        schema = nc_schema_cache[nc_path]
+        if nc_path not in nc_metadata_cache:
+            nc_metadata_cache[nc_path] = read_nc_variable_metadata(nc_path)
+        metadata = nc_metadata_cache[nc_path]
 
+        cruise, _ = key
         _ensure_child_text(dataset, "fileDir", f"{filedir_prefix.rstrip('/')}/{cruise}/")
         _ensure_child_text(dataset, "fileNameRegex", nc_path.name)
-        reused, created = _sync_datavariables_for_dataset(dataset, schema)
+        reused, created = _sync_datavariables_for_dataset(
+            dataset,
+            metadata,
+            preserve_erddap_ui=preserve_erddap_ui,
+        )
 
         updated_count += 1
         reused_vars_total += reused
         created_vars_total += created
+
+    if remove_orphan_datasets:
+        removed_count = _remove_orphan_datasets(
+            root, nc_index, dataset_type=dataset_type
+        )
 
     if create_missing_datasets:
         if template_dataset is None:
@@ -250,11 +464,15 @@ def sync_xml(
         for cruise in sorted(grouped):
             for nc_path in sorted(grouped[cruise], key=lambda p: p.name):
                 new_dataset = _create_dataset_from_template(template_dataset, nc_path, filedir_prefix)
-                schema = nc_schema_cache.get(nc_path)
-                if schema is None:
-                    schema = read_nc_schema(nc_path)
-                    nc_schema_cache[nc_path] = schema
-                _sync_datavariables_for_dataset(new_dataset, schema)
+                metadata = nc_metadata_cache.get(nc_path)
+                if metadata is None:
+                    metadata = read_nc_variable_metadata(nc_path)
+                    nc_metadata_cache[nc_path] = metadata
+                _sync_datavariables_for_dataset(
+                    new_dataset,
+                    metadata,
+                    preserve_erddap_ui=preserve_erddap_ui,
+                )
                 root.append(new_dataset)
                 created_count += 1
 
@@ -262,40 +480,120 @@ def sync_xml(
     tree.write(str(output_xml), pretty_print=True, xml_declaration=True, encoding="UTF-8")
 
     logger.info("Updated dataset blocks: %d", updated_count)
-    logger.info("Skipped existing blocks (no matching file): %d", skipped_count)
+    logger.info("Skipped existing blocks (unparseable or kept orphan): %d", skipped_count)
+    logger.info("Removed orphan dataset blocks: %d", removed_count)
     logger.info("Created new dataset blocks: %d", created_count)
     logger.info("Reused existing dataVariable nodes: %d", reused_vars_total)
     logger.info("Created new dataVariable nodes: %d", created_vars_total)
     logger.info("Wrote XML: %s", output_xml)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Sync ERDDAP datasets.xml blocks against NetCDF files (including QC vars)."
+def run_erddap_xml_sync(
+    *,
+    input_xml: Path,
+    output_xml: Path,
+    data_root: Path,
+    filedir_prefix: str | None = None,
+    dataset_type: str = "EDDTableFromNcCFFiles",
+    create_missing_datasets: bool = False,
+    remove_orphan_datasets: bool = True,
+    in_place: bool = False,
+    preserve_erddap_ui: bool = True,
+    verbose: bool = False,
+) -> Path:
+    """
+    Validate paths, configure logging, and run sync_xml.
+
+    When *in_place* is True, *output_xml* is ignored and the input file is overwritten.
+    Returns the path written.
+    """
+    setup_logging(verbose=verbose)
+    if not input_xml.exists():
+        raise FileNotFoundError(f"Input XML not found: {input_xml}")
+    if not data_root.exists():
+        raise FileNotFoundError(f"Data root not found: {data_root}")
+
+    resolved_output = input_xml if in_place else output_xml
+    resolved_filedir_prefix = resolve_filedir_prefix(data_root, filedir_prefix)
+    sync_xml(
+        input_xml=input_xml,
+        output_xml=resolved_output,
+        data_root=data_root,
+        filedir_prefix=resolved_filedir_prefix,
+        dataset_type=dataset_type,
+        create_missing_datasets=create_missing_datasets,
+        remove_orphan_datasets=remove_orphan_datasets,
+        preserve_erddap_ui=preserve_erddap_ui,
+    )
+    return resolved_output
+
+
+def run_erddap_xml_sync_for_profile(
+    profile: DatasetProfile | None = None,
+    *,
+    input_xml: Path | None = None,
+    output_xml: Path | None = None,
+    data_root: Path | str | None = None,
+    filedir_prefix: str | None = None,
+    create_missing_datasets: bool = False,
+    remove_orphan_datasets: bool = True,
+    preserve_erddap_ui: bool = True,
+    verbose: bool = False,
+) -> Path:
+    """Sync ERDDAP XML using dataset profile defaults (QC output tree when duplicate mode)."""
+    prof = profile or default_profile()
+    return run_erddap_xml_sync(
+        input_xml=input_xml or ERDDAP_DATASETS_XML,
+        output_xml=output_xml or ERDDAP_DATASETS_XML_OUTPUT,
+        data_root=resolve_erddap_data_root(prof, data_root),
+        filedir_prefix=filedir_prefix,
+        create_missing_datasets=create_missing_datasets,
+        remove_orphan_datasets=remove_orphan_datasets,
+        in_place=False,
+        preserve_erddap_ui=preserve_erddap_ui,
+        verbose=verbose,
+    )
+
+
+def add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register ERDDAP XML sync CLI flags on *parser* (subparser or standalone)."""
+    from dataset_profile import DEFAULT_PROFILE_PATH
+
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=str(DEFAULT_PROFILE_PATH),
+        help=f"Dataset profile JSON for default --data-root (default: '{DEFAULT_PROFILE_PATH}')",
     )
     parser.add_argument(
         "--input-xml",
         type=Path,
-        default=Path("datasets/mod_CTD_datasets.xml"),
-        help="Input ERDDAP datasets XML file.",
+        default=ERDDAP_DATASETS_XML,
+        help=f"Input ERDDAP datasets XML file (default: '{ERDDAP_DATASETS_XML}')",
     )
     parser.add_argument(
         "--output-xml",
         type=Path,
-        default=Path("datasets/mod_CTD_datasets_qc.xml"),
-        help="Output XML path.",
+        default=ERDDAP_DATASETS_XML_OUTPUT,
+        help=f"Output XML path (default: '{ERDDAP_DATASETS_XML_OUTPUT}')",
     )
     parser.add_argument(
         "--data-root",
         type=Path,
-        default=Path("datasets/SFER_CTD_SOAK_REMOVED"),
-        help="Root containing cruise directories with .nc files.",
+        default=None,
+        help=(
+            "Root containing cruise directories with .nc files "
+            "(default: profile duplicate output dir or data_root)"
+        ),
     )
     parser.add_argument(
         "--filedir-prefix",
         type=str,
-        default="data/erddap/SFER_CTD_SOAK_REMOVED",
-        help="ERDDAP fileDir prefix used in each dataset block.",
+        default=None,
+        help=(
+            "ERDDAP fileDir prefix used in each dataset block "
+            f"(default: {ERDDAP_FILEDIR_BASE}/<dataset_name> from --data-root)"
+        ),
     )
     parser.add_argument(
         "--dataset-type",
@@ -309,36 +607,54 @@ def parse_args() -> argparse.Namespace:
         help="Create new dataset blocks for NetCDF files absent from the XML.",
     )
     parser.add_argument(
+        "--keep-orphan-datasets",
+        action="store_true",
+        help=(
+            "Keep dataset blocks whose cruise/filename is not present under --data-root "
+            "(default: remove them)."
+        ),
+    )
+    parser.add_argument(
         "--in-place",
         action="store_true",
-        help="Overwrite input XML instead of writing to --output-xml.",
+        help="Overwrite input XML instead of writing to --output-xml (not recommended).",
+    )
+    parser.add_argument(
+        "--no-preserve-erddap-ui",
+        action="store_true",
+        help="Do not preserve ERDDAP color bar attributes from the input XML.",
     )
     parser.add_argument(
         "--verbose",
+        "-v",
         action="store_true",
         help="Enable debug logging.",
     )
-    return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    setup_logging(verbose=args.verbose)
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Sync ERDDAP datasets.xml blocks against NetCDF files (including QC metadata)."
+    )
+    add_erddap_xml_arguments(parser)
+    return parser.parse_args(argv)
 
-    if not args.input_xml.exists():
-        raise FileNotFoundError(f"Input XML not found: {args.input_xml}")
-    if not args.data_root.exists():
-        raise FileNotFoundError(f"Data root not found: {args.data_root}")
 
-    output_xml = args.input_xml if args.in_place else args.output_xml
-
-    sync_xml(
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    prof = default_profile()
+    data_root = resolve_erddap_data_root(prof, args.data_root)
+    run_erddap_xml_sync(
         input_xml=args.input_xml,
-        output_xml=output_xml,
-        data_root=args.data_root,
+        output_xml=args.output_xml,
+        data_root=data_root,
         filedir_prefix=args.filedir_prefix,
         dataset_type=args.dataset_type,
         create_missing_datasets=args.create_missing_datasets,
+        remove_orphan_datasets=not args.keep_orphan_datasets,
+        in_place=args.in_place,
+        preserve_erddap_ui=not args.no_preserve_erddap_ui,
+        verbose=args.verbose,
     )
 
 

@@ -13,31 +13,51 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 import xarray as xr
 
-from qc_data_loader import get_station_id
+from dataset_profile import MetadataConfig, default_profile
 
 # CONFIG FILE PATHS
-# All config files are stored in the config/ directory.
+# Config files live under config/ in subfolders named for the QC test (or variable_mapping).
 # Change these paths if you need to use different config files.
 
 CONFIG_DIR = Path(__file__).parent / "config"
 
 # Default dataset directory
-DATASET_DIR = Path(__file__).parent / "datasets" / "SFER_CTD_SOAK_REMOVED"
+DATASET_DIR = default_profile().data_root
 
-# Variable mapping: maps variable names to QC categories
-VARIABLE_MAPPING_JSON = CONFIG_DIR / "walton_mapping.json"
+# Standard variable name → dataset-specific variable names (Walton categories)
+VARIABLE_MAPPING_JSON = CONFIG_DIR / "variable_mapping" / "walton_mapping.json"
 
 # Station coordinates: ground truth lat/lon for each station (for location test)
-STATION_COORDS_CSV = CONFIG_DIR / "Station_Mean_Coords.csv"
+STATION_COORDS_CSV = CONFIG_DIR / "location_test" / "Station_Mean_Coords.csv"
 
-# Station climatology: station-specific climatology limits
-STATION_CLIMATOLOGY_JSON = CONFIG_DIR / "station_climatology_config.json"
+# Station climatology: limit tables keyed by cast type (deep vs shallow)
+STATION_CLIMATOLOGY_JSON = CONFIG_DIR / "climatology_test" / "station_climatology_config.json"
+
+# Station → deep_cast vs shallow_cast membership (separate from limit values)
+STATION_DEPTH_CLASSIFICATION_JSON = (
+    CONFIG_DIR / "climatology_test" / "station_depth_classification.json"
+)
 
 # Sensor specs: sensor-specific gross range limits by unit
-SENSOR_SPECS_JSON = CONFIG_DIR / "sensor_specs.json"
+SENSOR_SPECS_JSON = CONFIG_DIR / "gross_range_test" / "sensor_specs.json"
 
 # Variable-sensor map: maps variables to their sensors
-VARIABLE_SENSOR_MAP_JSON = CONFIG_DIR / "variable_sensor_map.json"
+VARIABLE_SENSOR_MAP_JSON = CONFIG_DIR / "gross_range_test" / "variable_sensor_map.json"
+
+# Per-variable spike and rate-of-change thresholds
+SPIKE_THRESHOLDS_JSON = CONFIG_DIR / "spike_test" / "spike_thresholds.json"
+RATE_OF_CHANGE_THRESHOLDS_JSON = (
+    CONFIG_DIR / "rate_of_change_test" / "rate_of_change_thresholds.json"
+)
+
+# ERDDAP datasets.xml defaults (used by main.py erddap-xml and erddap_xml_sync.py)
+_DATASETS_DIR = Path(__file__).parent / "datasets"
+ERDDAP_OUTPUT_DIR = Path(__file__).parent / "output" / "erddap"
+ERDDAP_DATASETS_XML = _DATASETS_DIR / "mod_CTD_datasets.xml"
+ERDDAP_DATASETS_XML_OUTPUT = ERDDAP_OUTPUT_DIR / "mod_CTD_datasets_qc.xml"
+# ERDDAP server path: bigParentDirectory/data/erddap/<dataset_name>/...
+ERDDAP_FILEDIR_BASE = "data/erddap"
+ERDDAP_FILEDIR_PREFIX = f"{ERDDAP_FILEDIR_BASE}/SFER_QC_NO_LEGACY"
 
 # QC FLAGS AND PARAMETERS
 
@@ -50,29 +70,16 @@ QC_FLAGS = {
     "MISSING": 9,
 }
 
-# Variable-specific gross range defaults (customize per sensor/dataset)
-# Each entry: variable_name -> {"fail_span": (min, max), "suspect_span": (min, max)}
-GROSS_RANGE_CONFIG = {
-    "sea_water_temperature": {"fail_span": (-2.0, 40.0), "suspect_span": (0.0, 35.0)},
-    "sea_water_salinity": {"fail_span": (0.0, 45.0), "suspect_span": (25.0, 40.0)},
-    "sea_water_salinity_2": {"fail_span": (0.0, 45.0), "suspect_span": (25.0, 40.0)},
-    "sea_water_electrical_conductivity": {"fail_span": (0.0, 7.0), "suspect_span": (0.0, 6.5)},
-    "sea_water_electrical_conductivity_2": {"fail_span": (0.0, 7.0), "suspect_span": (0.0, 6.5)},
-    "sea_water_pressure": {"fail_span": (0.0, 12000.0), "suspect_span": (0.0, 11000.0)},
-    "dissolved_oxygen": {"fail_span": (0.0, 500.0), "suspect_span": (0.0, 400.0)},
-    "oxygen_saturation": {"fail_span": (0.0, 500.0), "suspect_span": (0.0, 400.0)},
-    "oxygen_saturation_2": {"fail_span": (0.0, 500.0), "suspect_span": (0.0, 400.0)},
-    "beam_attenuation": {"fail_span": (0.0, 10.0), "suspect_span": (0.0, 8.0)},
-    "sea_water_turbidity": {"fail_span": (0.0, 1000.0), "suspect_span": (0.0, 800.0)},
-    "photosynthetically_available_radiation": {"fail_span": (0.0, 4000.0), "suspect_span": (0.0, 3500.0)},
-    "surface_photosynthetically_available_radiation": {"fail_span": (0.0, 4000.0), "suspect_span": (0.0, 3500.0)},
-    "chlorophyll_concentration": {"fail_span": (0.0, 1000.0), "suspect_span": (0.0, 500.0)},
-    "chlorophyll_fluorescence": {"fail_span": (0.0, 1000.0), "suspect_span": (0.0, 500.0)},
-    "CDOM": {"fail_span": (0.0, 1000.0), "suspect_span": (0.0, 500.0)},
-}
-
 # Tolerance (in degrees) for Location Test
 LOCATION_TOLERANCE = 0.01
+
+# Flat-line test defaults (QARTOD-style count-based implementation).
+# REP_CNT values are "number of previous observations".
+FLAT_LINE_DEFAULTS = {
+    "rep_cnt_suspect": 3,
+    "rep_cnt_fail": 5,
+    "eps": 0.05,
+}
 
 ALL_CATEGORIES = frozenset({
     "in_water_radiance_irradiance",
@@ -123,75 +130,62 @@ TEST_CATEGORIES = {
 
 
     "spike_test": ALL_CATEGORIES,
+    #spike test need high threshold and low threshold value
 
-    "rate_of_change_test": ALL_CATEGORIES,#only pass and suspect
+    "rate_of_change_test": ALL_CATEGORIES,
+    # Count-based |value[i] - value[i-1]| between consecutive samples; threshold in data units per step (see rate_of_change_thresholds.json).
 
     "flat_line_test": ALL_CATEGORIES,
 
-    # "spike_test": frozenset({
-    #     #t, sp, c, p
-    #     #temperature,practical_salinity,conductivity,pressure
-    #     #1,3,4
-    #     "temperature",
-    #     "practical_salinity",
-    #     "conductivity",
-    #     "pressure",
 
-    #     "oxygen_dissolved_oxygen",
-    # }),
-
-
-    # "rate_of_change_test": frozenset({
-    #     #t, sp, c, p
-    #     #temperature,practical_salinity,conductivity,pressure
-    #     #1,4
-    #     "temperature",
-    #     "practical_salinity",
-    #     "conductivity",
-    #     "pressure",
-
-    #     "oxygen_dissolved_oxygen",
-
-
-    # }),
-    # "flat_line_test": frozenset({
-    #     #t, sp, c, p
-    #     #temperature,practical_salinity,conductivity,pressure
-    #     #1,3,4
-    #     "temperature",
-    #     "practical_salinity",
-    #     "conductivity",
-    #     "pressure",
-
-    #     "oxygen_dissolved_oxygen",
-    # }),
-
+    
 
 }
-
-# PLACEHOLDER!!!!!!!!!!!!!!!!!!!!
-# 
-#  
-# Each variable maps to a list of period configs. Example for monthly bins:
-# {"tspan": (1, 3), "vspan": (15, 28), "period": "month"}
-CLIMATOLOGY_CONFIG = {
-    "sea_water_temperature": [
-        {"tspan": (1, 3), "vspan": (15.0, 28.0), "period": "month"},
-        {"tspan": (4, 6), "vspan": (18.0, 31.0), "period": "month"},
-        {"tspan": (7, 9), "vspan": (20.0, 33.0), "period": "month"},
-        {"tspan": (10, 12), "vspan": (15.0, 30.0), "period": "month"},
-    ],
-    "sea_water_salinity": [
-        {"tspan": (1, 12), "vspan": (25.0, 40.0), "period": "month"},
-    ],
-}
-
-
 
 
 def load_station_climatology_config(json_path: Path | str = STATION_CLIMATOLOGY_JSON) -> Dict[str, Any]:
     """
-    Load the station climatology JSON configuration.
+    Load the station climatology limits JSON (deep_cast_limits / shallow_cast_limits only).
+    """
+    path = Path(json_path)
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load_variable_thresholds_json(json_path: Path | str) -> Dict[str, Any]:
+    """
+    Load a flat ``{ "<var_name>": { ... }, ... }`` thresholds file, or legacy ``{ "variables": {...} }``.
+    """
+    path = Path(json_path)
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        root = json.load(f)
+    if not isinstance(root, dict):
+        return {}
+    block = root.get("variables")
+    if isinstance(block, dict):
+        return block
+    return {k: v for k, v in root.items() if isinstance(v, dict)}
+
+
+def load_spike_thresholds(json_path: Path | str = SPIKE_THRESHOLDS_JSON) -> Dict[str, Any]:
+    """Load per-variable spike test thresholds (suspect_threshold, fail_threshold)."""
+    return _load_variable_thresholds_json(json_path)
+
+
+def load_rate_of_change_thresholds(
+    json_path: Path | str = RATE_OF_CHANGE_THRESHOLDS_JSON,
+) -> Dict[str, Any]:
+    """Load per-variable rate-of-change thresholds (threshold = max |Δvalue| per adjacent sample)."""
+    return _load_variable_thresholds_json(json_path)
+
+
+def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLASSIFICATION_JSON) -> Dict[str, Any]:
+    """
+    Load station → deep_cast / shallow_cast membership lists.
     """
     path = Path(json_path)
     if not path.exists():
@@ -202,16 +196,30 @@ def load_station_climatology_config(json_path: Path | str = STATION_CLIMATOLOGY_
 
 def get_climatology_config_for_file(
     ds: xr.Dataset,
-    json_path: Path | str = STATION_CLIMATOLOGY_JSON,
+    limits_json_path: Path | str = STATION_CLIMATOLOGY_JSON,
+    classification_json_path: Path | str | None = None,
+    metadata: MetadataConfig | None = None,
 ) -> Optional[Mapping[str, Iterable[Mapping[str, float]]]]:
     """
     Resolve climatology limits for the file based on station ID.
+
+    Station membership (which stations are deep vs shallow) comes from
+    *classification_json_path* (default: ``STATION_DEPTH_CLASSIFICATION_JSON``).
+    Limit tables come from *limits_json_path* (default: ``STATION_CLIMATOLOGY_JSON``).
     """
-    station_id = get_station_id(ds)
+    from qc_data_loader import get_station_id
+
+    station_id = get_station_id(ds, metadata)
     if not station_id:
         return None
 
-    config = load_station_climatology_config(json_path)
+    limits_root = load_station_climatology_config(limits_json_path)
+    class_path = (
+        Path(classification_json_path)
+        if classification_json_path is not None
+        else STATION_DEPTH_CLASSIFICATION_JSON
+    )
+    classification = load_station_depth_classification(class_path)
 
     # Normalize station id for comparison
     sid = str(station_id).strip().lower()
@@ -223,18 +231,15 @@ def get_climatology_config_for_file(
         target = target.strip().lower()
         return any(str(s).strip().lower() == target for s in stations)
 
-    # Preferred new-style station types and their corresponding limits keys
     station_type_priority = [
         ("deep_cast", "deep_cast_limits"),
         ("shallow_cast", "shallow_cast_limits"),
-        ("shallow_stable", "shallow_stable_limits"),
     ]
 
-
     for list_key, limits_key in station_type_priority:
-        stations = config.get(list_key) or []
+        stations = classification.get(list_key) or []
         if stations and _contains_station(stations, sid):
-            limits = config.get(limits_key)
+            limits = limits_root.get(limits_key)
             if limits:
                 return limits
 

@@ -1,0 +1,4 @@
+{
+  "sea_water_temperature": { "threshold": 0.1 },
+  "sea_water_salinity": { "threshold": 0.02 }
+}

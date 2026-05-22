@@ -2,3 +2,11 @@
 .DS_Store
 *.pyc
 /datasets
+/tests/pipeline_sfer_output/
+/output
+/output_2
+/tests
+GenerateDatasetsXml.xml
+/example_source_file
+pytest.ini
+rewrite_erddap_dataset_titles.py

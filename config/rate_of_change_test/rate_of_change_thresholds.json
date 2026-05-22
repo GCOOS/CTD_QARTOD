@@ -1,0 +1,19 @@
+{
+  "surface_photosynthetically_available_radiation": { "threshold": 200.0 },
+  "beam_attenuation": { "threshold": 0.02 },
+  "sea_water_turbidity": { "threshold": 2.0 },
+  "photosynthetically_available_radiation": { "threshold": 200.0 },
+  "chlorophyll_concentration": { "threshold": 4.0 },
+  "chlorophyll_fluorescence": { "threshold": 4.0 },
+  "CDOM": { "threshold": 2.0 },
+  "sea_water_temperature": { "threshold": 0.08 },
+  "sea_water_temperature_2": { "threshold": 0.08 },
+  "sea_water_salinity": { "threshold": 0.02 },
+  "sea_water_salinity_2": { "threshold": 0.02 },
+  "sea_water_electrical_conductivity": { "threshold": 0.004 },
+  "sea_water_electrical_conductivity_2": { "threshold": 0.004 },
+  "sea_water_pressure": { "threshold": 8.0 },
+  "dissolved_oxygen": { "threshold": 0.08 },
+  "oxygen_saturation": { "threshold": 2.0 },
+  "oxygen_saturation_2": { "threshold": 2.0 }
+}
