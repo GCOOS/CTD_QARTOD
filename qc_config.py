@@ -49,6 +49,7 @@ SPIKE_THRESHOLDS_JSON = CONFIG_DIR / "spike_test" / "spike_thresholds.json"
 RATE_OF_CHANGE_THRESHOLDS_JSON = (
     CONFIG_DIR / "rate_of_change_test" / "rate_of_change_thresholds.json"
 )
+FLAT_LINE_CONFIG_JSON = CONFIG_DIR / "flat_line_test" / "flat_line_config.json"
 
 # ERDDAP datasets.xml defaults (used by main.py erddap-xml and erddap_xml_sync.py)
 _DATASETS_DIR = Path(__file__).parent / "datasets"
@@ -56,7 +57,7 @@ ERDDAP_OUTPUT_DIR = Path(__file__).parent / "output" / "erddap"
 ERDDAP_DATASETS_XML = _DATASETS_DIR / "mod_CTD_datasets.xml"
 ERDDAP_DATASETS_XML_OUTPUT = ERDDAP_OUTPUT_DIR / "mod_CTD_datasets_qc.xml"
 # ERDDAP server path: bigParentDirectory/data/erddap/<dataset_name>/...
-ERDDAP_FILEDIR_BASE = "data/erddap"
+ERDDAP_FILEDIR_BASE = "/data/erddap"
 ERDDAP_FILEDIR_PREFIX = f"{ERDDAP_FILEDIR_BASE}/SFER_QC_NO_LEGACY"
 
 # QC FLAGS AND PARAMETERS
@@ -78,7 +79,7 @@ LOCATION_TOLERANCE = 0.01
 FLAT_LINE_DEFAULTS = {
     "rep_cnt_suspect": 3,
     "rep_cnt_fail": 5,
-    "eps": 0.05,
+    "eps": 0.0,
 }
 
 ALL_CATEGORIES = frozenset({
@@ -183,6 +184,48 @@ def load_rate_of_change_thresholds(
     return _load_variable_thresholds_json(json_path)
 
 
+def _positive_int(value: object, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    if isinstance(value, bool) or number < 1:
+        return default
+    return number
+
+
+def _nonnegative_float(value: object, default: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number < 0:
+        return default
+    return number
+
+
+def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict[str, Any]:
+    """Load global flat-line test config, falling back to defaults for missing or invalid fields."""
+    config: Dict[str, Any] = dict(FLAT_LINE_DEFAULTS)
+    path = Path(json_path)
+    if not path.exists():
+        return config
+    with path.open("r", encoding="utf-8") as f:
+        root = json.load(f)
+    if not isinstance(root, dict):
+        return config
+
+    config["rep_cnt_suspect"] = _positive_int(root.get("rep_cnt_suspect"), FLAT_LINE_DEFAULTS["rep_cnt_suspect"])
+    config["rep_cnt_fail"] = _positive_int(root.get("rep_cnt_fail"), FLAT_LINE_DEFAULTS["rep_cnt_fail"])
+    config["eps"] = _nonnegative_float(root.get("eps"), FLAT_LINE_DEFAULTS["eps"])
+
+    if config["rep_cnt_fail"] < config["rep_cnt_suspect"]:
+        config["rep_cnt_suspect"] = FLAT_LINE_DEFAULTS["rep_cnt_suspect"]
+        config["rep_cnt_fail"] = FLAT_LINE_DEFAULTS["rep_cnt_fail"]
+
+    return config
+
+
 def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLASSIFICATION_JSON) -> Dict[str, Any]:
     """
     Load station → deep_cast / shallow_cast membership lists.
@@ -244,5 +287,4 @@ def get_climatology_config_for_file(
                 return limits
 
     return None
-
 

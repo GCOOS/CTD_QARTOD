@@ -93,6 +93,7 @@ class PathsConfig:
     variable_sensor_map: Path | None = None
     spike_thresholds: Path | None = None
     rate_of_change_thresholds: Path | None = None
+    flat_line_config: Path | None = None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object] | None, base_dir: Path = REPO_ROOT) -> "PathsConfig":
@@ -107,6 +108,7 @@ class PathsConfig:
             variable_sensor_map=_resolve_path(data.get("variable_sensor_map"), base_dir),
             spike_thresholds=_resolve_path(data.get("spike_thresholds"), base_dir),
             rate_of_change_thresholds=_resolve_path(data.get("rate_of_change_thresholds"), base_dir),
+            flat_line_config=_resolve_path(data.get("flat_line_config"), base_dir),
         )
 
     def get(self, key: str) -> Path | None:
@@ -193,6 +195,7 @@ def resolve_config_path(
         "variable_sensor_map": qc_config.VARIABLE_SENSOR_MAP_JSON,
         "spike_thresholds": qc_config.SPIKE_THRESHOLDS_JSON,
         "rate_of_change_thresholds": qc_config.RATE_OF_CHANGE_THRESHOLDS_JSON,
+        "flat_line_config": qc_config.FLAT_LINE_CONFIG_JSON,
     }
     try:
         return fallback_by_key[key]

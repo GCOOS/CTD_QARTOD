@@ -54,7 +54,7 @@ def flat_line_test(
             fail = False
             if n >= rep_cnt_fail:
                 prev = series[n - rep_cnt_fail : n]
-                fail = not np.isnan(prev).any() and np.all(np.abs(curr - prev) < eps)
+                fail = not np.isnan(prev).any() and np.all(np.abs(curr - prev) <= eps)
             if fail:
                 out[n] = QC_FLAGS["FAIL"]
                 continue
@@ -62,7 +62,7 @@ def flat_line_test(
             suspect = False
             if n >= rep_cnt_suspect:
                 prev = series[n - rep_cnt_suspect : n]
-                suspect = not np.isnan(prev).any() and np.all(np.abs(curr - prev) < eps)
+                suspect = not np.isnan(prev).any() and np.all(np.abs(curr - prev) <= eps)
             if suspect:
                 out[n] = QC_FLAGS["SUSPECT"]
 

@@ -8,6 +8,7 @@ variables embedded in each file — no filename parsing is required.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -24,11 +25,11 @@ from dataset_profile import (
     restore_flags_shape,
 )
 from qc_config import (
-    FLAT_LINE_DEFAULTS,
     LOCATION_TOLERANCE,
     QC_FLAGS,
     TEST_CATEGORIES,
     get_climatology_config_for_file,
+    load_flat_line_config,
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
@@ -40,6 +41,7 @@ from qc_data_loader import (
     get_station_id,
     get_cruise_id,
     get_variable_category,
+    get_scalar_var,
     load_mapping,
     load_nc_file,
 )
@@ -79,6 +81,55 @@ _IMPLEMENTED_TESTS = (
     "spike_test",
     "rate_of_change_test",
 )
+
+
+def _date_from_iso_like(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return text[:10]
+    return None
+
+
+def _date_from_time_var(ds: xr.Dataset, profile: DatasetProfile) -> str | None:
+    for name in profile.metadata.time:
+        if name not in ds:
+            continue
+        value = np.asarray(ds[name].values).flat[0]
+        iso_date = _date_from_iso_like(value)
+        if iso_date:
+            return iso_date
+
+        units = str(ds[name].attrs.get("units") or "").strip().lower()
+        if np.issubdtype(np.asarray(value).dtype, np.number) and units.startswith("seconds since 1970-01-01"):
+            date = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=float(value))
+            return date.date().isoformat()
+    return None
+
+
+def _sfer_metadata_date(ds: xr.Dataset, profile: DatasetProfile) -> str:
+    for attr_name in ("time_coverage_start", "time_coverage_end"):
+        date = _date_from_iso_like(ds.attrs.get(attr_name))
+        if date:
+            return date
+    return _date_from_time_var(ds, profile) or "unknown"
+
+
+def refresh_sfer_qc_metadata(ds: xr.Dataset, profile: DatasetProfile | None = None) -> xr.Dataset:
+    """Refresh SFER display metadata before writing QC output."""
+    prof = profile or default_profile()
+    cruise_id = get_scalar_var(ds, prof.metadata.cruise_id) or "unknown"
+    station = get_scalar_var(ds, prof.metadata.station) or "unknown"
+    date = _sfer_metadata_date(ds, prof)
+
+    if "profile" in ds:
+        ds["profile"].attrs["long_name"] = f"{cruise_id}_{station}"
+    else:
+        logger.warning("Dataset has no profile variable; cannot refresh profile long_name")
+
+    ds.attrs["title"] = f"CTD data from SFER cruise {cruise_id}, station {station}, {date}"
+    return ds
 
 
 def _should_run_test(test_name: str, category: str | None) -> bool:
@@ -162,6 +213,7 @@ def _run_common_tests(
     location_tolerance: float,
     spike_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     rate_of_change_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
+    flat_line_config: Mapping[str, Any] | None = None,
     profile: DatasetProfile | None = None,
 ) -> xr.Dataset:
     data_var = ds[var_name]
@@ -184,6 +236,7 @@ def _run_common_tests(
             location_tolerance=location_tolerance,
             spike_thresholds=spike_thresholds,
             rate_of_change_thresholds=rate_of_change_thresholds,
+            flat_line_config=flat_line_config,
             profile=prof,
         )
         ds = write_qc_results(ds, var_name, test_name, flags)
@@ -214,6 +267,7 @@ def _run_single_test_for_var(
     location_tolerance: float,
     spike_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     rate_of_change_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
+    flat_line_config: Mapping[str, Any] | None = None,
     profile: DatasetProfile | None = None,
 ) -> np.ndarray:
     """
@@ -281,6 +335,7 @@ def _run_single_test_for_var(
         return climatology_test(data_var, time=time, depth=depth, config=config)
 
     if test_name == "flat_line_test":
+        flat_cfg = dict(flat_line_config or load_flat_line_config())
         aligned_data, moved_axis = align_for_profile_tests(
             data_var,
             data_var.dims,
@@ -288,9 +343,9 @@ def _run_single_test_for_var(
         )
         flags = flat_line_test(
             aligned_data,
-            rep_cnt_suspect=FLAT_LINE_DEFAULTS["rep_cnt_suspect"],
-            rep_cnt_fail=FLAT_LINE_DEFAULTS["rep_cnt_fail"],
-            eps=FLAT_LINE_DEFAULTS["eps"],
+            rep_cnt_suspect=flat_cfg["rep_cnt_suspect"],
+            rep_cnt_fail=flat_cfg["rep_cnt_fail"],
+            eps=flat_cfg["eps"],
         )
         return restore_flags_shape(flags, data_var.shape, moved_axis)
 
@@ -335,6 +390,7 @@ def run_qc_for_file(
     station_coords_csv: Path | str | None = None,
     spike_thresholds_path: Path | str | None = None,
     rate_of_change_thresholds_path: Path | str | None = None,
+    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
 ) -> None:
@@ -355,6 +411,7 @@ def run_qc_for_file(
     variable_sensor_file = resolve_config_path("variable_sensor_map", prof, variable_sensor_map_path)
     spike_file = resolve_config_path("spike_thresholds", prof, spike_thresholds_path)
     rate_file = resolve_config_path("rate_of_change_thresholds", prof, rate_of_change_thresholds_path)
+    flat_line_file = resolve_config_path("flat_line_config", prof, flat_line_config_path)
     logger.info("Processing file: %s", nc_path.name)
     
     mapping = load_mapping(mapping_file)
@@ -385,6 +442,7 @@ def run_qc_for_file(
 
     spike_thresholds = load_spike_thresholds(spike_file)
     rate_of_change_thresholds = load_rate_of_change_thresholds(rate_file)
+    flat_line_cfg = load_flat_line_config(flat_line_file)
 
     qc_vars = get_qc_variables(ds, mapping)
     logger.debug("  QC variables (%d): %s", len(qc_vars), ", ".join(qc_vars))
@@ -402,10 +460,12 @@ def run_qc_for_file(
             location_tolerance=location_tolerance,
             spike_thresholds=spike_thresholds,
             rate_of_change_thresholds=rate_of_change_thresholds,
+            flat_line_config=flat_line_cfg,
             profile=prof,
         )
 
     output_path = resolve_output_path(nc_path, prof, root_for_output)
+    ds = refresh_sfer_qc_metadata(ds, prof)
     save_dataset(ds, output_path)
     logger.info("  Saved QC results to %s", output_path)
 
@@ -423,6 +483,7 @@ def run_qc_for_directory(
     station_coords_csv: Path | str | None = None,
     spike_thresholds_path: Path | str | None = None,
     rate_of_change_thresholds_path: Path | str | None = None,
+    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
 ) -> None:
@@ -449,6 +510,7 @@ def run_qc_for_directory(
             station_coords_csv=station_coords_csv,
             spike_thresholds_path=spike_thresholds_path,
             rate_of_change_thresholds_path=rate_of_change_thresholds_path,
+            flat_line_config_path=flat_line_config_path,
             profile=prof,
             data_root=data_root,
         )
@@ -469,6 +531,7 @@ def run_qc_for_all(
     station_coords_csv: Path | str | None = None,
     spike_thresholds_path: Path | str | None = None,
     rate_of_change_thresholds_path: Path | str | None = None,
+    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
 ) -> None:
     """
@@ -497,6 +560,7 @@ def run_qc_for_all(
             station_coords_csv=station_coords_csv,
             spike_thresholds_path=spike_thresholds_path,
             rate_of_change_thresholds_path=rate_of_change_thresholds_path,
+            flat_line_config_path=flat_line_config_path,
             profile=prof,
             data_root=base_dir,
         )
@@ -538,6 +602,7 @@ def run_single_test(
     station_coords_csv: Path | str | None = None,
     spike_thresholds_path: Path | str | None = None,
     rate_of_change_thresholds_path: Path | str | None = None,
+    flat_line_config_path: Path | str | None = None,
     print_summary: bool = True,
     profile: DatasetProfile | None = None,
 ) -> List[QCTestResult]:
@@ -582,6 +647,7 @@ def run_single_test(
     rate_of_change_thresholds = load_rate_of_change_thresholds(
         resolve_config_path("rate_of_change_thresholds", prof, rate_of_change_thresholds_path)
     )
+    flat_line_cfg = load_flat_line_config(resolve_config_path("flat_line_config", prof, flat_line_config_path))
 
     vars_to_run = [variable] if variable else get_qc_variables(ds, mapping)
     results: List[QCTestResult] = []
@@ -607,6 +673,7 @@ def run_single_test(
             location_tolerance=location_tolerance,
             spike_thresholds=spike_thresholds,
             rate_of_change_thresholds=rate_of_change_thresholds,
+            flat_line_config=flat_line_cfg,
             profile=prof,
         )
 

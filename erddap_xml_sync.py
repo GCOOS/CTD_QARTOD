@@ -88,6 +88,14 @@ def safe_dataset_id(stem: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", stem)
 
 
+def prefixed_dataset_id(stem_or_id: str, dataset_id_prefix: str = "") -> str:
+    """Return a datasetID-safe token with an optional, non-duplicated prefix."""
+    safe_id = safe_dataset_id(stem_or_id)
+    if dataset_id_prefix and not safe_id.startswith(dataset_id_prefix):
+        return f"{dataset_id_prefix}{safe_id}"
+    return safe_id
+
+
 def scan_nc_files(data_root: Path) -> Dict[Tuple[str, str], Path]:
     """Index NetCDF files by (cruise_dir_name, filename)."""
     indexed: Dict[Tuple[str, str], Path] = {}
@@ -201,6 +209,89 @@ def read_nc_variable_metadata(nc_path: Path) -> List[Tuple[str, str, Dict[str, A
             attrs = {k: _normalize_attr_value(v) for k, v in dict(var.attrs).items()}
             result.append((name, erddap_data_type(var.dtype), attrs))
         return result
+
+
+def _split_ancillary_variables(value: object) -> list[str]:
+    value = _normalize_attr_value(value)
+    if value is None:
+        return []
+    if isinstance(value, list):
+        parts = [str(item).strip() for item in value]
+    else:
+        parts = re.split(r"[\s,]+", str(value).strip())
+    return [part for part in parts if part]
+
+
+def _append_first_present(
+    ordered: list[Tuple[str, str, Dict[str, Any]]],
+    used: set[str],
+    by_name: Mapping[str, Tuple[str, str, Dict[str, Any]]],
+    candidates: Iterable[str],
+) -> None:
+    for name in candidates:
+        item = by_name.get(name)
+        if item is not None and name not in used:
+            ordered.append(item)
+            used.add(name)
+            return
+
+
+def _order_nc_metadata_for_erddap(
+    nc_metadata: Iterable[Tuple[str, str, Dict[str, Any]]],
+    profile: DatasetProfile | None = None,
+) -> list[Tuple[str, str, Dict[str, Any]]]:
+    """Order ERDDAP variables for profile/axis fields, then data variables and QC flags."""
+    metadata = list(nc_metadata)
+    prof = profile or default_profile()
+    by_name = {item[0]: item for item in metadata}
+    ordered: list[Tuple[str, str, Dict[str, Any]]] = []
+    used: set[str] = set()
+
+    lead_groups: list[Iterable[str]] = [
+        ("profile",),
+        prof.metadata.time,
+        ("time_elapsed",),
+        prof.metadata.latitude,
+        prof.metadata.longitude,
+        (prof.metadata.cruise_id,),
+        (prof.metadata.station,),
+        prof.metadata.depth,
+    ]
+    for candidates in lead_groups:
+        _append_first_present(ordered, used, by_name, candidates)
+
+    ancillary_by_parent = {}
+    for name, _, attrs in metadata:
+        ancillary_by_parent[name] = [
+            qc_name
+            for qc_name in _split_ancillary_variables(attrs.get("ancillary_variables"))
+            if qc_name in by_name
+        ]
+    referenced_flags = {
+        qc_name
+        for qc_names in ancillary_by_parent.values()
+        for qc_name in qc_names
+    }
+
+    for name, _, _ in metadata:
+        if name in used or name in referenced_flags:
+            continue
+        qc_names = ancillary_by_parent.get(name) or []
+        if not qc_names:
+            continue
+        ordered.append(by_name[name])
+        used.add(name)
+        for qc_name in qc_names:
+            if qc_name not in used:
+                ordered.append(by_name[qc_name])
+                used.add(qc_name)
+
+    for item in metadata:
+        if item[0] not in used:
+            ordered.append(item)
+            used.add(item[0])
+
+    return ordered
 
 
 def _get_child_text(elem: etree._Element, child_tag: str) -> str | None:
@@ -343,9 +434,10 @@ def _create_dataset_from_template(
     template: etree._Element,
     nc_path: Path,
     filedir_prefix: str,
+    dataset_id_prefix: str = "",
 ) -> etree._Element:
     dataset = copy.deepcopy(template)
-    dataset.set("datasetID", safe_dataset_id(nc_path.stem))
+    dataset.set("datasetID", prefixed_dataset_id(nc_path.stem, dataset_id_prefix))
     _ensure_child_text(dataset, "fileDir", f"{filedir_prefix.rstrip('/')}/{nc_path.parent.name}/")
     _ensure_child_text(dataset, "fileNameRegex", nc_path.name)
     return dataset
@@ -389,10 +481,12 @@ def sync_xml(
     output_xml: Path,
     data_root: Path,
     filedir_prefix: str,
+    dataset_id_prefix: str = "",
     dataset_type: str = "EDDTableFromNcCFFiles",
     create_missing_datasets: bool = False,
     remove_orphan_datasets: bool = True,
     preserve_erddap_ui: bool = True,
+    profile: DatasetProfile | None = None,
 ) -> None:
     parser = etree.XMLParser(remove_blank_text=True, strip_cdata=False)
     tree = etree.parse(str(input_xml), parser)
@@ -401,6 +495,7 @@ def sync_xml(
     if root.tag != "erddapDatasets":
         raise ValueError(f"Unexpected root tag: {root.tag}")
 
+    prof = profile or default_profile()
     nc_index = scan_nc_files(data_root)
     if not nc_index:
         raise ValueError(f"No NetCDF files found in {data_root}")
@@ -432,10 +527,16 @@ def sync_xml(
 
         matched_keys.add(key)
         if nc_path not in nc_metadata_cache:
-            nc_metadata_cache[nc_path] = read_nc_variable_metadata(nc_path)
+            nc_metadata_cache[nc_path] = _order_nc_metadata_for_erddap(
+                read_nc_variable_metadata(nc_path),
+                prof,
+            )
         metadata = nc_metadata_cache[nc_path]
 
         cruise, _ = key
+        current_dataset_id = dataset.get("datasetID")
+        if current_dataset_id:
+            dataset.set("datasetID", prefixed_dataset_id(current_dataset_id, dataset_id_prefix))
         _ensure_child_text(dataset, "fileDir", f"{filedir_prefix.rstrip('/')}/{cruise}/")
         _ensure_child_text(dataset, "fileNameRegex", nc_path.name)
         reused, created = _sync_datavariables_for_dataset(
@@ -463,10 +564,18 @@ def sync_xml(
 
         for cruise in sorted(grouped):
             for nc_path in sorted(grouped[cruise], key=lambda p: p.name):
-                new_dataset = _create_dataset_from_template(template_dataset, nc_path, filedir_prefix)
+                new_dataset = _create_dataset_from_template(
+                    template_dataset,
+                    nc_path,
+                    filedir_prefix,
+                    dataset_id_prefix,
+                )
                 metadata = nc_metadata_cache.get(nc_path)
                 if metadata is None:
-                    metadata = read_nc_variable_metadata(nc_path)
+                    metadata = _order_nc_metadata_for_erddap(
+                        read_nc_variable_metadata(nc_path),
+                        prof,
+                    )
                     nc_metadata_cache[nc_path] = metadata
                 _sync_datavariables_for_dataset(
                     new_dataset,
@@ -493,7 +602,9 @@ def run_erddap_xml_sync(
     input_xml: Path,
     output_xml: Path,
     data_root: Path,
+    profile: DatasetProfile | None = None,
     filedir_prefix: str | None = None,
+    dataset_id_prefix: str = "",
     dataset_type: str = "EDDTableFromNcCFFiles",
     create_missing_datasets: bool = False,
     remove_orphan_datasets: bool = True,
@@ -520,6 +631,8 @@ def run_erddap_xml_sync(
         output_xml=resolved_output,
         data_root=data_root,
         filedir_prefix=resolved_filedir_prefix,
+        profile=profile,
+        dataset_id_prefix=dataset_id_prefix,
         dataset_type=dataset_type,
         create_missing_datasets=create_missing_datasets,
         remove_orphan_datasets=remove_orphan_datasets,
@@ -535,6 +648,7 @@ def run_erddap_xml_sync_for_profile(
     output_xml: Path | None = None,
     data_root: Path | str | None = None,
     filedir_prefix: str | None = None,
+    dataset_id_prefix: str = "",
     create_missing_datasets: bool = False,
     remove_orphan_datasets: bool = True,
     preserve_erddap_ui: bool = True,
@@ -546,7 +660,9 @@ def run_erddap_xml_sync_for_profile(
         input_xml=input_xml or ERDDAP_DATASETS_XML,
         output_xml=output_xml or ERDDAP_DATASETS_XML_OUTPUT,
         data_root=resolve_erddap_data_root(prof, data_root),
+        profile=prof,
         filedir_prefix=filedir_prefix,
+        dataset_id_prefix=dataset_id_prefix,
         create_missing_datasets=create_missing_datasets,
         remove_orphan_datasets=remove_orphan_datasets,
         in_place=False,
@@ -594,6 +710,12 @@ def add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
             "ERDDAP fileDir prefix used in each dataset block "
             f"(default: {ERDDAP_FILEDIR_BASE}/<dataset_name> from --data-root)"
         ),
+    )
+    parser.add_argument(
+        "--dataset-id-prefix",
+        type=str,
+        default="",
+        help="Prefix to add to synced ERDDAP datasetID values, e.g. 'SFER_CTD_'.",
     )
     parser.add_argument(
         "--dataset-type",
@@ -648,7 +770,9 @@ def main(argv: list[str] | None = None) -> None:
         input_xml=args.input_xml,
         output_xml=args.output_xml,
         data_root=data_root,
+        profile=prof,
         filedir_prefix=args.filedir_prefix,
+        dataset_id_prefix=args.dataset_id_prefix,
         dataset_type=args.dataset_type,
         create_missing_datasets=args.create_missing_datasets,
         remove_orphan_datasets=not args.keep_orphan_datasets,
