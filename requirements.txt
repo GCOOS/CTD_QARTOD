@@ -5,3 +5,5 @@ ioos_qc
 netCDF4
 lxml
 pytest
+dash
+plotly

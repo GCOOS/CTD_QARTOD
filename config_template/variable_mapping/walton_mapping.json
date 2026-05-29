@@ -20,5 +20,6 @@
   "pressure": [
     "sea_water_pressure"
   ],
-  "oxygen_dissolved_oxygen": []
+  "oxygen_dissolved_oxygen": [],
+  "oxygen_saturation": []
 }

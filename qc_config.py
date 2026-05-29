@@ -98,6 +98,7 @@ ALL_CATEGORIES = frozenset({
     "conductivity",
     "pressure",
     "oxygen_dissolved_oxygen",
+    "oxygen_saturation",
 })
 
 # Maps each QC test to the set of categories it applies to.

@@ -12,3 +12,4 @@ GenerateDatasetsXml.xml
 /example_source_file
 pytest.ini
 rewrite_erddap_dataset_titles.py
+scripts/

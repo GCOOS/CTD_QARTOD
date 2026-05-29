@@ -172,6 +172,23 @@ After `python main.py qc`, ERDDAP XML sync runs by default (`--sync-erddap-xml`)
 
 **Defaults** for XML paths and `fileDir` prefix live in `qc_config.py` (`ERDDAP_DATASETS_XML`, `ERDDAP_DATASETS_XML_OUTPUT`, `ERDDAP_FILEDIR_PREFIX`); adjust there or override on the command line.
 
+#### `viz` — inspect saved QC results in Dash
+
+Launch a local read-only dashboard over the QC NetCDF output tree:
+
+```bash
+python main.py viz
+```
+
+By default, `viz` reads `profile.output.directory` when the profile uses duplicate output mode, otherwise it reads `profile.data_root`. Override the tree or server address as needed:
+
+```bash
+python main.py viz --data-root output/SFER_QC
+python main.py viz --host 0.0.0.0 --port 8051
+```
+
+The dashboard lets you select cruise, file, variable, and QC test. It plots sample index vs depth above sample index vs variable value, preserving the original sample order so casts with irregular depth movement are easy to inspect. QC flags are colored by QARTOD value and can be filtered from the checklist.
+
 ### Running via Python
 
 Process a single file:
@@ -296,7 +313,8 @@ From `config/variable_mapping/walton_mapping.json` :
 | practical_salinity | `sea_water_salinity`, `sea_water_salinity_2` |
 | conductivity | `sea_water_electrical_conductivity`, `sea_water_electrical_conductivity_2` |
 | pressure | `sea_water_pressure` |
-| oxygen_dissolved_oxygen | `dissolved_oxygen`, `oxygen_saturation`, `oxygen_saturation_2` |
+| oxygen_dissolved_oxygen | `dissolved_oxygen` |
+| oxygen_saturation | `oxygen_saturation`, `oxygen_saturation_2` |
 | PAR | `photosynthetically_available_radiation` |
 | above_water_radiance_irradiance | `surface_photosynthetically_available_radiation` |
 | beam_attenuation | `beam_attenuation` |

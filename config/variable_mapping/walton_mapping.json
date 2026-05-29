@@ -49,7 +49,10 @@
     ],
   
     "oxygen_dissolved_oxygen": [
-      "dissolved_oxygen",
+      "dissolved_oxygen"
+    ],
+
+    "oxygen_saturation": [
       "oxygen_saturation",
       "oxygen_saturation_2"
     ]

@@ -1,8 +1,8 @@
 {
-  "data_root": "datasets/SFER_CTD_SOAK_REMOVED_NO_LEGACY_QC",
+  "data_root": "datasets/SFER_ORIGINAL",
   "output": {
     "mode": "duplicate",
-    "directory": "output/SFER_QC_NO_LEGACY"
+    "directory": "output/SFER_QC"
   },
   "metadata": {
     "station": "station",

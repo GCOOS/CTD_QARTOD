@@ -4,6 +4,7 @@ Main entry point for QC and ERDDAP XML sync.
 Usage:
     python main.py qc [--base-dir DIR] ...
     python main.py erddap-xml [--input-xml PATH] [--data-root DIR] ...
+    python main.py viz [--data-root DIR] ...
 """
 
 from __future__ import annotations
@@ -161,6 +162,41 @@ def _add_qc_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_viz_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=str(DEFAULT_PROFILE_PATH),
+        help=f"Path to dataset profile JSON (default: '{DEFAULT_PROFILE_PATH}')",
+    )
+    parser.add_argument(
+        "--data-root",
+        type=str,
+        default=None,
+        help=(
+            "Root containing QC NetCDF cruise directories. Defaults to profile output.directory "
+            "when output.mode is duplicate, otherwise profile data_root."
+        ),
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Dash server host (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8050,
+        help="Dash server port (default: 8050)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run Dash in debug mode",
+    )
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SFER CTD QC and ERDDAP datasets.xml sync",
@@ -172,6 +208,8 @@ Examples:
     python main.py qc --base-dir /path/to/datasets/SFER_CTD_SOAK_REMOVED
     python main.py qc --no-sync-erddap-xml
     python main.py erddap-xml --data-root output/SFER_QC
+    python main.py viz
+    python main.py viz --data-root output/SFER_QC
         """,
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -189,6 +227,13 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     add_erddap_xml_arguments(erddap_parser)
+
+    viz_parser = sub.add_parser(
+        "viz",
+        help="Launch a local Dash viewer for QC NetCDF outputs",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_viz_arguments(viz_parser)
 
     return parser.parse_args(argv)
 
@@ -300,12 +345,44 @@ def _run_erddap_xml(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _run_viz(args: argparse.Namespace) -> None:
+    profile = load_dataset_profile(args.profile)
+    data_root = Path(args.data_root) if args.data_root else None
+    try:
+        from qc_dashboard import default_viz_data_root, run_dashboard
+
+        resolved_root = data_root or default_viz_data_root(profile)
+        print(f"Launching QC viewer for {resolved_root.absolute()}")
+        print(f"Open http://{args.host}:{args.port} in your browser")
+        run_dashboard(
+            data_root=resolved_root,
+            profile=profile,
+            host=args.host,
+            port=args.port,
+            debug=args.debug,
+        )
+    except KeyboardInterrupt:
+        logging.getLogger("qc_dashboard").warning("QC viewer interrupted by user.")
+        sys.exit(1)
+    except ImportError as e:
+        logging.getLogger("qc_dashboard").error(
+            "Dash viewer dependencies are missing. Install requirements.txt first: %s",
+            e,
+        )
+        sys.exit(1)
+    except Exception as e:
+        logging.getLogger("qc_dashboard").exception("QC viewer failed: %s", e)
+        sys.exit(1)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     if args.command == "qc":
         _run_qc(args)
     elif args.command == "erddap-xml":
         _run_erddap_xml(args)
+    elif args.command == "viz":
+        _run_viz(args)
     else:
         raise RuntimeError(f"Unknown command: {args.command}")
 
