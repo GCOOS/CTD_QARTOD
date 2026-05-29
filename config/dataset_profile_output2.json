@@ -12,5 +12,17 @@
     "depth": ["depth"],
     "time": ["time"],
     "sample_dimension": "z"
+  },
+  "paths": {
+    "variable_mapping": "config/variable_mapping/walton_mapping.json",
+    "station_coords": "config/location_test/Station_Mean_Coords.csv",
+    "location_config": "config/location_test/location_config.json",
+    "station_climatology": "config/climatology_test/station_climatology_config.json",
+    "station_depth_classification": "config/climatology_test/station_depth_classification.json",
+    "sensor_specs": "config/gross_range_test/sensor_specs.json",
+    "variable_sensor_map": "config/gross_range_test/variable_sensor_map.json",
+    "spike_thresholds": "config/spike_test/spike_thresholds.json",
+    "rate_of_change_thresholds": "config/rate_of_change_test/rate_of_change_thresholds.json",
+    "flat_line_config": "config/flat_line_test/flat_line_config.json"
   }
 }

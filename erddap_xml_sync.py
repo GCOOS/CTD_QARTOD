@@ -5,7 +5,8 @@ Sync ERDDAP datasets XML from NetCDF files.
 This script updates EDDTableFromNcCFFiles <dataset> blocks so that:
 1) fileDir/fileNameRegex point to the selected data root layout,
 2) dataVariable entries (names, types, and addAttributes) match NetCDF contents, and
-3) optionally removes dataset blocks with no matching NetCDF under --data-root.
+3) missing dataset blocks are created from a template, and
+4) dataset blocks with no matching NetCDF under --data-root are removed.
 
 
 """
@@ -24,8 +25,9 @@ import numpy as np
 import xarray as xr
 from lxml import etree
 
-from dataset_profile import DatasetProfile, default_profile
+from dataset_profile import DatasetProfile, default_profile, load_dataset_profile
 from qc_config import (
+    ERDDAP_DATASET_TEMPLATE_XML,
     ERDDAP_DATASETS_XML,
     ERDDAP_DATASETS_XML_OUTPUT,
     ERDDAP_FILEDIR_BASE,
@@ -329,6 +331,28 @@ def _replace_add_attributes(data_var_elem: etree._Element, new_add_attrs: etree.
     data_var_elem.append(new_add_attrs)
 
 
+def _load_dataset_template(template_xml: Path, dataset_type: str) -> etree._Element:
+    """Load a dataset template from a single <dataset> file or full datasets.xml."""
+    parser = etree.XMLParser(remove_blank_text=True, strip_cdata=False)
+    tree = etree.parse(str(template_xml), parser)
+    root = tree.getroot()
+
+    if root.tag == "dataset":
+        if root.get("type") != dataset_type:
+            raise ValueError(
+                f"Template dataset type {root.get('type')!r} does not match {dataset_type!r}."
+            )
+        return root
+
+    if root.tag == "erddapDatasets":
+        template = root.find(f"dataset[@type='{dataset_type}']")
+        if template is not None:
+            return template
+        raise ValueError(f"No {dataset_type} dataset template found in {template_xml}.")
+
+    raise ValueError(f"Unexpected template root tag in {template_xml}: {root.tag}")
+
+
 def _build_datavariable(
     source_name: str,
     data_type: str,
@@ -476,14 +500,141 @@ def resolve_filedir_prefix(data_root: Path, filedir_prefix: str | None = None) -
     return _filedir_prefix_from_data_root(data_root)
 
 
+def _scan_tag_name(xml_text: str, index: int) -> tuple[str, int, bool]:
+    j = index + 1
+    if j < len(xml_text) and xml_text[j] == "/":
+        j += 1
+    while j < len(xml_text) and xml_text[j].isspace():
+        j += 1
+    name_start = j
+    while j < len(xml_text) and (xml_text[j].isalnum() or xml_text[j] in "_:-"):
+        j += 1
+    name = xml_text[name_start:j]
+    quote: str | None = None
+    while j < len(xml_text):
+        char = xml_text[j]
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == ">":
+            k = j - 1
+            while k > index and xml_text[k].isspace():
+                k -= 1
+            return name, j + 1, xml_text[k] == "/"
+        j += 1
+    raise ValueError("Unterminated XML tag while locating dataset blocks.")
+
+
+def _top_level_dataset_spans(xml_text: str) -> list[tuple[int, int]]:
+    """Return byte-preserving character spans for top-level <dataset> blocks."""
+    spans: list[tuple[int, int]] = []
+    stack: list[str] = []
+    dataset_start: int | None = None
+    i = 0
+
+    while i < len(xml_text):
+        if not xml_text.startswith("<", i):
+            i += 1
+            continue
+        if xml_text.startswith("<!--", i):
+            end = xml_text.find("-->", i + 4)
+            if end == -1:
+                raise ValueError("Unterminated XML comment while locating dataset blocks.")
+            i = end + 3
+            continue
+        if xml_text.startswith("<![CDATA[", i):
+            end = xml_text.find("]]>", i + 9)
+            if end == -1:
+                raise ValueError("Unterminated CDATA while locating dataset blocks.")
+            i = end + 3
+            continue
+        if xml_text.startswith("<?", i):
+            end = xml_text.find("?>", i + 2)
+            if end == -1:
+                raise ValueError("Unterminated XML processing instruction.")
+            i = end + 2
+            continue
+        if xml_text.startswith("<!", i):
+            end = xml_text.find(">", i + 2)
+            if end == -1:
+                raise ValueError("Unterminated XML declaration while locating dataset blocks.")
+            i = end + 1
+            continue
+
+        is_close = i + 1 < len(xml_text) and xml_text[i + 1] == "/"
+        name, tag_end, self_closing = _scan_tag_name(xml_text, i)
+        if not name:
+            i = tag_end
+            continue
+
+        if is_close:
+            if name == "dataset" and stack == ["erddapDatasets", "dataset"]:
+                if dataset_start is not None:
+                    spans.append((dataset_start, tag_end))
+                    dataset_start = None
+            if stack and stack[-1] == name:
+                stack.pop()
+            i = tag_end
+            continue
+
+        if name == "dataset" and stack == ["erddapDatasets"]:
+            dataset_start = i
+            if self_closing:
+                spans.append((i, tag_end))
+                dataset_start = None
+        if not self_closing:
+            stack.append(name)
+        i = tag_end
+
+    return spans
+
+
+def _serialize_dataset_block(dataset: etree._Element) -> str:
+    dataset_copy = copy.deepcopy(dataset)
+    dataset_copy.tail = None
+    text = etree.tostring(dataset_copy, pretty_print=True, encoding="unicode")
+    return "\n".join(f"  {line}" if line else line for line in text.rstrip().splitlines())
+
+
+def _write_preserving_non_dataset_xml(
+    *,
+    input_xml: Path,
+    output_xml: Path,
+    root: etree._Element,
+) -> None:
+    original = input_xml.read_text(encoding="utf-8")
+    datasets = root.findall("dataset")
+    dataset_region = "\n".join(_serialize_dataset_block(dataset) for dataset in datasets)
+    if dataset_region:
+        dataset_region = f"{dataset_region}\n"
+
+    spans = _top_level_dataset_spans(original)
+    if spans:
+        prefix = original[: spans[0][0]]
+        suffix = original[spans[-1][1] :]
+        output_xml.write_text(f"{prefix}{dataset_region}{suffix}", encoding="utf-8")
+        return
+
+    closing = original.rfind("</erddapDatasets>")
+    if closing == -1:
+        raise ValueError("Cannot preserve XML shell: </erddapDatasets> not found.")
+    prefix = original[:closing]
+    suffix = original[closing:]
+    separator = "" if prefix.endswith("\n") or not dataset_region else "\n"
+    output_xml.write_text(f"{prefix}{separator}{dataset_region}{suffix}", encoding="utf-8")
+
+
 def sync_xml(
     input_xml: Path,
     output_xml: Path,
     data_root: Path,
     filedir_prefix: str,
+    dataset_template_xml: Path | None = None,
     dataset_id_prefix: str = "",
     dataset_type: str = "EDDTableFromNcCFFiles",
-    create_missing_datasets: bool = False,
+    create_missing_datasets: bool = True,
     remove_orphan_datasets: bool = True,
     preserve_erddap_ui: bool = True,
     profile: DatasetProfile | None = None,
@@ -502,7 +653,6 @@ def sync_xml(
 
     matched_keys: set[Tuple[str, str]] = set()
     datasets = [d for d in root.findall("dataset") if d.get("type") == dataset_type]
-    template_dataset = datasets[0] if datasets else None
 
     nc_metadata_cache: Dict[Path, List[Tuple[str, str, Dict[str, Any]]]] = {}
 
@@ -555,38 +705,46 @@ def sync_xml(
         )
 
     if create_missing_datasets:
-        if template_dataset is None:
-            raise ValueError("Cannot create missing datasets: no template dataset found in XML.")
         grouped = defaultdict(list)
         for (cruise, filename), path in nc_index.items():
             if (cruise, filename) not in matched_keys:
                 grouped[cruise].append(path)
 
-        for cruise in sorted(grouped):
-            for nc_path in sorted(grouped[cruise], key=lambda p: p.name):
-                new_dataset = _create_dataset_from_template(
-                    template_dataset,
-                    nc_path,
-                    filedir_prefix,
-                    dataset_id_prefix,
-                )
-                metadata = nc_metadata_cache.get(nc_path)
-                if metadata is None:
-                    metadata = _order_nc_metadata_for_erddap(
-                        read_nc_variable_metadata(nc_path),
-                        prof,
+        if grouped:
+            template_path = dataset_template_xml or ERDDAP_DATASET_TEMPLATE_XML
+            if not template_path.exists():
+                raise FileNotFoundError(f"Dataset template XML not found: {template_path}")
+            template_dataset = _load_dataset_template(template_path, dataset_type)
+
+            for cruise in sorted(grouped):
+                for nc_path in sorted(grouped[cruise], key=lambda p: p.name):
+                    new_dataset = _create_dataset_from_template(
+                        template_dataset,
+                        nc_path,
+                        filedir_prefix,
+                        dataset_id_prefix,
                     )
-                    nc_metadata_cache[nc_path] = metadata
-                _sync_datavariables_for_dataset(
-                    new_dataset,
-                    metadata,
-                    preserve_erddap_ui=preserve_erddap_ui,
-                )
-                root.append(new_dataset)
-                created_count += 1
+                    metadata = nc_metadata_cache.get(nc_path)
+                    if metadata is None:
+                        metadata = _order_nc_metadata_for_erddap(
+                            read_nc_variable_metadata(nc_path),
+                            prof,
+                        )
+                        nc_metadata_cache[nc_path] = metadata
+                    _sync_datavariables_for_dataset(
+                        new_dataset,
+                        metadata,
+                        preserve_erddap_ui=preserve_erddap_ui,
+                    )
+                    root.append(new_dataset)
+                    created_count += 1
 
     output_xml.parent.mkdir(parents=True, exist_ok=True)
-    tree.write(str(output_xml), pretty_print=True, xml_declaration=True, encoding="UTF-8")
+    _write_preserving_non_dataset_xml(
+        input_xml=input_xml,
+        output_xml=output_xml,
+        root=root,
+    )
 
     logger.info("Updated dataset blocks: %d", updated_count)
     logger.info("Skipped existing blocks (unparseable or kept orphan): %d", skipped_count)
@@ -604,9 +762,10 @@ def run_erddap_xml_sync(
     data_root: Path,
     profile: DatasetProfile | None = None,
     filedir_prefix: str | None = None,
+    dataset_template_xml: Path = ERDDAP_DATASET_TEMPLATE_XML,
     dataset_id_prefix: str = "",
     dataset_type: str = "EDDTableFromNcCFFiles",
-    create_missing_datasets: bool = False,
+    create_missing_datasets: bool = True,
     remove_orphan_datasets: bool = True,
     in_place: bool = False,
     preserve_erddap_ui: bool = True,
@@ -623,6 +782,8 @@ def run_erddap_xml_sync(
         raise FileNotFoundError(f"Input XML not found: {input_xml}")
     if not data_root.exists():
         raise FileNotFoundError(f"Data root not found: {data_root}")
+    if create_missing_datasets and not dataset_template_xml.exists():
+        raise FileNotFoundError(f"Dataset template XML not found: {dataset_template_xml}")
 
     resolved_output = input_xml if in_place else output_xml
     resolved_filedir_prefix = resolve_filedir_prefix(data_root, filedir_prefix)
@@ -631,6 +792,7 @@ def run_erddap_xml_sync(
         output_xml=resolved_output,
         data_root=data_root,
         filedir_prefix=resolved_filedir_prefix,
+        dataset_template_xml=dataset_template_xml,
         profile=profile,
         dataset_id_prefix=dataset_id_prefix,
         dataset_type=dataset_type,
@@ -648,8 +810,9 @@ def run_erddap_xml_sync_for_profile(
     output_xml: Path | None = None,
     data_root: Path | str | None = None,
     filedir_prefix: str | None = None,
+    dataset_template_xml: Path = ERDDAP_DATASET_TEMPLATE_XML,
     dataset_id_prefix: str = "",
-    create_missing_datasets: bool = False,
+    create_missing_datasets: bool = True,
     remove_orphan_datasets: bool = True,
     preserve_erddap_ui: bool = True,
     verbose: bool = False,
@@ -662,6 +825,7 @@ def run_erddap_xml_sync_for_profile(
         data_root=resolve_erddap_data_root(prof, data_root),
         profile=prof,
         filedir_prefix=filedir_prefix,
+        dataset_template_xml=dataset_template_xml,
         dataset_id_prefix=dataset_id_prefix,
         create_missing_datasets=create_missing_datasets,
         remove_orphan_datasets=remove_orphan_datasets,
@@ -712,6 +876,15 @@ def add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--dataset-template-xml",
+        type=Path,
+        default=ERDDAP_DATASET_TEMPLATE_XML,
+        help=(
+            "Dataset XML template used when creating missing dataset blocks "
+            f"(default: '{ERDDAP_DATASET_TEMPLATE_XML}')"
+        ),
+    )
+    parser.add_argument(
         "--dataset-id-prefix",
         type=str,
         default="",
@@ -724,9 +897,9 @@ def add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
         help="Dataset type tag to sync.",
     )
     parser.add_argument(
-        "--create-missing-datasets",
+        "--no-create-missing-datasets",
         action="store_true",
-        help="Create new dataset blocks for NetCDF files absent from the XML.",
+        help="Do not create new dataset blocks for NetCDF files absent from the XML.",
     )
     parser.add_argument(
         "--keep-orphan-datasets",
@@ -764,7 +937,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    prof = default_profile()
+    prof = load_dataset_profile(args.profile)
     data_root = resolve_erddap_data_root(prof, args.data_root)
     run_erddap_xml_sync(
         input_xml=args.input_xml,
@@ -772,9 +945,10 @@ def main(argv: list[str] | None = None) -> None:
         data_root=data_root,
         profile=prof,
         filedir_prefix=args.filedir_prefix,
+        dataset_template_xml=args.dataset_template_xml,
         dataset_id_prefix=args.dataset_id_prefix,
         dataset_type=args.dataset_type,
-        create_missing_datasets=args.create_missing_datasets,
+        create_missing_datasets=not args.no_create_missing_datasets,
         remove_orphan_datasets=not args.keep_orphan_datasets,
         in_place=args.in_place,
         preserve_erddap_ui=not args.no_preserve_erddap_ui,

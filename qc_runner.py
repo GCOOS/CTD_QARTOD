@@ -25,11 +25,11 @@ from dataset_profile import (
     restore_flags_shape,
 )
 from qc_config import (
-    LOCATION_TOLERANCE,
     QC_FLAGS,
     TEST_CATEGORIES,
     get_climatology_config_for_file,
     load_flat_line_config,
+    load_location_config,
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
@@ -379,18 +379,8 @@ def _run_single_test_for_var(
 
 def run_qc_for_file(
     nc_path: Path | str,
-    mapping_path: Path | str | None = None,
-    location_tolerance: float = LOCATION_TOLERANCE,
     gross_range_overrides: Mapping[str, Mapping[str, tuple]] | None = None,
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
-    station_climatology_config_path: Path | str | None = None,
-    station_depth_classification_path: Path | str | None = None,
-    sensor_specs_path: Path | str | None = None,
-    variable_sensor_map_path: Path | str | None = None,
-    station_coords_csv: Path | str | None = None,
-    spike_thresholds_path: Path | str | None = None,
-    rate_of_change_thresholds_path: Path | str | None = None,
-    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
 ) -> None:
@@ -403,15 +393,16 @@ def run_qc_for_file(
     nc_path = Path(nc_path)
     prof = profile or default_profile()
     root_for_output = Path(data_root) if data_root is not None else prof.data_root
-    mapping_file = resolve_config_path("variable_mapping", prof, mapping_path)
-    station_coords_file = resolve_config_path("station_coords", prof, station_coords_csv)
-    station_climatology_file = resolve_config_path("station_climatology", prof, station_climatology_config_path)
-    station_depth_file = resolve_config_path("station_depth_classification", prof, station_depth_classification_path)
-    sensor_specs_file = resolve_config_path("sensor_specs", prof, sensor_specs_path)
-    variable_sensor_file = resolve_config_path("variable_sensor_map", prof, variable_sensor_map_path)
-    spike_file = resolve_config_path("spike_thresholds", prof, spike_thresholds_path)
-    rate_file = resolve_config_path("rate_of_change_thresholds", prof, rate_of_change_thresholds_path)
-    flat_line_file = resolve_config_path("flat_line_config", prof, flat_line_config_path)
+    mapping_file = resolve_config_path("variable_mapping", prof)
+    station_coords_file = resolve_config_path("station_coords", prof)
+    location_file = resolve_config_path("location_config", prof)
+    station_climatology_file = resolve_config_path("station_climatology", prof)
+    station_depth_file = resolve_config_path("station_depth_classification", prof)
+    sensor_specs_file = resolve_config_path("sensor_specs", prof)
+    variable_sensor_file = resolve_config_path("variable_sensor_map", prof)
+    spike_file = resolve_config_path("spike_thresholds", prof)
+    rate_file = resolve_config_path("rate_of_change_thresholds", prof)
+    flat_line_file = resolve_config_path("flat_line_config", prof)
     logger.info("Processing file: %s", nc_path.name)
     
     mapping = load_mapping(mapping_file)
@@ -442,6 +433,7 @@ def run_qc_for_file(
 
     spike_thresholds = load_spike_thresholds(spike_file)
     rate_of_change_thresholds = load_rate_of_change_thresholds(rate_file)
+    location_cfg = load_location_config(location_file)
     flat_line_cfg = load_flat_line_config(flat_line_file)
 
     qc_vars = get_qc_variables(ds, mapping)
@@ -457,7 +449,7 @@ def run_qc_for_file(
             gross_ranges,
             clim_config,
             expected_location=station_coords,
-            location_tolerance=location_tolerance,
+            location_tolerance=location_cfg["tolerance"],
             spike_thresholds=spike_thresholds,
             rate_of_change_thresholds=rate_of_change_thresholds,
             flat_line_config=flat_line_cfg,
@@ -472,18 +464,8 @@ def run_qc_for_file(
 
 def run_qc_for_directory(
     dir_path: Path | str,
-    mapping_path: Path | str | None = None,
-    location_tolerance: float = LOCATION_TOLERANCE,
     gross_range_overrides: Mapping[str, Mapping[str, tuple]] | None = None,
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
-    station_climatology_config_path: Path | str | None = None,
-    station_depth_classification_path: Path | str | None = None,
-    sensor_specs_path: Path | str | None = None,
-    variable_sensor_map_path: Path | str | None = None,
-    station_coords_csv: Path | str | None = None,
-    spike_thresholds_path: Path | str | None = None,
-    rate_of_change_thresholds_path: Path | str | None = None,
-    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
 ) -> None:
@@ -499,18 +481,8 @@ def run_qc_for_directory(
         logger.debug("File %d/%d: %s", i, len(nc_files), nc_file.name)
         run_qc_for_file(
             nc_file,
-            mapping_path=mapping_path,
-            location_tolerance=location_tolerance,
             gross_range_overrides=gross_range_overrides,
             climatology_overrides=climatology_overrides,
-            station_climatology_config_path=station_climatology_config_path,
-            station_depth_classification_path=station_depth_classification_path,
-            sensor_specs_path=sensor_specs_path,
-            variable_sensor_map_path=variable_sensor_map_path,
-            station_coords_csv=station_coords_csv,
-            spike_thresholds_path=spike_thresholds_path,
-            rate_of_change_thresholds_path=rate_of_change_thresholds_path,
-            flat_line_config_path=flat_line_config_path,
             profile=prof,
             data_root=data_root,
         )
@@ -520,18 +492,8 @@ def run_qc_for_directory(
 
 def run_qc_for_all(
     base_dir: Path | str | None = None,
-    mapping_path: Path | str | None = None,
-    location_tolerance: float = LOCATION_TOLERANCE,
     gross_range_overrides: Mapping[str, Mapping[str, tuple]] | None = None,
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
-    station_climatology_config_path: Path | str | None = None,
-    station_depth_classification_path: Path | str | None = None,
-    sensor_specs_path: Path | str | None = None,
-    variable_sensor_map_path: Path | str | None = None,
-    station_coords_csv: Path | str | None = None,
-    spike_thresholds_path: Path | str | None = None,
-    rate_of_change_thresholds_path: Path | str | None = None,
-    flat_line_config_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
 ) -> None:
     """
@@ -549,18 +511,8 @@ def run_qc_for_all(
         logger.info("Processing cruise %d/%d: %s", i, len(cruise_dirs), cruise_dir.name)
         run_qc_for_directory(
             cruise_dir,
-            mapping_path=mapping_path,
-            location_tolerance=location_tolerance,
             gross_range_overrides=gross_range_overrides,
             climatology_overrides=climatology_overrides,
-            station_climatology_config_path=station_climatology_config_path,
-            station_depth_classification_path=station_depth_classification_path,
-            sensor_specs_path=sensor_specs_path,
-            variable_sensor_map_path=variable_sensor_map_path,
-            station_coords_csv=station_coords_csv,
-            spike_thresholds_path=spike_thresholds_path,
-            rate_of_change_thresholds_path=rate_of_change_thresholds_path,
-            flat_line_config_path=flat_line_config_path,
             profile=prof,
             data_root=base_dir,
         )
@@ -575,14 +527,13 @@ def list_available_tests() -> List[str]:
 
 def list_file_variables(
     nc_path: Path | str,
-    mapping_path: Path | str | None = None,
     profile: DatasetProfile | None = None,
 ) -> List[str]:
     """
     List variables in the file that are eligible for QC (per mapping).
     """
     prof = profile or default_profile()
-    mapping = load_mapping(resolve_config_path("variable_mapping", prof, mapping_path))
+    mapping = load_mapping(resolve_config_path("variable_mapping", prof))
     ds = load_nc_file(nc_path)
     return get_qc_variables(ds, mapping)
 
@@ -591,18 +542,8 @@ def run_single_test(
     nc_path: Path | str,
     test_name: str,
     variable: str | None = None,
-    mapping_path: Path | str | None = None,
-    location_tolerance: float = LOCATION_TOLERANCE,
     gross_range_overrides: Mapping[str, Mapping[str, tuple]] | None = None,
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
-    station_climatology_config_path: Path | str | None = None,
-    station_depth_classification_path: Path | str | None = None,
-    sensor_specs_path: Path | str | None = None,
-    variable_sensor_map_path: Path | str | None = None,
-    station_coords_csv: Path | str | None = None,
-    spike_thresholds_path: Path | str | None = None,
-    rate_of_change_thresholds_path: Path | str | None = None,
-    flat_line_config_path: Path | str | None = None,
     print_summary: bool = True,
     profile: DatasetProfile | None = None,
 ) -> List[QCTestResult]:
@@ -615,39 +556,36 @@ def run_single_test(
 
     nc_path = Path(nc_path)
     prof = profile or default_profile()
-    mapping = load_mapping(resolve_config_path("variable_mapping", prof, mapping_path))
+    mapping = load_mapping(resolve_config_path("variable_mapping", prof))
     ds = load_nc_file(nc_path)
 
     station_id = get_station_id(ds, prof.metadata)
     station_coords = resolve_coords_by_station_id(
         station_id,
-        station_csv=resolve_config_path("station_coords", prof, station_coords_csv),
+        station_csv=resolve_config_path("station_coords", prof),
     )
 
     dynamic_ranges = resolve_gross_ranges(
         ds,
-        specs_path=resolve_config_path("sensor_specs", prof, sensor_specs_path),
-        variable_map_path=resolve_config_path("variable_sensor_map", prof, variable_sensor_map_path),
+        specs_path=resolve_config_path("sensor_specs", prof),
+        variable_map_path=resolve_config_path("variable_sensor_map", prof),
     )
     gross_ranges = {**dynamic_ranges, **(gross_range_overrides or {})}
     clim_config = get_climatology_config_for_file(
         ds,
-        limits_json_path=resolve_config_path("station_climatology", prof, station_climatology_config_path),
-        classification_json_path=resolve_config_path(
-            "station_depth_classification",
-            prof,
-            station_depth_classification_path,
-        ),
+        limits_json_path=resolve_config_path("station_climatology", prof),
+        classification_json_path=resolve_config_path("station_depth_classification", prof),
         metadata=prof.metadata,
     )
     if clim_config and climatology_overrides:
         clim_config = {**clim_config, **climatology_overrides}
 
-    spike_thresholds = load_spike_thresholds(resolve_config_path("spike_thresholds", prof, spike_thresholds_path))
+    spike_thresholds = load_spike_thresholds(resolve_config_path("spike_thresholds", prof))
     rate_of_change_thresholds = load_rate_of_change_thresholds(
-        resolve_config_path("rate_of_change_thresholds", prof, rate_of_change_thresholds_path)
+        resolve_config_path("rate_of_change_thresholds", prof)
     )
-    flat_line_cfg = load_flat_line_config(resolve_config_path("flat_line_config", prof, flat_line_config_path))
+    location_cfg = load_location_config(resolve_config_path("location_config", prof))
+    flat_line_cfg = load_flat_line_config(resolve_config_path("flat_line_config", prof))
 
     vars_to_run = [variable] if variable else get_qc_variables(ds, mapping)
     results: List[QCTestResult] = []
@@ -670,7 +608,7 @@ def run_single_test(
             gross_ranges=gross_ranges,
             climatology_config=clim_config,
             expected_location=station_coords,
-            location_tolerance=location_tolerance,
+            location_tolerance=location_cfg["tolerance"],
             spike_thresholds=spike_thresholds,
             rate_of_change_thresholds=rate_of_change_thresholds,
             flat_line_config=flat_line_cfg,

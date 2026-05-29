@@ -87,6 +87,7 @@ class PathsConfig:
 
     variable_mapping: Path | None = None
     station_coords: Path | None = None
+    location_config: Path | None = None
     station_climatology: Path | None = None
     station_depth_classification: Path | None = None
     sensor_specs: Path | None = None
@@ -102,6 +103,7 @@ class PathsConfig:
         return cls(
             variable_mapping=_resolve_path(data.get("variable_mapping"), base_dir),
             station_coords=_resolve_path(data.get("station_coords"), base_dir),
+            location_config=_resolve_path(data.get("location_config"), base_dir),
             station_climatology=_resolve_path(data.get("station_climatology"), base_dir),
             station_depth_classification=_resolve_path(data.get("station_depth_classification"), base_dir),
             sensor_specs=_resolve_path(data.get("sensor_specs"), base_dir),
@@ -189,6 +191,7 @@ def resolve_config_path(
     fallback_by_key = {
         "variable_mapping": qc_config.VARIABLE_MAPPING_JSON,
         "station_coords": qc_config.STATION_COORDS_CSV,
+        "location_config": qc_config.LOCATION_CONFIG_JSON,
         "station_climatology": qc_config.STATION_CLIMATOLOGY_JSON,
         "station_depth_classification": qc_config.STATION_DEPTH_CLASSIFICATION_JSON,
         "sensor_specs": qc_config.SENSOR_SPECS_JSON,

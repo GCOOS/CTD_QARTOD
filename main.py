@@ -21,7 +21,7 @@ from erddap_xml_sync import (
     run_erddap_xml_sync,
     run_erddap_xml_sync_for_profile,
 )
-from qc_config import LOCATION_TOLERANCE
+from qc_config import load_location_config
 from qc_runner import run_qc_for_all
 
 logger = logging.getLogger(__name__)
@@ -57,69 +57,6 @@ def _add_qc_arguments(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=None,
         help="Base directory containing cruise directories (overrides profile data_root)",
-    )
-    parser.add_argument(
-        "--mapping-path",
-        type=str,
-        default=None,
-        help="Path to variable mapping JSON (overrides profile/default config path)",
-    )
-    parser.add_argument(
-        "--location-tolerance",
-        type=float,
-        default=LOCATION_TOLERANCE,
-        help=f"Tolerance in degrees for location test (default: {LOCATION_TOLERANCE})",
-    )
-    parser.add_argument(
-        "--station-coords",
-        type=str,
-        default=None,
-        help="Path to station coordinates CSV (overrides profile/default config path)",
-    )
-    parser.add_argument(
-        "--station-climatology-config",
-        type=str,
-        default=None,
-        help=(
-            "Path to climatology limits JSON (deep_cast_limits / shallow_cast_limits only; "
-            "overrides profile/default config path)"
-        ),
-    )
-    parser.add_argument(
-        "--station-depth-classification",
-        type=str,
-        default=None,
-        help=(
-            "Path to JSON mapping station IDs to deep_cast vs shallow_cast lists "
-            "(overrides profile/default config path)"
-        ),
-    )
-    parser.add_argument(
-        "--sensor-specs",
-        type=str,
-        default=None,
-        help="Path to sensor specs JSON (overrides profile/default config path)",
-    )
-    parser.add_argument(
-        "--variable-sensor-map",
-        type=str,
-        default=None,
-        help="Path to variable-sensor map JSON (overrides profile/default config path)",
-    )
-    parser.add_argument(
-        "--spike-thresholds",
-        type=str,
-        default=None,
-        help="Path to per-variable spike test thresholds JSON (overrides profile/default config path)",
-    )
-    parser.add_argument(
-        "--rate-of-change-thresholds",
-        type=str,
-        default=None,
-        help=(
-            "Path to per-variable rate-of-change thresholds JSON "
-            "(overrides profile/default config path)"
-        ),
     )
     parser.add_argument(
         "--verbose",
@@ -250,26 +187,21 @@ def _run_qc(args: argparse.Namespace) -> None:
         logger.error("Base path is not a directory: %s", base_dir)
         sys.exit(1)
 
-    mapping_path = resolve_config_path("variable_mapping", profile, args.mapping_path)
+    mapping_path = resolve_config_path("variable_mapping", profile)
     if not mapping_path.exists():
         logger.error("Mapping file does not exist: %s", mapping_path)
         sys.exit(1)
 
-    station_coords_csv = resolve_config_path("station_coords", profile, args.station_coords)
-    station_climatology_config = resolve_config_path("station_climatology", profile, args.station_climatology_config)
-    station_depth_classification = resolve_config_path(
-        "station_depth_classification",
-        profile,
-        args.station_depth_classification,
-    )
-    sensor_specs_path = resolve_config_path("sensor_specs", profile, args.sensor_specs)
-    variable_sensor_map_path = resolve_config_path("variable_sensor_map", profile, args.variable_sensor_map)
-    spike_thresholds_path = resolve_config_path("spike_thresholds", profile, args.spike_thresholds)
-    rate_of_change_thresholds_path = resolve_config_path(
-        "rate_of_change_thresholds",
-        profile,
-        args.rate_of_change_thresholds,
-    )
+    station_coords_csv = resolve_config_path("station_coords", profile)
+    location_config = resolve_config_path("location_config", profile)
+    station_climatology_config = resolve_config_path("station_climatology", profile)
+    station_depth_classification = resolve_config_path("station_depth_classification", profile)
+    sensor_specs_path = resolve_config_path("sensor_specs", profile)
+    variable_sensor_map_path = resolve_config_path("variable_sensor_map", profile)
+    spike_thresholds_path = resolve_config_path("spike_thresholds", profile)
+    rate_of_change_thresholds_path = resolve_config_path("rate_of_change_thresholds", profile)
+    flat_line_config = resolve_config_path("flat_line_config", profile)
+    location_cfg = load_location_config(location_config)
 
     logger.info("Starting QC pipeline...")
     logger.info("  Dataset profile:          %s", Path(args.profile).absolute())
@@ -279,26 +211,19 @@ def _run_qc(args: argparse.Namespace) -> None:
     logger.info("  Sample dimension:          %s", profile.metadata.sample_dimension)
     logger.info("  Mapping file:              %s", mapping_path.absolute())
     logger.info("  Station coords CSV:        %s", station_coords_csv.absolute())
+    logger.info("  Location config JSON:      %s", location_config.absolute())
     logger.info("  Station depth class JSON:  %s", station_depth_classification.absolute())
     logger.info("  Station climatology JSON:  %s", station_climatology_config.absolute())
     logger.info("  Sensor specs JSON:         %s", sensor_specs_path.absolute())
     logger.info("  Variable-sensor map JSON:  %s", variable_sensor_map_path.absolute())
     logger.info("  Spike thresholds JSON:       %s", spike_thresholds_path.absolute())
     logger.info("  Rate-of-change thresholds:   %s", rate_of_change_thresholds_path.absolute())
-    logger.info("  Location tolerance:        %s degrees", args.location_tolerance)
+    logger.info("  Flat-line config JSON:       %s", flat_line_config.absolute())
+    logger.info("  Location tolerance:        %s degrees", location_cfg["tolerance"])
 
     try:
         run_qc_for_all(
             base_dir=base_dir,
-            mapping_path=mapping_path,
-            location_tolerance=args.location_tolerance,
-            station_climatology_config_path=station_climatology_config,
-            station_depth_classification_path=station_depth_classification,
-            sensor_specs_path=sensor_specs_path,
-            variable_sensor_map_path=variable_sensor_map_path,
-            station_coords_csv=station_coords_csv,
-            spike_thresholds_path=spike_thresholds_path,
-            rate_of_change_thresholds_path=rate_of_change_thresholds_path,
             profile=profile,
         )
         logger.info("QC pipeline completed successfully!")
@@ -329,9 +254,11 @@ def _run_erddap_xml(args: argparse.Namespace) -> None:
             input_xml=args.input_xml,
             output_xml=args.output_xml,
             data_root=data_root,
+            profile=profile,
             filedir_prefix=args.filedir_prefix,
             dataset_type=args.dataset_type,
-            create_missing_datasets=args.create_missing_datasets,
+            dataset_template_xml=args.dataset_template_xml,
+            create_missing_datasets=not args.no_create_missing_datasets,
             remove_orphan_datasets=not args.keep_orphan_datasets,
             in_place=args.in_place,
             preserve_erddap_ui=not args.no_preserve_erddap_ui,

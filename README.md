@@ -3,15 +3,12 @@
 ### Components
 
 - `main.py`: CLI entry point with subcommands `qc` (NetCDF QC) and `erddap-xml` (sync ERDDAP `datasets.xml` blocks).
-- `erddap_xml_sync.py`: Updates `EDDTableFromNcCFFiles` dataset blocks so `fileDir` / `fileNameRegex` and `dataVariable` lists match NetCDF contents (including `*_qc_*` variables). By default removes XML dataset blocks with no matching `.nc` under `--data-root`. Can be run standalone or via `main.py erddap-xml`.
+- `erddap_xml_sync.py`: Updates `EDDTableFromNcCFFiles` dataset blocks so `fileDir` / `fileNameRegex` and `dataVariable` lists match NetCDF contents (including `*_qc_*` variables). By default creates missing XML dataset blocks from `datasets/GenerateDatasetsXml.xml` and removes blocks with no matching `.nc` under `--data-root`. Can be run standalone or via `main.py erddap-xml`.
 - `qc_config.py`: Centralized configuration including:
-  - `DATASET_DIR`: Default dataset directory path
-  - `ERDDAP_DATASETS_XML`, `ERDDAP_DATASETS_XML_OUTPUT`, `ERDDAP_FILEDIR_PREFIX`: Defaults for ERDDAP XML sync (see below)
   - `QC_FLAGS`: QARTOD quality flag definitions
-  - `LOCATION_TOLERANCE`: Tolerance (degrees) for location test
   - `ALL_CATEGORIES`: All variable categories from the mapping
   - `TEST_CATEGORIES`: Maps each test to the categories it applies to
-  - Config file paths (`VARIABLE_MAPPING_JSON`, `STATION_COORDS_CSV`, `STATION_CLIMATOLOGY_JSON`, `STATION_DEPTH_CLASSIFICATION_JSON`, `SENSOR_SPECS_JSON`, `VARIABLE_SENSOR_MAP_JSON`, `SPIKE_THRESHOLDS_JSON`, `RATE_OF_CHANGE_THRESHOLDS_JSON`)
+  - Fallback config paths and small loader helpers used when a profile omits a path
 - `qc_data_loader.py`: Loads NetCDF, loads `walton_mapping.json`, finds variables needing QC, and locates lon/lat fields.
 - `qc_tests/`: Package of QC test modules (each `*_test` name matches the string written as `{var}_qc_{name}` in NetCDF, e.g. `location_test`, `gross_range_test`, `climatology_test`, `gap_test`, `syntax_test`, `decreasing_radiance_test`, `spike_test`, `rate_of_change_test`, `flat_line_test`) wrapping `ioos_qc` where applicable.
 - `qc_writer.py`: Writes QC arrays back to the dataset with standard QARTOD-like attributes.
@@ -30,7 +27,7 @@ python -m pytest tests/ -q
 
 ### Config files (`config/`)
 
-Config is grouped by QC test (or `variable_mapping` for the standard-name → dataset-variable map). Dataset-level layout is defined in `config/dataset_profile.json`; individual config file path fallbacks are defined in `qc_config.py`.
+Config is grouped by QC test (or `variable_mapping` for the Walton category → dataset-variable map). Dataset-level layout and config file paths are defined in `config/dataset_profile.json`; per-test folders own test-specific thresholds/settings.
 
 For a **new dataset**, start from [`config_template/`](config_template/README.md): copy the folder to `config/`, then edit each file (see the template README for a checklist).
 
@@ -40,7 +37,8 @@ config/
 ├── variable_mapping/
 │   └── walton_mapping.json          # Walton categories → dataset variable names
 ├── location_test/
-│   └── Station_Mean_Coords.csv      # Expected lat/lon per station
+│   ├── Station_Mean_Coords.csv      # Expected lat/lon per station
+│   └── location_config.json         # Location-test tolerance
 ├── gross_range_test/
 │   ├── sensor_specs.json            # Sensor IDs + unit-aware ranges
 │   └── variable_sensor_map.json     # Variable → sensor mapping
@@ -49,8 +47,10 @@ config/
 │   └── station_depth_classification.json # Station lists: deep_cast vs shallow_cast
 ├── spike_test/
 │   └── spike_thresholds.json
-└── rate_of_change_test/
-    └── rate_of_change_thresholds.json
+├── rate_of_change_test/
+│   └── rate_of_change_thresholds.json
+└── flat_line_test/
+    └── flat_line_config.json
 ```
 
 The SFER profile uses `sample_dimension: "z"` because science variables are shaped `(profile, z)`, with `profile` size 1 and cast order along `z`. The `metadata.depth` field names the NetCDF variable containing depth values, not the dimension name.
@@ -86,7 +86,6 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 #### Strongly recommended tests
 | Test | Description | Categories |
 |------|-------------|------------|
-| `photic_zone_limit_test` | ... | PAR, in_water_radiance_irradiance |
 | `spike_test` | ... | All |
 | `rate_of_change_test` | ... | All |
 | `flat_line_test` | ... | All |
@@ -104,14 +103,8 @@ python main.py erddap-xml --help
 #### `qc` — run QC on NetCDF trees
 
 ```
+--profile                   Dataset profile JSON
 --base-dir                  Base directory containing cruise directories
---mapping-path              Path to variable mapping JSON
---location-tolerance        Tolerance in degrees for location test
---station-coords            Path to station coordinates CSV
---station-depth-classification Path to deep vs shallow station ID lists JSON
---station-climatology-config Path to climatology limits JSON (deep/shallow limit tables only)
---sensor-specs              Path to sensor specs JSON
---variable-sensor-map       Path to variable-sensor map JSON
 --verbose, -v               Debug logging
 --log-file                  Optional log file path
 --sync-erddap-xml / --no-sync-erddap-xml
@@ -127,10 +120,10 @@ Run with defaults:
 python main.py qc
 ```
 
-Run with custom paths:
+Run with a different input tree while keeping the selected profile/config files:
 
 ```bash
-python main.py qc --base-dir /path/to/datasets --sensor-specs /path/to/sensor_specs.json
+python main.py qc --base-dir /path/to/datasets
 ```
 
 #### `erddap-xml` — sync ERDDAP `datasets.xml` from NetCDF files
@@ -144,8 +137,10 @@ After QC adds `*_qc_*` variables, this step refreshes each matching `<dataset>` 
 --profile                   Dataset profile JSON (default: config/dataset_profile.json)
 --no-preserve-erddap-ui     Do not keep ERDDAP color-bar attributes from the input XML
 --filedir-prefix            Value written into each <fileDir> prefix (default: data/erddap/<dataset_name> from --data-root)
+--dataset-template-xml      Template <dataset> XML for missing datasets (default: datasets/GenerateDatasetsXml.xml)
 --dataset-type              ERDDAP dataset type attribute to match (default: EDDTableFromNcCFFiles)
---create-missing-datasets   Append new <dataset> blocks for .nc files not already in the XML
+--no-create-missing-datasets
+                            Do not append new <dataset> blocks for .nc files not already in the XML
 --keep-orphan-datasets      Keep XML blocks whose cruise/filename is missing from --data-root (default: remove)
 --in-place                  Overwrite --input-xml instead of writing --output-xml
 --verbose, -v               Debug logging
@@ -166,11 +161,11 @@ Standalone (same behavior as `main.py erddap-xml`):
 python erddap_xml_sync.py --help
 ```
 
-**Note:** Matching uses the cruise folder name (last segment of the existing `<fileDir>` in the XML) plus `<fileNameRegex>` as the NetCDF filename. Your `--data-root` tree should follow `data-root/<cruise>/<file>.nc`. For each variable, `<addAttributes>` are rebuilt from NetCDF (including `standard_name`, `ancillary_variables`, and QC flag metadata). The original `datasets/mod_CTD_datasets.xml` is not modified unless you pass `--in-place`. Requires `lxml` (see `requirements.txt`).
+**Note:** Matching uses the cruise folder name (last segment of the existing `<fileDir>` in the XML) plus `<fileNameRegex>` as the NetCDF filename. Your `--data-root` tree should follow `data-root/<cruise>/<file>.nc`. For each variable, `<addAttributes>` are rebuilt from NetCDF (including `standard_name`, `ancillary_variables`, and QC flag metadata). Missing NetCDF-backed datasets are created by default from `datasets/GenerateDatasetsXml.xml`. Non-dataset ERDDAP XML content from `datasets/mod_CTD_datasets.xml` is preserved, and the original file is not modified unless you pass `--in-place`. Requires `lxml` (see `requirements.txt`).
 
 After `python main.py qc`, ERDDAP XML sync runs by default (`--sync-erddap-xml`) using the QC output tree when the profile uses duplicate output mode. Skip with `--no-sync-erddap-xml`.
 
-**Defaults** for XML paths and `fileDir` prefix live in `qc_config.py` (`ERDDAP_DATASETS_XML`, `ERDDAP_DATASETS_XML_OUTPUT`, `ERDDAP_FILEDIR_PREFIX`); adjust there or override on the command line.
+XML paths default from the ERDDAP sync module and can be overridden on the command line.
 
 #### `viz` — inspect saved QC results in Dash
 
@@ -209,7 +204,7 @@ Process all cruise directories:
 
 ```python
 from qc_runner import run_qc_for_all
-run_qc_for_all()  # Uses DATASET_DIR from qc_config.py
+run_qc_for_all()  # Uses config/dataset_profile.json by default
 ```
 
 Sync ERDDAP XML programmatically (same as `main.py erddap-xml`):
@@ -261,10 +256,10 @@ Individual tests return `QCTestResult` objects with:
   2. Dynamic (instrument + unit from `instrument_resolver.py` using `config/gross_range_test/sensor_specs.json` + `variable_sensor_map.json`)
 - **Variable-to-sensor mapping**: edit `config/gross_range_test/variable_sensor_map.json`
 - **Sensor identifiers and limits**: edit `config/gross_range_test/sensor_specs.json` (`identifiers.long_names` is used for sensor matching)
-- **Location tolerance**: edit `LOCATION_TOLERANCE` in `qc_config.py`
+- **Location tolerance**: edit `config/location_test/location_config.json`
 - **Test-to-category mapping**: edit `TEST_CATEGORIES` in `qc_config.py`
-- **Climatology limits**: edit `config/climatology_test/station_climatology_config.json` (or pass `station_climatology_config_path`). **Station deep vs shallow**: edit `config/climatology_test/station_depth_classification.json` (or pass `station_depth_classification_path` / CLI `--station-depth-classification`). You can also pass `climatology_overrides` to runners.
-- **ERDDAP XML sync defaults**: edit `ERDDAP_DATASETS_XML`, `ERDDAP_DATASETS_XML_OUTPUT`, and `ERDDAP_FILEDIR_PREFIX` in `qc_config.py`, or pass flags to `main.py erddap-xml` / `run_erddap_xml_sync(...)`.
+- **Climatology limits**: edit `config/climatology_test/station_climatology_config.json`. **Station deep vs shallow**: edit `config/climatology_test/station_depth_classification.json`. Programmatic runners can still pass `climatology_overrides`.
+- **ERDDAP XML sync paths**: pass flags to `main.py erddap-xml` / `run_erddap_xml_sync(...)`.
 
 ### Station resolution logic
 

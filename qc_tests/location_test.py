@@ -4,7 +4,9 @@ from typing import Sequence
 
 import numpy as np
 
-from qc_config import LOCATION_TOLERANCE, QC_FLAGS
+from qc_config import QC_FLAGS
+
+DEFAULT_LOCATION_TOLERANCE = 0.01
 
 
 def location_test(
@@ -12,7 +14,7 @@ def location_test(
     lat: Sequence[float],
     expected_lon: float,
     expected_lat: float,
-    tolerance: float = LOCATION_TOLERANCE,
+    tolerance: float = DEFAULT_LOCATION_TOLERANCE,
 ) -> np.ndarray:
     """PASS when both lon/lat are within tolerance of the expected location."""
     lon_arr = np.asarray(lon, dtype=float)

@@ -11,9 +11,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+import numpy as np
 import xarray as xr
 
-from dataset_profile import MetadataConfig, default_profile
+from dataset_profile import MetadataConfig
 
 # CONFIG FILE PATHS
 # Config files live under config/ in subfolders named for the QC test (or variable_mapping).
@@ -21,14 +22,12 @@ from dataset_profile import MetadataConfig, default_profile
 
 CONFIG_DIR = Path(__file__).parent / "config"
 
-# Default dataset directory
-DATASET_DIR = default_profile().data_root
-
 # Standard variable name → dataset-specific variable names (Walton categories)
 VARIABLE_MAPPING_JSON = CONFIG_DIR / "variable_mapping" / "walton_mapping.json"
 
 # Station coordinates: ground truth lat/lon for each station (for location test)
 STATION_COORDS_CSV = CONFIG_DIR / "location_test" / "Station_Mean_Coords.csv"
+LOCATION_CONFIG_JSON = CONFIG_DIR / "location_test" / "location_config.json"
 
 # Station climatology: limit tables keyed by cast type (deep vs shallow)
 STATION_CLIMATOLOGY_JSON = CONFIG_DIR / "climatology_test" / "station_climatology_config.json"
@@ -55,10 +54,10 @@ FLAT_LINE_CONFIG_JSON = CONFIG_DIR / "flat_line_test" / "flat_line_config.json"
 _DATASETS_DIR = Path(__file__).parent / "datasets"
 ERDDAP_OUTPUT_DIR = Path(__file__).parent / "output" / "erddap"
 ERDDAP_DATASETS_XML = _DATASETS_DIR / "mod_CTD_datasets.xml"
+ERDDAP_DATASET_TEMPLATE_XML = _DATASETS_DIR / "GenerateDatasetsXml.xml"
 ERDDAP_DATASETS_XML_OUTPUT = ERDDAP_OUTPUT_DIR / "mod_CTD_datasets_qc.xml"
 # ERDDAP server path: bigParentDirectory/data/erddap/<dataset_name>/...
 ERDDAP_FILEDIR_BASE = "/data/erddap"
-ERDDAP_FILEDIR_PREFIX = f"{ERDDAP_FILEDIR_BASE}/SFER_QC_NO_LEGACY"
 
 # QC FLAGS AND PARAMETERS
 
@@ -71,8 +70,9 @@ QC_FLAGS = {
     "MISSING": 9,
 }
 
-# Tolerance (in degrees) for Location Test
-LOCATION_TOLERANCE = 0.01
+LOCATION_DEFAULTS = {
+    "tolerance": 0.01,
+}
 
 # Flat-line test defaults (QARTOD-style count-based implementation).
 # REP_CNT values are "number of previous observations".
@@ -123,11 +123,11 @@ TEST_CATEGORIES = {
 
     #strongly recommended tests
 
-    "photic_zone_limit_test": frozenset({
-        #may not apply where high ch fl increases energy at 683nm
-        "in_water_radiance_irradiance",
-        "PAR",
-    }),
+    # "photic_zone_limit_test": frozenset({
+    #     # Configure this after the test implementation is added.
+    #     "in_water_radiance_irradiance",
+    #     "PAR",
+    # }),
 
 
 
@@ -203,6 +203,30 @@ def _nonnegative_float(value: object, default: float) -> float:
     if number < 0:
         return default
     return number
+
+
+def _positive_float(value: object, default: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not np.isfinite(number) or number <= 0:
+        return default
+    return number
+
+
+def load_location_config(json_path: Path | str = LOCATION_CONFIG_JSON) -> Dict[str, float]:
+    """Load location-test config, falling back to defaults for missing or invalid fields."""
+    config: Dict[str, float] = dict(LOCATION_DEFAULTS)
+    path = Path(json_path)
+    if not path.exists():
+        return config
+    with path.open("r", encoding="utf-8") as f:
+        root = json.load(f)
+    if not isinstance(root, dict):
+        return config
+    config["tolerance"] = _positive_float(root.get("tolerance"), LOCATION_DEFAULTS["tolerance"])
+    return config
 
 
 def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict[str, Any]:
@@ -288,4 +312,3 @@ def get_climatology_config_for_file(
                 return limits
 
     return None
-
