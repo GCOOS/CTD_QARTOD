@@ -481,7 +481,7 @@ def resolve_erddap_data_root(
 
 
 def _filedir_prefix_from_data_root(data_root: Path) -> str:
-    """Map a local data root to the ERDDAP server path under data/erddap/."""
+    """Map a local data root to the ERDDAP server path under /data/erddap/."""
     dataset_name = data_root.name
     if not dataset_name:
         raise ValueError(f"Cannot derive ERDDAP fileDir prefix from data root: {data_root}")
@@ -492,8 +492,8 @@ def resolve_filedir_prefix(data_root: Path, filedir_prefix: str | None = None) -
     """Resolve the ERDDAP fileDir prefix.
 
     If the caller did not explicitly set --filedir-prefix, use
-    ``data/erddap/<dataset_folder_name>`` derived from --data-root
-    (e.g. ``output/SFER_QC`` → ``data/erddap/SFER_QC``).
+    ``/data/erddap/<dataset_folder_name>`` derived from --data-root
+    (e.g. ``output/SFER_QC`` -> ``/data/erddap/SFER_QC``).
     """
     if filedir_prefix:
         return filedir_prefix.rstrip("/")

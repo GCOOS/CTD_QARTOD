@@ -86,13 +86,13 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 #### Strongly recommended tests
 | Test | Description | Categories |
 |------|-------------|------------|
-| `spike_test` | ... | All |
-| `rate_of_change_test` | ... | All |
-| `flat_line_test` | ... | All |
+| `spike_test` | Placeholder (all NOT_EVALUATED) until the ioos_qc implementation is enabled | All |
+| `rate_of_change_test` | Placeholder (all NOT_EVALUATED) until the count-based implementation is enabled | All |
+| `flat_line_test` | Count-based repeated-value check using `flat_line_config.json` | All |
 
 ### Running via CLI
 
-The top-level command requires a **subcommand**: `qc` or `erddap-xml`.
+The top-level command requires a **subcommand**: `qc`, `erddap-xml`, or `viz`.
 
 ```bash
 python main.py --help
@@ -103,7 +103,7 @@ python main.py erddap-xml --help
 #### `qc` — run QC on NetCDF trees
 
 ```
---profile                   Dataset profile JSON
+--profile                   Dataset profile JSON (default: config/dataset_profile.json)
 --base-dir                  Base directory containing cruise directories
 --verbose, -v               Debug logging
 --log-file                  Optional log file path
@@ -111,7 +111,7 @@ python main.py erddap-xml --help
                             After QC, write synced XML to output/erddap/ (default: on)
 --erddap-input-xml          Input ERDDAP XML for post-QC sync (optional override)
 --erddap-output-xml         Output ERDDAP XML path (optional override)
---erddap-filedir-prefix     fileDir prefix for synced blocks (optional override)
+--erddap-filedir-prefix     fileDir prefix for synced blocks (default: /data/erddap/<dataset_name>)
 ```
 
 Run with defaults:
@@ -133,10 +133,10 @@ After QC adds `*_qc_*` variables, this step refreshes each matching `<dataset>` 
 ```
 --input-xml                 Input ERDDAP datasets XML (default: datasets/mod_CTD_datasets.xml)
 --output-xml                Output path when not using --in-place (default: output/erddap/mod_CTD_datasets_qc.xml)
---data-root                 Root with cruise subdirs containing *.nc (default: profile duplicate output dir when configured)
+--data-root                 Root with cruise subdirs containing *.nc (default: profile output.directory when output.mode is duplicate, otherwise profile data_root)
 --profile                   Dataset profile JSON (default: config/dataset_profile.json)
 --no-preserve-erddap-ui     Do not keep ERDDAP color-bar attributes from the input XML
---filedir-prefix            Value written into each <fileDir> prefix (default: data/erddap/<dataset_name> from --data-root)
+--filedir-prefix            Value written into each <fileDir> prefix (default: /data/erddap/<dataset_name> from --data-root)
 --dataset-template-xml      Template <dataset> XML for missing datasets (default: datasets/GenerateDatasetsXml.xml)
 --dataset-type              ERDDAP dataset type attribute to match (default: EDDTableFromNcCFFiles)
 --no-create-missing-datasets
@@ -210,9 +210,6 @@ run_qc_for_all()  # Uses config/dataset_profile.json by default
 Sync ERDDAP XML programmatically (same as `main.py erddap-xml`):
 
 ```python
-from pathlib import Path
-from erddap_xml_sync import run_erddap_xml_sync
-
 from erddap_xml_sync import run_erddap_xml_sync_for_profile
 
 run_erddap_xml_sync_for_profile()  # reads profile; writes output/erddap/mod_CTD_datasets_qc.xml
@@ -227,7 +224,9 @@ from qc_runner import run_single_test, list_available_tests, list_file_variables
 
 # List available tests (full names)
 tests = list_available_tests()
-# ['gap_test', 'syntax_test', 'location_test', 'gross_range_test', 'decreasing_radiance_test', 'climatology_test']
+# ['gap_test', 'syntax_test', 'location_test', 'gross_range_test',
+#  'decreasing_radiance_test', 'climatology_test', 'spike_test',
+#  'rate_of_change_test', 'flat_line_test']
 
 # List QC-able variables in a file
 vars = list_file_variables("datasets/SFER_CTD/WS24139/WS24139_Stn_002.nc")
