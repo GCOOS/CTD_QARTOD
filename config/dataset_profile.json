@@ -2,7 +2,7 @@
   "data_root": "datasets/SFER_ORIGINAL",
   "output": {
     "mode": "duplicate",
-    "directory": "output/SFER_QC_2"
+    "directory": "output/SFER_QC"
   },
   "metadata": {
     "station": "station",

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 
 import numpy as np
 import xarray as xr
 
 from dataset_profile import DatasetProfile, default_profile, resolve_config_path
-from qc_config import QC_FLAGS
+from qc_config import QC_FLAGS, get_climatology_config_for_file
 from qc_data_loader import flatten_mapping, get_coord_for_var, get_scalar_var, load_mapping
 
 FLAG_ORDER = ("PASS", "NOT_EVALUATED", "SUSPECT", "FAIL", "MISSING")
@@ -199,6 +200,164 @@ def _depth_for_variable(ds: xr.Dataset, data_var: xr.DataArray, profile: Dataset
     return _broadcast_optional(depth, data_var)
 
 
+def _time_for_variable(ds: xr.Dataset, data_var: xr.DataArray, profile: DatasetProfile) -> xr.DataArray | None:
+    return get_coord_for_var(ds, data_var, profile.metadata.time)
+
+
+def _is_climatology_qc(qc_name: str) -> bool:
+    return qc_name.endswith("_qc_climatology")
+
+
+def _month_from_datetime_like(value: object) -> int | None:
+    try:
+        if isinstance(value, np.datetime64):
+            if np.isnat(value):
+                return None
+            text = np.datetime_as_string(value, unit="D")
+            return int(text[5:7])
+        if isinstance(value, datetime):
+            return int(value.month)
+    except (TypeError, ValueError):
+        return None
+
+    text = str(value).strip()
+    if len(text) >= 7 and text[4] == "-" and text[5:7].isdigit():
+        return int(text[5:7])
+    return None
+
+
+def _base_datetime_from_units(units: str) -> datetime | None:
+    text = units.strip()
+    if " since " not in text:
+        return None
+    _, base = text.split(" since ", 1)
+    base = base.strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(base)
+    except ValueError:
+        try:
+            return datetime.fromisoformat(base.split()[0])
+        except ValueError:
+            return None
+
+
+def _months_for_time(time: xr.DataArray | np.ndarray | None, target: xr.DataArray) -> np.ndarray | None:
+    if time is None:
+        return None
+    raw = np.asarray(time)
+    values = _broadcast_optional(time if isinstance(time, xr.DataArray) else xr.DataArray(raw), target)
+    if values is None:
+        return None
+
+    months = np.full(target.shape, np.nan, dtype=float)
+    units = str(getattr(time, "attrs", {}).get("units") or "") if isinstance(time, xr.DataArray) else ""
+    base = _base_datetime_from_units(units)
+    unit_name = units.split(" since ", 1)[0].strip().lower() if " since " in units else ""
+
+    for idx, value in np.ndenumerate(values):
+        month = _month_from_datetime_like(value)
+        if month is None and base is not None:
+            try:
+                offset = float(value)
+            except (TypeError, ValueError):
+                offset = np.nan
+            if np.isfinite(offset):
+                if unit_name.startswith("day"):
+                    dt = base + timedelta(days=offset)
+                elif unit_name.startswith("hour"):
+                    dt = base + timedelta(hours=offset)
+                elif unit_name.startswith("minute"):
+                    dt = base + timedelta(minutes=offset)
+                elif unit_name.startswith("millisecond"):
+                    dt = base + timedelta(milliseconds=offset)
+                else:
+                    dt = base + timedelta(seconds=offset)
+                month = int(dt.astimezone(timezone.utc).month) if dt.tzinfo else int(dt.month)
+        if month is not None:
+            months[idx] = month
+    return months
+
+
+def _tspan_contains(tspan: Iterable[object] | None, month: float) -> bool:
+    if tspan is None or not np.isfinite(month):
+        return False
+    parts = list(tspan)
+    if len(parts) != 2:
+        return False
+    start, end = int(parts[0]), int(parts[1])
+    m = int(month)
+    if start <= end:
+        return start <= m <= end
+    return m >= start or m <= end
+
+
+def _zspan_contains(zspan: Iterable[object] | None, depth: float) -> bool:
+    if zspan is None or not np.isfinite(depth):
+        return False
+    parts = list(zspan)
+    if len(parts) != 2:
+        return False
+    low, high = float(parts[0]), float(parts[1])
+    return low <= float(depth) <= high
+
+
+def _climatology_limits_for_samples(
+    config: Iterable[Mapping[str, object]] | None,
+    depth: np.ndarray | None,
+    months: np.ndarray | None,
+) -> dict[str, np.ndarray] | None:
+    if config is None or depth is None or months is None:
+        return None
+
+    depth_arr = np.asarray(depth, dtype=float).ravel()
+    month_arr = np.asarray(months, dtype=float).ravel()
+    lower = np.full(depth_arr.shape, np.nan, dtype=float)
+    upper = np.full(depth_arr.shape, np.nan, dtype=float)
+
+    rows = list(config)
+    for i, (sample_depth, sample_month) in enumerate(zip(depth_arr, month_arr, strict=False)):
+        for row in rows:
+            vspan = row.get("vspan")
+            try:
+                vparts = list(vspan) if vspan is not None else []
+            except TypeError:
+                continue
+            if len(vparts) != 2:
+                continue
+            if _zspan_contains(row.get("zspan"), sample_depth) and _tspan_contains(row.get("tspan"), sample_month):
+                lower[i] = float(vparts[0])
+                upper[i] = float(vparts[1])
+                break
+
+    if np.all(np.isnan(lower)) and np.all(np.isnan(upper)):
+        return None
+    return {"lower": lower, "upper": upper}
+
+
+def _resolve_climatology_limits(
+    ds: xr.Dataset,
+    data_var: xr.DataArray,
+    var_name: str,
+    depth_values: np.ndarray | None,
+    profile: DatasetProfile,
+) -> dict[str, np.ndarray] | None:
+    clim_config = get_climatology_config_for_file(
+        ds,
+        limits_json_path=resolve_config_path("station_climatology", profile),
+        classification_json_path=resolve_config_path("station_depth_classification", profile),
+        metadata=profile.metadata,
+    )
+    if not clim_config:
+        return None
+    var_config = clim_config.get(var_name)
+    if not var_config:
+        return None
+
+    time = _time_for_variable(ds, data_var, profile)
+    months = _months_for_time(time, data_var)
+    return _climatology_limits_for_samples(var_config, depth_values, months)
+
+
 def load_plot_data(
     nc_path: Path | str,
     variable: str,
@@ -224,6 +383,12 @@ def load_plot_data(
         depth_values = np.asarray(depth).ravel() if depth is not None else None
         if depth_values is not None and depth_values.size != values.size:
             depth_values = None
+        climatology_limits = None
+        climatology_limit_status = ""
+        if _is_climatology_qc(qc_name):
+            climatology_limits = _resolve_climatology_limits(ds, data_var, variable, depth_values, prof)
+            if climatology_limits is None:
+                climatology_limit_status = "Climatology limits are unavailable for this file, variable, station, depth, or time."
 
         return {
             "path": str(path),
@@ -241,6 +406,8 @@ def load_plot_data(
             "values": values,
             "depth": depth_values,
             "flags": flags,
+            "climatology_limits": climatology_limits,
+            "climatology_limit_status": climatology_limit_status,
             "summary": flag_summary(flags),
         }
 
@@ -272,8 +439,38 @@ def _empty_figure(message: str):
 
     fig = go.Figure()
     fig.add_annotation(text=message, x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
-    fig.update_layout(template="plotly_white", height=620, margin={"l": 56, "r": 24, "t": 48, "b": 48})
+    fig.update_layout(
+        template="plotly_white",
+        autosize=True,
+        height=850,
+        margin={"l": 56, "r": 24, "t": 48, "b": 48},
+    )
     return fig
+
+
+def _marker_style(flag_name: str) -> dict[str, object]:
+    if flag_name == "FAIL":
+        return {
+            "size": 12,
+            "symbol": "x",
+            "color": FLAG_COLORS[flag_name],
+            "opacity": 0.98,
+            "line": {"width": 3, "color": FLAG_COLORS[flag_name]},
+        }
+    if flag_name == "SUSPECT":
+        return {
+            "size": 11,
+            "symbol": "x",
+            "color": FLAG_COLORS[flag_name],
+            "opacity": 0.95,
+            "line": {"width": 2, "color": FLAG_COLORS[flag_name]},
+        }
+    return {
+        "size": 6,
+        "symbol": "circle",
+        "color": FLAG_COLORS[flag_name],
+        "opacity": 0.78,
+    }
 
 
 def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
@@ -285,6 +482,7 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
     values = np.asarray(payload["values"])
     depth = payload["depth"]
     flags = np.asarray(payload["flags"])
+    climatology_limits = payload.get("climatology_limits")
     units = payload["variable_units"]
     variable_label = payload["variable"]
     value_title = f"{variable_label} ({units})" if units else str(variable_label)
@@ -299,7 +497,7 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
 
     if depth is not None:
         fig.add_trace(
-            go.Scattergl(
+            go.Scatter(
                 x=idx,
                 y=np.asarray(depth),
                 mode="lines",
@@ -325,6 +523,36 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
         col=1,
     )
 
+    if climatology_limits:
+        lower = np.asarray(climatology_limits["lower"], dtype=float)
+        upper = np.asarray(climatology_limits["upper"], dtype=float)
+        fig.add_trace(
+            go.Scatter(
+                x=idx,
+                y=lower,
+                mode="lines",
+                line={"color": "#7c3aed", "width": 1.6, "dash": "dash"},
+                name="Climatology lower",
+                hovertemplate="index=%{x}<br>lower limit=%{y}<extra>Climatology lower</extra>",
+                connectgaps=False,
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=idx,
+                y=upper,
+                mode="lines",
+                line={"color": "#7c3aed", "width": 1.6, "dash": "dot"},
+                name="Climatology upper",
+                hovertemplate="index=%{x}<br>upper limit=%{y}<extra>Climatology upper</extra>",
+                connectgaps=False,
+            ),
+            row=2,
+            col=1,
+        )
+
     for flag_name in FLAG_ORDER:
         if flag_name not in visible:
             continue
@@ -332,16 +560,15 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
         mask = flags == flag_value
         if not np.any(mask):
             continue
-        color = FLAG_COLORS[flag_name]
         label = FLAG_LABELS[flag_name]
         if depth is not None:
             depth_values = np.asarray(depth)
             fig.add_trace(
-                go.Scattergl(
+                go.Scatter(
                     x=idx[mask],
                     y=depth_values[mask],
                     mode="markers",
-                    marker={"size": 6, "color": color, "opacity": 0.78},
+                    marker=_marker_style(flag_name),
                     name=label,
                     legendgroup=flag_name,
                     showlegend=False,
@@ -351,11 +578,11 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
                 col=1,
             )
         fig.add_trace(
-            go.Scattergl(
+            go.Scatter(
                 x=idx[mask],
                 y=values[mask],
                 mode="markers",
-                marker={"size": 6, "color": color, "opacity": 0.82},
+                marker=_marker_style(flag_name),
                 name=label,
                 legendgroup=flag_name,
                 hovertemplate="index=%{x}<br>value=%{y}<extra>" + label + "</extra>",
@@ -381,7 +608,8 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
     fig.update_xaxes(title_text="sample index", row=2, col=1)
     fig.update_layout(
         template="plotly_white",
-        height=720,
+        autosize=True,
+        height=900,
         margin={"l": 70, "r": 28, "t": 70, "b": 56},
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.04, "xanchor": "left", "x": 0},
         paper_bgcolor="#f7f8f5",
@@ -566,9 +794,10 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
             }
             .workspace {
                 display: grid;
-                grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+                grid-template-columns: minmax(260px, 330px) minmax(720px, 1fr);
                 gap: 24px;
                 padding: 24px 34px 36px;
+                width: 100%;
             }
             .controls {
                 align-self: start;
@@ -625,6 +854,7 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 min-width: 0;
                 display: grid;
                 gap: 16px;
+                width: 100%;
             }
             .metadata-strip {
                 display: grid;
@@ -656,6 +886,13 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 border: 1px solid var(--line);
                 border-radius: 8px;
                 background: #ffffff;
+                width: 100%;
+                min-height: 850px;
+            }
+            #qc-graph .js-plotly-plot,
+            #qc-graph .plot-container,
+            #qc-graph .svg-container {
+                width: 100% !important;
             }
             @media (max-width: 980px) {
                 .topbar { display: grid; align-items: start; }
@@ -780,7 +1017,7 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
             html.Div([html.Span("File"), html.Strong(str(payload["file_name"]))], className="metadata-item"),
             html.Div([html.Span("Selection"), html.Strong(f"{payload['variable']} / {payload['test_label']}")], className="metadata-item"),
         ]
-        return _make_figure(payload, visible_flags), payload["summary"], metadata, ""
+        return _make_figure(payload, visible_flags), payload["summary"], metadata, payload.get("climatology_limit_status", "")
 
     return app
 

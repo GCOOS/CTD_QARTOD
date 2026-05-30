@@ -29,7 +29,7 @@ python -m pytest tests/ -q
 
 Config is grouped by QC test (or `variable_mapping` for the Walton category → dataset-variable map). Dataset-level layout and config file paths are defined in `config/dataset_profile.json`; per-test folders own test-specific thresholds/settings.
 
-For a **new dataset**, start from [`config_template/`](config_template/README.md): copy the folder to `config/`, then edit each file (see the template README for a checklist).
+For a **new dataset**, start from `[config_template/](config_template/README.md)`: copy the folder to `config/`, then edit each file (see the template README for a checklist).
 
 ```
 config/
@@ -62,33 +62,42 @@ Output mode is set in the profile:
 
 ### QC Flags
 
-| Flag | Meaning |
-|------|---------|
-| 1 | PASS |
-| 2 | NOT_EVALUATED |
-| 3 | SUSPECT |
-| 4 | FAIL |
-| 9 | MISSING |
+
+| Flag | Meaning       |
+| ---- | ------------- |
+| 1    | PASS          |
+| 2    | NOT_EVALUATED |
+| 3    | SUSPECT       |
+| 4    | FAIL          |
+| 9    | MISSING       |
+
 
 ### Tests
+
 All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps to the set of variable categories it applies to.
 
 #### Required Test
-| Test | Description | Categories |
-|------|-------------|------------|
-| `gap_test` | Placeholder (all NOT_EVALUATED) | All |
-| `syntax_test` | Placeholder (all NOT_EVALUATED) | All |
-| `location_test` | Compares lon/lat to expected station coordinates | All |
-| `gross_range_test` | Uses `ioos_qc.qartod.gross_range_test` with sensor-aware limits | All |
-| `decreasing_radiance_test` | Checks that values decrease with increasing depth | PAR, in_water_radiance_irradiance |
-| `climatology_test` | Uses `ioos_qc.qartod.climatology_test` with station-type limits | temperature, practical_salinity, oxygen_dissolved_oxygen |
+
+
+| Test                       | Description                                                     | Categories                                               |
+| -------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
+| `gap_test`                 | Placeholder (all NOT_EVALUATED)                                 | All                                                      |
+| `syntax_test`              | Placeholder (all NOT_EVALUATED)                                 | All                                                      |
+| `location_test`            | Compares lon/lat to expected station coordinates                | All                                                      |
+| `gross_range_test`         | Uses `ioos_qc.qartod.gross_range_test` with sensor-aware limits | All                                                      |
+| `decreasing_radiance_test` | Checks that values decrease with increasing depth               | PAR, in_water_radiance_irradiance                        |
+| `climatology_test`         | Uses `ioos_qc.qartod.climatology_test` with station-type limits | temperature, practical_salinity, oxygen_dissolved_oxygen |
+
 
 #### Strongly recommended tests
-| Test | Description | Categories |
-|------|-------------|------------|
-| `spike_test` | Placeholder (all NOT_EVALUATED) until the ioos_qc implementation is enabled | All |
-| `rate_of_change_test` | Placeholder (all NOT_EVALUATED) until the count-based implementation is enabled | All |
-| `flat_line_test` | Count-based repeated-value check using `flat_line_config.json` | All |
+
+
+| Test                  | Description                                                                     | Categories |
+| --------------------- | ------------------------------------------------------------------------------- | ---------- |
+| `spike_test`          | Placeholder (all NOT_EVALUATED) until the ioos_qc implementation is enabled     | All        |
+| `rate_of_change_test` | Placeholder (all NOT_EVALUATED) until the count-based implementation is enabled | All        |
+| `flat_line_test`      | Count-based repeated-value check using `flat_line_config.json`                  | All        |
+
 
 ### Running via CLI
 
@@ -243,6 +252,7 @@ results[0].plot_profile()
 ```
 
 Individual tests return `QCTestResult` objects with:
+
 - Original data and QC flag arrays
 - Flag summary counts
 - Visualization method: `plot_profile()` with 3-panel layout
@@ -284,34 +294,39 @@ All new QC variables include `flag_values = 1, 2, 3, 4, 9`, `flag_meanings = "PA
 
 Each data variable that appears in the variable mapping and in the file gets QC tests based on its category.
 
-| QC output | QC variable suffix | `standard_name` | Applied to |
-|-----------|-------------------|-----------------|------------|
-| Aggregate flag | `_qc_agg` | `aggregate_quality_flag` | All mapped variables with pipeline QC |
-| Gap test | `_qc_gap` | `gap_test_quality_flag` | All mapped variables |
-| Syntax test | `_qc_syntax` | `syntax_test_quality_flag` | All mapped variables |
-| Location test | `_qc_location` | `location_test_quality_flag` | All mapped variables |
-| Gross range test | `_qc_gross_range` | `gross_range_test_quality_flag` | All mapped variables |
-| Decreasing radiance test | `_qc_decreasing_radiance_test` | `decreasing_radiance_test_quality_flag` | PAR, in_water_radiance_irradiance |
-| Climatology test | `_qc_climatology` | `climatology_test_quality_flag` | temperature, practical_salinity, oxygen_dissolved_oxygen |
-| Flat line test | `_qc_flat_line` | `flat_line_test_quality_flag` | All mapped variables |
-| Spike test | `_qc_spike` | `spike_test_quality_flag` | All mapped variables |
-| Rate of change test | `_qc_rate_of_change` | `rate_of_change_test_quality_flag` | All mapped variables |
+
+| QC output                | QC variable suffix             | `standard_name`                         | Applied to                                               |
+| ------------------------ | ------------------------------ | --------------------------------------- | -------------------------------------------------------- |
+| Aggregate flag           | `_qc_agg`                      | `aggregate_quality_flag`                | All mapped variables with pipeline QC                    |
+| Gap test                 | `_qc_gap`                      | `gap_test_quality_flag`                 | All mapped variables                                     |
+| Syntax test              | `_qc_syntax`                   | `syntax_test_quality_flag`              | All mapped variables                                     |
+| Location test            | `_qc_location`                 | `location_test_quality_flag`            | All mapped variables                                     |
+| Gross range test         | `_qc_gross_range`              | `gross_range_test_quality_flag`         | All mapped variables                                     |
+| Decreasing radiance test | `_qc_decreasing_radiance_test` | `decreasing_radiance_test_quality_flag` | PAR, in_water_radiance_irradiance                        |
+| Climatology test         | `_qc_climatology`              | `climatology_test_quality_flag`         | temperature, practical_salinity, oxygen_dissolved_oxygen |
+| Flat line test           | `_qc_flat_line`                | `flat_line_test_quality_flag`           | All mapped variables                                     |
+| Spike test               | `_qc_spike`                    | `spike_test_quality_flag`               | All mapped variables                                     |
+| Rate of change test      | `_qc_rate_of_change`           | `rate_of_change_test_quality_flag`      | All mapped variables                                     |
+
 
 ### Mapped data variables
 
 From `config/variable_mapping/walton_mapping.json` :
 
-| Category | Variables |
-|----------|-----------|
-| temperature | `sea_water_temperature`, `sea_water_temperature_2` |
-| practical_salinity | `sea_water_salinity`, `sea_water_salinity_2` |
-| conductivity | `sea_water_electrical_conductivity`, `sea_water_electrical_conductivity_2` |
-| pressure | `sea_water_pressure` |
-| oxygen_dissolved_oxygen | `dissolved_oxygen` |
-| oxygen_saturation | `oxygen_saturation`, `oxygen_saturation_2` |
-| PAR | `photosynthetically_available_radiation` |
-| above_water_radiance_irradiance | `surface_photosynthetically_available_radiation` |
-| beam_attenuation | `beam_attenuation` |
-| turbidity | `sea_water_turbidity` |
-| chlorophyll | `chlorophyll_concentration`, `chlorophyll_fluorescence` |
-| CDOM | `CDOM` |
+
+| Category                        | Variables                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| temperature                     | `sea_water_temperature`, `sea_water_temperature_2`                         |
+| practical_salinity              | `sea_water_salinity`, `sea_water_salinity_2`                               |
+| conductivity                    | `sea_water_electrical_conductivity`, `sea_water_electrical_conductivity_2` |
+| pressure                        | `sea_water_pressure`                                                       |
+| oxygen_dissolved_oxygen         | `dissolved_oxygen`                                                         |
+| oxygen_saturation               | `oxygen_saturation`, `oxygen_saturation_2`                                 |
+| PAR                             | `photosynthetically_available_radiation`                                   |
+| above_water_radiance_irradiance | `surface_photosynthetically_available_radiation`                           |
+| beam_attenuation                | `beam_attenuation`                                                         |
+| turbidity                       | `sea_water_turbidity`                                                      |
+| chlorophyll                     | `chlorophyll_concentration`, `chlorophyll_fluorescence`                    |
+| CDOM                            | `CDOM`                                                                     |
+
+
