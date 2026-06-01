@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,9 +11,10 @@ from typing import Iterable, Mapping
 import numpy as np
 import xarray as xr
 
-from dataset_profile import DatasetProfile, default_profile, resolve_config_path
-from qc_config import QC_FLAGS, get_climatology_config_for_file
-from qc_data_loader import flatten_mapping, get_coord_for_var, get_scalar_var, load_mapping
+from dataset_profile import REPO_ROOT, DatasetProfile, default_profile, resolve_config_path
+from qc_config import QC_FLAGS, get_climatology_config_for_file, load_location_config
+from qc_data_loader import flatten_mapping, get_coord_for_var, get_lon_lat, get_scalar_var, get_station_id, load_mapping
+from station_resolver import resolve_coords_by_station_id
 
 FLAG_ORDER = ("PASS", "NOT_EVALUATED", "SUSPECT", "FAIL", "MISSING")
 FLAG_LABELS = {name: f"{name} ({QC_FLAGS[name]})" for name in FLAG_ORDER}
@@ -37,6 +39,7 @@ TEST_LABELS = {
     "spike": "Spike",
     "rate_of_change": "Rate Of Change",
 }
+ISSUE_FLAG_OPTIONS = ("SUSPECT", "FAIL")
 
 
 @dataclass(frozen=True)
@@ -173,6 +176,255 @@ def flag_summary(flags: Iterable[int]) -> list[dict[str, object]]:
     return rows
 
 
+def default_issue_index_path() -> Path:
+    """Return the generated cache path for the dashboard issue index."""
+    return REPO_ROOT / "output" / "qc_dashboard_index.json"
+
+
+def _flag_count_map(flags: Iterable[int]) -> dict[str, int]:
+    arr = np.asarray(flags, dtype=np.int16).ravel()
+    return {
+        "pass": int(np.count_nonzero(arr == QC_FLAGS["PASS"])),
+        "not_evaluated": int(np.count_nonzero(arr == QC_FLAGS["NOT_EVALUATED"])),
+        "suspect": int(np.count_nonzero(arr == QC_FLAGS["SUSPECT"])),
+        "fail": int(np.count_nonzero(arr == QC_FLAGS["FAIL"])),
+        "missing": int(np.count_nonzero(arr == QC_FLAGS["MISSING"])),
+        "total": int(arr.size),
+    }
+
+
+def _test_value_from_qc_name(var_name: str, qc_name: str) -> str:
+    return qc_name.removeprefix(f"{var_name}_qc_")
+
+
+def build_qc_issue_index(data_root: Path | str, mapping: dict[str, Iterable[str]]) -> list[dict[str, object]]:
+    """Scan QC NetCDF files and return per-file/variable/test flag counts."""
+    rows: list[dict[str, object]] = []
+    for cruise, files in discover_qc_files(data_root).items():
+        for nc_path in files:
+            try:
+                with xr.open_dataset(nc_path, decode_cf=False, mask_and_scale=True) as ds:
+                    for variable in discover_variables(ds, mapping):
+                        for test in discover_tests_for_variable(ds, variable.value):
+                            counts = _flag_count_map(ds[test.qc_name].values)
+                            rows.append(
+                                {
+                                    "cruise": cruise,
+                                    "file": nc_path.name,
+                                    "path": str(nc_path),
+                                    "variable": variable.value,
+                                    "test": _test_value_from_qc_name(variable.value, test.qc_name),
+                                    "test_label": test.label,
+                                    "qc_name": test.qc_name,
+                                    **counts,
+                                }
+                            )
+            except Exception:
+                continue
+    return rows
+
+
+def write_qc_issue_index(
+    path: Path | str,
+    rows: list[dict[str, object]],
+    metadata: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Write issue index JSON and return the payload."""
+    out_path = Path(path)
+    payload = {
+        "metadata": {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "row_count": len(rows),
+            **(metadata or {}),
+        },
+        "rows": rows,
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return payload
+
+
+def load_qc_issue_index(path: Path | str) -> dict[str, object]:
+    """Load a cached issue index payload, or return an empty missing-cache payload."""
+    in_path = Path(path)
+    if not in_path.is_file():
+        return {"metadata": {"status": "missing", "path": str(in_path)}, "rows": []}
+    try:
+        payload = json.loads(in_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"metadata": {"status": "invalid", "path": str(in_path)}, "rows": []}
+    if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
+        return {"metadata": {"status": "invalid", "path": str(in_path)}, "rows": []}
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata.setdefault("path", str(in_path))
+    return {"metadata": metadata, "rows": payload["rows"]}
+
+
+def filter_issue_rows(
+    rows: Iterable[dict[str, object]],
+    test: str | None = "ALL",
+    variable: str | None = "ALL",
+    flags: Iterable[str] | None = None,
+) -> list[dict[str, object]]:
+    """Filter cached issue-index rows for display."""
+    selected_flags = {str(flag).lower() for flag in (flags or ISSUE_FLAG_OPTIONS)}
+    out: list[dict[str, object]] = []
+    for row in rows:
+        if test and test != "ALL" and row.get("test") != test:
+            continue
+        if variable and variable != "ALL" and row.get("variable") != variable:
+            continue
+        if selected_flags and not any(int(row.get(flag, 0) or 0) > 0 for flag in selected_flags):
+            continue
+        out.append(row)
+    return out
+
+
+def issue_row_selection(row: Mapping[str, object]) -> dict[str, str]:
+    """Return the main-plot selection fields encoded by an issue-index row."""
+    return {
+        "path": str(row.get("path") or ""),
+        "variable": str(row.get("variable") or ""),
+        "qc_name": str(row.get("qc_name") or ""),
+    }
+
+
+def issue_row_key(row: Mapping[str, object]) -> str:
+    """Return a stable key for one issue row in the sidebar navigator."""
+    selection = issue_row_selection(row)
+    return json.dumps(
+        {
+            "path": selection["path"],
+            "variable": selection["variable"],
+            "qc_name": selection["qc_name"],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def issue_row_from_key(rows: Iterable[dict[str, object]] | None, key: str | None) -> dict[str, object] | None:
+    """Find an issue row by the sidebar navigator key."""
+    if not rows or not key:
+        return None
+    for row in rows:
+        if isinstance(row, dict) and issue_row_key(row) == key:
+            return row
+    return None
+
+
+def adjacent_issue_key(rows: Iterable[dict[str, object]], current_key: str | None, direction: int) -> str | None:
+    """Return the previous/next issue key within a filtered issue list."""
+    keys = [issue_row_key(row) for row in rows]
+    if not keys:
+        return None
+    if current_key not in keys:
+        return keys[0]
+    idx = keys.index(str(current_key))
+    next_idx = idx + direction
+    if 0 <= next_idx < len(keys):
+        return keys[next_idx]
+    return keys[idx]
+
+
+def _issue_dropdown_options(rows: Iterable[dict[str, object]], key: str, label_key: str | None = None) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    options = [{"label": "All", "value": "ALL"}]
+    for row in rows:
+        value = str(row.get(key) or "")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        label = str(row.get(label_key or key) or value)
+        options.append({"label": label, "value": value})
+    return options
+
+
+def _issue_filter_dropdown_state(
+    rows: list[dict[str, object]],
+    current_test: str | None,
+    current_variable: str | None,
+    triggered_id: str = "",
+) -> tuple[list[dict[str, str]], str, list[dict[str, str]], str]:
+    """Return mutually constrained issue test/variable dropdown state."""
+    all_test_options = _issue_dropdown_options(rows, "test", "test_label")
+    all_variable_options = _issue_dropdown_options(rows, "variable")
+    all_test_values = {item["value"] for item in all_test_options}
+    all_variable_values = {item["value"] for item in all_variable_options}
+    test_value = current_test if current_test in all_test_values else "ALL"
+    variable_value = current_variable if current_variable in all_variable_values else "ALL"
+
+    if triggered_id == "issue-variable-dropdown":
+        test_rows = rows if variable_value == "ALL" else [row for row in rows if row.get("variable") == variable_value]
+        test_options = _issue_dropdown_options(test_rows, "test", "test_label")
+        test_values = {item["value"] for item in test_options}
+        test_value = test_value if test_value in test_values else "ALL"
+
+        variable_rows = rows if test_value == "ALL" else [row for row in rows if row.get("test") == test_value]
+        variable_options = _issue_dropdown_options(variable_rows, "variable")
+        variable_values = {item["value"] for item in variable_options}
+        variable_value = variable_value if variable_value in variable_values else "ALL"
+        return test_options, test_value, variable_options, variable_value
+
+    variable_rows = rows if test_value == "ALL" else [row for row in rows if row.get("test") == test_value]
+    variable_options = _issue_dropdown_options(variable_rows, "variable")
+    variable_values = {item["value"] for item in variable_options}
+    variable_value = variable_value if variable_value in variable_values else "ALL"
+
+    test_rows = rows if variable_value == "ALL" else [row for row in rows if row.get("variable") == variable_value]
+    test_options = _issue_dropdown_options(test_rows, "test", "test_label")
+    test_values = {item["value"] for item in test_options}
+    test_value = test_value if test_value in test_values else "ALL"
+    return test_options, test_value, variable_options, variable_value
+
+
+def _issue_cruise_options(rows: Iterable[dict[str, object]]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    options: list[dict[str, str]] = []
+    for row in rows:
+        cruise = str(row.get("cruise") or "")
+        if not cruise or cruise in seen:
+            continue
+        seen.add(cruise)
+        options.append({"label": cruise, "value": cruise})
+    return options
+
+
+def _issue_file_options(rows: Iterable[dict[str, object]], include_cruise: bool = True) -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    for row in rows:
+        suspect = int(row.get("suspect", 0) or 0)
+        fail = int(row.get("fail", 0) or 0)
+        total = int(row.get("total", 0) or 0)
+        label = f"{row.get('file', '')} - S:{suspect} F:{fail} / {total}"
+        cruise = str(row.get("cruise") or "")
+        if include_cruise and cruise:
+            label = f"{cruise} / {label}"
+        options.append({"label": label, "value": issue_row_key(row)})
+    return options
+
+
+def _issue_status(payload: dict[str, object], displayed_count: int | None = None) -> str:
+    metadata = payload.get("metadata") if isinstance(payload, dict) else {}
+    rows = payload.get("rows") if isinstance(payload, dict) else []
+    if not isinstance(metadata, dict):
+        metadata = {}
+    if not rows:
+        status = metadata.get("status")
+        if status == "missing":
+            return "No index cache found. Click Re-index."
+        if status == "invalid":
+            return "Index cache is invalid. Click Re-index."
+    total = len(rows) if isinstance(rows, list) else 0
+    created = metadata.get("created_at") or "unknown time"
+    file_count = metadata.get("file_count")
+    shown = f"{displayed_count} shown / " if displayed_count is not None else ""
+    file_part = f", {file_count} files" if file_count is not None else ""
+    return f"{shown}{total} indexed rows{file_part}. Cache: {created}."
+
+
 def _broadcast_optional(source: xr.DataArray | None, target: xr.DataArray) -> np.ndarray | None:
     if source is None:
         return None
@@ -206,6 +458,61 @@ def _time_for_variable(ds: xr.Dataset, data_var: xr.DataArray, profile: DatasetP
 
 def _is_climatology_qc(qc_name: str) -> bool:
     return qc_name.endswith("_qc_climatology")
+
+
+def _is_location_qc(qc_name: str) -> bool:
+    return qc_name.endswith("_qc_location")
+
+
+def _first_finite(values: np.ndarray | None) -> float | None:
+    if values is None:
+        return None
+    arr = np.asarray(values, dtype=float).ravel()
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return None
+    return float(finite[0])
+
+
+def _location_info_for_file(
+    ds: xr.Dataset,
+    data_var: xr.DataArray,
+    profile: DatasetProfile,
+) -> dict[str, object] | None:
+    lon, lat = get_lon_lat(ds, profile.metadata)
+    lon_values = _broadcast_optional(lon, data_var) if lon is not None else None
+    lat_values = _broadcast_optional(lat, data_var) if lat is not None else None
+    actual_lon = _first_finite(lon_values if lon_values is not None else (np.asarray(lon) if lon is not None else None))
+    actual_lat = _first_finite(lat_values if lat_values is not None else (np.asarray(lat) if lat is not None else None))
+
+    station_id = get_station_id(ds, profile.metadata)
+    expected = resolve_coords_by_station_id(
+        station_id,
+        station_csv=resolve_config_path("station_coords", profile),
+    )
+    if actual_lon is None and actual_lat is None and expected is None:
+        return None
+
+    expected_lat = float(expected[0]) if expected is not None else None
+    expected_lon = float(expected[1]) if expected is not None else None
+    tolerance = None
+    try:
+        tolerance = float(load_location_config(resolve_config_path("location_config", profile)).get("tolerance"))
+    except Exception:
+        tolerance = None
+
+    delta_lat = actual_lat - expected_lat if actual_lat is not None and expected_lat is not None else None
+    delta_lon = actual_lon - expected_lon if actual_lon is not None and expected_lon is not None else None
+    return {
+        "station": station_id or "unknown",
+        "actual_lat": actual_lat,
+        "actual_lon": actual_lon,
+        "expected_lat": expected_lat,
+        "expected_lon": expected_lon,
+        "delta_lat": delta_lat,
+        "delta_lon": delta_lon,
+        "tolerance": tolerance,
+    }
 
 
 def _month_from_datetime_like(value: object) -> int | None:
@@ -389,6 +696,7 @@ def load_plot_data(
             climatology_limits = _resolve_climatology_limits(ds, data_var, variable, depth_values, prof)
             if climatology_limits is None:
                 climatology_limit_status = "Climatology limits are unavailable for this file, variable, station, depth, or time."
+        location_info = _location_info_for_file(ds, data_var, prof) if _is_location_qc(qc_name) else None
 
         return {
             "path": str(path),
@@ -408,6 +716,7 @@ def load_plot_data(
             "flags": flags,
             "climatology_limits": climatology_limits,
             "climatology_limit_status": climatology_limit_status,
+            "location_info": location_info,
             "summary": flag_summary(flags),
         }
 
@@ -418,6 +727,15 @@ def _dropdown_options(items: Iterable[object]) -> list[dict[str, str]]:
 
 def _file_options(files: Iterable[Path]) -> list[dict[str, str]]:
     return [{"label": path.name, "value": str(path)} for path in files]
+
+
+def _format_coord(lat: object, lon: object) -> str:
+    if lat is None or lon is None:
+        return "unavailable"
+    try:
+        return f"{float(lat):.6f}, {float(lon):.6f}"
+    except (TypeError, ValueError):
+        return "unavailable"
 
 
 def adjacent_file(files: Iterable[Path], current: Path | str | None, direction: int) -> str | None:
@@ -620,12 +938,14 @@ def _make_figure(payload: dict[str, object], visible_flags: list[str] | None):
 
 def create_app(data_root: Path | str | None = None, profile: DatasetProfile | None = None):
     """Create the Dash QC viewer app."""
-    from dash import Dash, Input, Output, State, callback_context, dash_table, dcc, html
+    from dash import Dash, Input, Output, State, callback_context, dash_table, dcc, html, no_update
 
     prof = profile or default_profile()
     root = Path(data_root) if data_root is not None else default_viz_data_root(prof)
     mapping = load_mapping(resolve_config_path("variable_mapping", prof))
     mapped_names = flatten_mapping(mapping)
+    issue_index_path = default_issue_index_path()
+    issue_index_payload = load_qc_issue_index(issue_index_path)
     files_by_cruise = discover_qc_files(root)
     cruise_options = [{"label": cruise, "value": cruise} for cruise in sorted(files_by_cruise)]
     initial_cruise = cruise_options[0]["value"] if cruise_options else None
@@ -637,6 +957,8 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
         className="app-shell",
         children=[
             dcc.Store(id="data-root", data=str(root)),
+            dcc.Store(id="issue-index-store", data=issue_index_payload),
+            dcc.Store(id="filtered-issue-store", data=[]),
             html.Header(
                 className="topbar",
                 children=[
@@ -661,41 +983,109 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                     html.Aside(
                         className="controls",
                         children=[
-                            html.Label("Cruise", htmlFor="cruise-dropdown"),
-                            dcc.Dropdown(id="cruise-dropdown", options=cruise_options, value=initial_cruise, clearable=False),
-                            html.Label("Files in cruise", htmlFor="file-radio"),
-                            html.Div(
-                                dcc.RadioItems(
-                                    id="file-radio",
-                                    options=[],
-                                    value=None,
-                                    labelStyle={
-                                        "display": "block",
-                                        "margin": "4px 0",
-                                        "fontSize": "12px",
-                                        "wordBreak": "break-all",
-                                    },
-                                    inputStyle={"marginRight": "6px"},
-                                ),
-                                className="file-list",
-                            ),
-                            html.Div(
-                                [
-                                    html.Button("Prev", id="btn-prev-file", n_clicks=0, className="nav-button"),
-                                    html.Button("Next", id="btn-next-file", n_clicks=0, className="nav-button"),
+                            dcc.Tabs(
+                                id="view-mode",
+                                value="file",
+                                className="mode-tabs",
+                                children=[
+                                    dcc.Tab(label="File by file", value="file", className="mode-tab", selected_className="mode-tab-selected"),
+                                    dcc.Tab(label="Issue by issue", value="issue", className="mode-tab", selected_className="mode-tab-selected"),
                                 ],
-                                className="file-nav",
                             ),
-                            html.Label("Variable", htmlFor="variable-dropdown"),
-                            dcc.Dropdown(id="variable-dropdown", clearable=False),
-                            html.Label("QC test", htmlFor="test-dropdown"),
-                            dcc.Dropdown(id="test-dropdown", clearable=False),
-                            html.Label("Visible flags", htmlFor="flag-checklist"),
-                            dcc.Checklist(
-                                id="flag-checklist",
-                                options=[{"label": FLAG_LABELS[name], "value": name} for name in FLAG_ORDER],
-                                value=list(FLAG_ORDER),
-                                className="flag-list",
+                            html.Div(
+                                id="file-browser-panel",
+                                className="mode-panel",
+                                children=[
+                                    html.Label("Cruise", htmlFor="cruise-dropdown"),
+                                    dcc.Dropdown(id="cruise-dropdown", options=cruise_options, value=initial_cruise, clearable=False),
+                                    html.Label("Files in cruise", htmlFor="file-radio"),
+                                    html.Div(
+                                        dcc.RadioItems(
+                                            id="file-radio",
+                                            options=[],
+                                            value=None,
+                                            labelStyle={
+                                                "display": "block",
+                                                "margin": "4px 0",
+                                                "fontSize": "12px",
+                                                "wordBreak": "break-all",
+                                            },
+                                            inputStyle={"marginRight": "6px"},
+                                        ),
+                                        className="file-list",
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Button("Prev", id="btn-prev-file", n_clicks=0, className="nav-button"),
+                                            html.Button("Next", id="btn-next-file", n_clicks=0, className="nav-button"),
+                                        ],
+                                        className="file-nav",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                id="issue-browser-panel",
+                                className="mode-panel",
+                                style={"display": "none"},
+                                children=[
+                                    html.H3("Issue Finder", className="sidebar-heading"),
+                                    html.Label("Issue test", htmlFor="issue-test-dropdown"),
+                                    dcc.Dropdown(id="issue-test-dropdown", clearable=False),
+                                    html.Label("Issue variable", htmlFor="issue-variable-dropdown"),
+                                    dcc.Dropdown(id="issue-variable-dropdown", clearable=False),
+                                    html.Label("Issue flags", htmlFor="issue-flag-checklist"),
+                                    dcc.Checklist(
+                                        id="issue-flag-checklist",
+                                        options=[{"label": FLAG_LABELS[name], "value": name} for name in ISSUE_FLAG_OPTIONS],
+                                        value=list(ISSUE_FLAG_OPTIONS),
+                                        className="flag-list",
+                                    ),
+                                    html.Button("Re-index", id="btn-reindex", n_clicks=0, className="nav-button reindex-button"),
+                                    html.Div(id="issue-cache-status", className="status-message"),
+                                    html.Label("Issue cruise", htmlFor="issue-cruise-dropdown"),
+                                    dcc.Dropdown(id="issue-cruise-dropdown", clearable=False),
+                                    html.Label("Issue files", htmlFor="issue-file-radio"),
+                                    html.Div(
+                                        dcc.RadioItems(
+                                            id="issue-file-radio",
+                                            options=[],
+                                            value=None,
+                                            labelStyle={
+                                                "display": "block",
+                                                "margin": "5px 0",
+                                                "fontSize": "12px",
+                                                "wordBreak": "break-word",
+                                                "lineHeight": "1.35",
+                                            },
+                                            inputStyle={"marginRight": "6px"},
+                                        ),
+                                        className="file-list issue-file-list",
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Button("Prev issue", id="btn-prev-issue", n_clicks=0, className="nav-button"),
+                                            html.Button("Next issue", id="btn-next-issue", n_clicks=0, className="nav-button"),
+                                        ],
+                                        className="file-nav",
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                id="graph-controls-panel",
+                                className="mode-panel",
+                                children=[
+                                    html.Label("Variable", htmlFor="variable-dropdown"),
+                                    dcc.Dropdown(id="variable-dropdown", clearable=False),
+                                    html.Label("QC test", htmlFor="test-dropdown"),
+                                    dcc.Dropdown(id="test-dropdown", clearable=False),
+                                    html.Label("Visible flags", htmlFor="flag-checklist"),
+                                    dcc.Checklist(
+                                        id="flag-checklist",
+                                        options=[{"label": FLAG_LABELS[name], "value": name} for name in FLAG_ORDER],
+                                        value=list(FLAG_ORDER),
+                                        className="flag-list",
+                                    ),
+                                ],
                             ),
                             html.Div(id="status-message", className="status-message"),
                         ],
@@ -814,6 +1204,43 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 font-size: 13px;
                 font-weight: 750;
             }
+            .mode-tabs {
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 4px;
+            }
+            .mode-tab {
+                padding: 10px 8px !important;
+                background: #f3f6ef !important;
+                border: 0 !important;
+                border-right: 1px solid var(--line) !important;
+                color: #455240 !important;
+                font-size: 13px;
+                font-weight: 750;
+            }
+            .mode-tab-selected {
+                background: #dfe9d9 !important;
+                color: #182016 !important;
+                border-top: 3px solid var(--accent) !important;
+            }
+            .mode-panel {
+                display: grid;
+                gap: 10px;
+            }
+            .sidebar-rule {
+                width: 100%;
+                border: 0;
+                border-top: 1px solid var(--line);
+                margin: 8px 0 4px;
+            }
+            .sidebar-heading,
+            .results-heading {
+                margin: 4px 0 0;
+                color: #253520;
+                font-size: 16px;
+                line-height: 1.2;
+            }
             .flag-list label {
                 display: block;
                 margin: 8px 0;
@@ -828,6 +1255,9 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 border: 1px solid var(--line);
                 border-radius: 6px;
                 background: #fbfcfa;
+            }
+            .issue-file-list {
+                max-height: 28vh;
             }
             .file-nav {
                 display: grid;
@@ -844,6 +1274,10 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 cursor: pointer;
             }
             .nav-button:hover { background: #e1ebdc; }
+            .reindex-button {
+                width: 100%;
+                margin-top: 4px;
+            }
             .status-message {
                 min-height: 20px;
                 color: #8a3b12;
@@ -918,27 +1352,160 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
 """
 
     @app.callback(
+        Output("issue-index-store", "data"),
+        Input("btn-reindex", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def rebuild_issue_index(_n_clicks: int):
+        rows = build_qc_issue_index(root, mapping)
+        file_count = sum(len(files) for files in files_by_cruise.values())
+        return write_qc_issue_index(
+            issue_index_path,
+            rows,
+            {
+                "data_root": str(root),
+                "index_path": str(issue_index_path),
+                "file_count": file_count,
+            },
+        )
+
+    @app.callback(
+        Output("issue-test-dropdown", "options"),
+        Output("issue-test-dropdown", "value"),
+        Output("issue-variable-dropdown", "options"),
+        Output("issue-variable-dropdown", "value"),
+        Input("issue-index-store", "data"),
+        Input("issue-test-dropdown", "value"),
+        Input("issue-variable-dropdown", "value"),
+    )
+    def update_issue_filter_options(payload: dict | None, current_test: str | None, current_variable: str | None):
+        rows = (payload or {}).get("rows") or []
+        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
+        return _issue_filter_dropdown_state(rows, current_test, current_variable, triggered)
+
+    @app.callback(
+        Output("file-browser-panel", "style"),
+        Output("issue-browser-panel", "style"),
+        Output("graph-controls-panel", "style"),
+        Input("view-mode", "value"),
+    )
+    def toggle_browser_mode(mode: str | None):
+        hidden = {"display": "none"}
+        shown = {}
+        if mode == "issue":
+            return hidden, shown, hidden
+        return shown, hidden, shown
+
+    @app.callback(
+        Output("filtered-issue-store", "data"),
+        Output("issue-cruise-dropdown", "options"),
+        Output("issue-cruise-dropdown", "value"),
+        Output("issue-cache-status", "children"),
+        Input("issue-index-store", "data"),
+        Input("issue-test-dropdown", "value"),
+        Input("issue-variable-dropdown", "value"),
+        Input("issue-flag-checklist", "value"),
+        State("issue-cruise-dropdown", "value"),
+    )
+    def update_issue_cruises(
+        payload: dict | None,
+        issue_test: str | None,
+        issue_variable: str | None,
+        issue_flags: list[str] | None,
+        current_cruise: str | None,
+    ):
+        payload = payload or {"metadata": {"status": "missing", "path": str(issue_index_path)}, "rows": []}
+        rows = payload.get("rows") or []
+        filtered = filter_issue_rows(rows, issue_test or "ALL", issue_variable or "ALL", issue_flags or [])
+        cruise_options = _issue_cruise_options(filtered)
+        cruise_values = {item["value"] for item in cruise_options}
+        cruise_value = current_cruise if current_cruise in cruise_values else (cruise_options[0]["value"] if cruise_options else None)
+        return filtered, cruise_options, cruise_value, _issue_status(payload, len(filtered))
+
+    @app.callback(
+        Output("issue-file-radio", "options"),
+        Output("issue-file-radio", "value"),
+        Input("filtered-issue-store", "data"),
+        Input("issue-cruise-dropdown", "value"),
+        Input("btn-prev-issue", "n_clicks"),
+        Input("btn-next-issue", "n_clicks"),
+        State("issue-file-radio", "value"),
+    )
+    def update_issue_files(
+        issue_rows: list[dict] | None,
+        issue_cruise: str | None,
+        _prev_clicks: int,
+        _next_clicks: int,
+        current_issue_key: str | None,
+    ):
+        rows = issue_rows or []
+        cruise_rows = [row for row in rows if not issue_cruise or row.get("cruise") == issue_cruise]
+        options = _issue_file_options(cruise_rows, include_cruise=False)
+        values = {item["value"] for item in options}
+        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
+
+        if triggered == "btn-prev-issue":
+            value = adjacent_issue_key(cruise_rows, current_issue_key, -1)
+        elif triggered == "btn-next-issue":
+            value = adjacent_issue_key(cruise_rows, current_issue_key, 1)
+        else:
+            value = current_issue_key if current_issue_key in values else (options[0]["value"] if options else None)
+        return options, value
+
+    @app.callback(
+        Output("cruise-dropdown", "value"),
+        Input("view-mode", "value"),
+        Input("issue-file-radio", "value"),
+        State("filtered-issue-store", "data"),
+        State("cruise-dropdown", "value"),
+    )
+    def set_cruise_from_issue(
+        mode: str | None,
+        issue_key: str | None,
+        issue_rows: list[dict] | None,
+        current: str | None,
+    ):
+        if mode != "issue":
+            return no_update
+        row = issue_row_from_key(issue_rows, issue_key)
+        if not row:
+            return no_update
+        cruise = str(row.get("cruise") or "")
+        return cruise if cruise in files_by_cruise and cruise != current else no_update
+
+    @app.callback(
         Output("file-radio", "options"),
         Output("file-radio", "value"),
         Input("cruise-dropdown", "value"),
         Input("btn-prev-file", "n_clicks"),
         Input("btn-next-file", "n_clicks"),
+        Input("view-mode", "value"),
+        Input("issue-file-radio", "value"),
         State("file-radio", "value"),
+        State("filtered-issue-store", "data"),
     )
     def sync_file_controls(
         cruise: str | None,
         _prev_clicks: int,
         _next_clicks: int,
+        mode: str | None,
+        issue_key: str | None,
         current_file: str | None,
+        issue_rows: list[dict] | None,
     ):
+        issue_row = issue_row_from_key(issue_rows, issue_key)
+        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
+        if mode == "issue" and triggered in {"issue-file-radio", "view-mode"} and issue_row:
+            cruise = str(issue_row.get("cruise") or cruise or "")
         if not cruise or cruise not in files_by_cruise:
             return [], None
         files = files_by_cruise[cruise]
         options = _file_options(files)
         values = {item["value"] for item in options}
-        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
 
-        if triggered == "btn-prev-file":
+        if mode == "issue" and triggered in {"issue-file-radio", "view-mode"} and issue_row and issue_row.get("path") in values:
+            value = issue_row_selection(issue_row)["path"]
+        elif triggered == "btn-prev-file":
             value = adjacent_file(files, current_file, -1)
         elif triggered == "btn-next-file":
             value = adjacent_file(files, current_file, 1)
@@ -950,9 +1517,24 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
         Output("variable-dropdown", "options"),
         Output("variable-dropdown", "value"),
         Input("file-radio", "value"),
+        Input("view-mode", "value"),
+        Input("issue-file-radio", "value"),
         State("variable-dropdown", "value"),
+        State("filtered-issue-store", "data"),
     )
-    def update_variables(file_path: str | None, current: str | None):
+    def update_variables(
+        file_path: str | None,
+        mode: str | None,
+        issue_key: str | None,
+        current: str | None,
+        issue_rows: list[dict] | None,
+    ):
+        issue_row = issue_row_from_key(issue_rows, issue_key)
+        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
+        if mode == "issue" and triggered in {"issue-file-radio", "view-mode"} and issue_row:
+            selection = issue_row_selection(issue_row)
+            file_path = selection["path"] or file_path
+            current = selection["variable"] or current
         if not file_path:
             return [], None
         try:
@@ -969,9 +1551,26 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
         Output("test-dropdown", "value"),
         Input("file-radio", "value"),
         Input("variable-dropdown", "value"),
+        Input("view-mode", "value"),
+        Input("issue-file-radio", "value"),
         State("test-dropdown", "value"),
+        State("filtered-issue-store", "data"),
     )
-    def update_tests(file_path: str | None, variable: str | None, current: str | None):
+    def update_tests(
+        file_path: str | None,
+        variable: str | None,
+        mode: str | None,
+        issue_key: str | None,
+        current: str | None,
+        issue_rows: list[dict] | None,
+    ):
+        issue_row = issue_row_from_key(issue_rows, issue_key)
+        triggered = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else ""
+        if mode == "issue" and triggered in {"issue-file-radio", "view-mode"} and issue_row:
+            selection = issue_row_selection(issue_row)
+            file_path = selection["path"] or file_path
+            variable = selection["variable"] or variable
+            current = selection["qc_name"] or current
         if not file_path or not variable:
             return [], None
         try:
@@ -1017,6 +1616,44 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
             html.Div([html.Span("File"), html.Strong(str(payload["file_name"]))], className="metadata-item"),
             html.Div([html.Span("Selection"), html.Strong(f"{payload['variable']} / {payload['test_label']}")], className="metadata-item"),
         ]
+        location_info = payload.get("location_info")
+        if isinstance(location_info, dict):
+            metadata.extend(
+                [
+                    html.Div(
+                        [
+                            html.Span("Actual location"),
+                            html.Strong(_format_coord(location_info.get("actual_lat"), location_info.get("actual_lon"))),
+                        ],
+                        className="metadata-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Expected location"),
+                            html.Strong(_format_coord(location_info.get("expected_lat"), location_info.get("expected_lon"))),
+                        ],
+                        className="metadata-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Location delta"),
+                            html.Strong(_format_coord(location_info.get("delta_lat"), location_info.get("delta_lon"))),
+                        ],
+                        className="metadata-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Tolerance"),
+                            html.Strong(
+                                "unavailable"
+                                if location_info.get("tolerance") is None
+                                else f"{float(location_info['tolerance']):.6f} degrees"
+                            ),
+                        ],
+                        className="metadata-item",
+                    ),
+                ]
+            )
         return _make_figure(payload, visible_flags), payload["summary"], metadata, payload.get("climatology_limit_status", "")
 
     return app

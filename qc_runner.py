@@ -150,6 +150,72 @@ def _broadcast_like(target: xr.DataArray, source: xr.DataArray | None) -> Option
         return np.full(target.shape, np.asarray(source).flat[0])
 
 
+def _iter_attr_values(value: object) -> Iterable[object]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)):
+        return (value,)
+    try:
+        arr = np.asarray(value)
+    except Exception:
+        return (value,)
+    if arr.shape == ():
+        return (arr.item(),)
+    return tuple(arr.ravel().tolist())
+
+
+def _missing_mask_for_var(data_var: xr.DataArray) -> np.ndarray:
+    """Return samples that should be treated as missing before any QC test."""
+    raw = np.ma.asarray(data_var.values)
+    mask = np.ma.getmaskarray(raw).copy()
+    arr = np.asarray(raw.data)
+
+    if np.issubdtype(arr.dtype, np.number):
+        mask |= ~np.isfinite(arr.astype(float, copy=False))
+
+    sentinels: list[object] = []
+    for attr_name in ("_FillValue", "missing_value"):
+        sentinels.extend(_iter_attr_values(data_var.attrs.get(attr_name)))
+
+    for sentinel in sentinels:
+        try:
+            if np.issubdtype(arr.dtype, np.number):
+                sentinel_value = float(sentinel)
+                if np.isfinite(sentinel_value):
+                    mask |= arr == sentinel_value
+            else:
+                mask |= arr == sentinel
+        except (TypeError, ValueError):
+            continue
+
+    return np.asarray(mask, dtype=bool)
+
+
+def _data_var_with_missing_as_nan(data_var: xr.DataArray, missing_mask: np.ndarray) -> xr.DataArray:
+    """Return a numeric copy of *data_var* with encoded missing samples as NaN."""
+    if not np.any(missing_mask):
+        return data_var
+    try:
+        values = np.asarray(data_var.values, dtype=float).copy()
+    except (TypeError, ValueError):
+        return data_var
+    values[missing_mask] = np.nan
+    return xr.DataArray(
+        values,
+        dims=data_var.dims,
+        coords=data_var.coords,
+        attrs=dict(data_var.attrs),
+        name=data_var.name,
+    )
+
+
+def _apply_missing_flags(flags: np.ndarray, missing_mask: np.ndarray) -> np.ndarray:
+    out = np.asarray(flags, dtype=int).copy()
+    if out.shape == missing_mask.shape:
+        out[missing_mask] = QC_FLAGS["MISSING"]
+    return out
+
+
 def _get_depth_for_var(
     ds: xr.Dataset,
     var: xr.DataArray,
@@ -276,27 +342,32 @@ def _run_single_test_for_var(
     if not _should_run_test(test_name, category):
         return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
     prof = profile or default_profile()
+    missing_mask = _missing_mask_for_var(data_var)
+    test_data_var = _data_var_with_missing_as_nan(data_var, missing_mask)
 
     if test_name == "gap_test":
-        return gap_test(data_var)
+        return _apply_missing_flags(gap_test(test_data_var), missing_mask)
 
     if test_name == "syntax_test":
-        return syntax_test(data_var)
+        return _apply_missing_flags(syntax_test(test_data_var), missing_mask)
 
     if test_name == "location_test":
         lon, lat = get_lon_lat(ds, prof.metadata)
         if lon is not None and lat is not None and expected_location is not None:
-            lon_b = _broadcast_like(data_var, lon)
-            lat_b = _broadcast_like(data_var, lat)
+            lon_b = _broadcast_like(test_data_var, lon)
+            lat_b = _broadcast_like(test_data_var, lat)
             expected_lat, expected_lon = expected_location
-            return location_test(
-                lon=lon_b,
-                lat=lat_b,
-                expected_lon=expected_lon,
-                expected_lat=expected_lat,
-                tolerance=location_tolerance,
+            return _apply_missing_flags(
+                location_test(
+                    lon=lon_b,
+                    lat=lat_b,
+                    expected_lon=expected_lon,
+                    expected_lat=expected_lat,
+                    tolerance=location_tolerance,
+                ),
+                missing_mask,
             )
-        return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
+        return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
 
     if test_name == "gross_range_test":
         ranges = gross_ranges.get(var_name) if gross_ranges else None
@@ -304,14 +375,17 @@ def _run_single_test_for_var(
             fail_span = tuple(ranges.get("fail_span", ())) or None
             suspect_span = tuple(ranges.get("suspect_span", ())) or None
             if fail_span:
-                return gross_range_test(data_var, fail_span=fail_span, suspect_span=suspect_span)
-        return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
+                return _apply_missing_flags(
+                    gross_range_test(test_data_var, fail_span=fail_span, suspect_span=suspect_span),
+                    missing_mask,
+                )
+        return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
 
     if test_name == "decreasing_radiance_test":
-        depth = _get_depth_for_var(ds, data_var, prof)
+        depth = _get_depth_for_var(ds, test_data_var, prof)
         aligned_data, moved_axis = align_for_profile_tests(
-            data_var,
-            data_var.dims,
+            test_data_var,
+            test_data_var.dims,
             prof.metadata.sample_dimension,
         )
         aligned_depth = None
@@ -322,23 +396,26 @@ def _run_single_test_for_var(
                 prof.metadata.sample_dimension,
             )
         flags = decreasing_radiance_test(aligned_data, depth=aligned_depth, non_increasing=True)
-        return restore_flags_shape(flags, data_var.shape, moved_axis)
+        return _apply_missing_flags(restore_flags_shape(flags, data_var.shape, moved_axis), missing_mask)
 
     if test_name == "climatology_test":
-        depth = _get_depth_for_var(ds, data_var, prof)
-        time = _get_time_for_var(ds, data_var, prof)
+        depth = _get_depth_for_var(ds, test_data_var, prof)
+        time = _get_time_for_var(ds, test_data_var, prof)
         config = None
         if climatology_config:
             config = climatology_config.get(var_name)
         if depth is None or time is None or config is None:
-            return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
-        return climatology_test(data_var, time=time, depth=depth, config=config)
+            return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
+        return _apply_missing_flags(
+            climatology_test(test_data_var, time=time, depth=depth, config=config),
+            missing_mask,
+        )
 
     if test_name == "flat_line_test":
         flat_cfg = dict(flat_line_config or load_flat_line_config())
         aligned_data, moved_axis = align_for_profile_tests(
-            data_var,
-            data_var.dims,
+            test_data_var,
+            test_data_var.dims,
             prof.metadata.sample_dimension,
         )
         flags = flat_line_test(
@@ -347,32 +424,32 @@ def _run_single_test_for_var(
             rep_cnt_fail=flat_cfg["rep_cnt_fail"],
             eps=flat_cfg["eps"],
         )
-        return restore_flags_shape(flags, data_var.shape, moved_axis)
+        return _apply_missing_flags(restore_flags_shape(flags, data_var.shape, moved_axis), missing_mask)
 
     if test_name == "spike_test":
         sp = _spike_params_for_var(spike_thresholds, var_name)
         if sp is None:
-            return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
+            return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
         s_th, f_th = sp
         aligned_data, moved_axis = align_for_profile_tests(
-            data_var,
-            data_var.dims,
+            test_data_var,
+            test_data_var.dims,
             prof.metadata.sample_dimension,
         )
         flags = spike_test(aligned_data, suspect_threshold=s_th, fail_threshold=f_th)
-        return restore_flags_shape(flags, data_var.shape, moved_axis)
+        return _apply_missing_flags(restore_flags_shape(flags, data_var.shape, moved_axis), missing_mask)
 
     if test_name == "rate_of_change_test":
         roc_thr = _roc_threshold_for_var(rate_of_change_thresholds, var_name)
         if roc_thr is None:
-            return np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
+            return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
         aligned_data, moved_axis = align_for_profile_tests(
-            data_var,
-            data_var.dims,
+            test_data_var,
+            test_data_var.dims,
             prof.metadata.sample_dimension,
         )
         flags = rate_of_change_test(aligned_data, threshold=roc_thr)
-        return restore_flags_shape(flags, data_var.shape, moved_axis)
+        return _apply_missing_flags(restore_flags_shape(flags, data_var.shape, moved_axis), missing_mask)
 
     raise ValueError(f"Unknown test_name: {test_name}")
 
