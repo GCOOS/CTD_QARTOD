@@ -34,5 +34,6 @@ def climatology_test(
                 period=c.get("period"),
             )
 
-    flags = qartod.climatology_test(config=cfg, inp=np.asarray(data), tinp=np.asarray(time), zinp=np.asarray(depth))
+    time_values = np.asarray(time).astype("datetime64[s]")
+    flags = qartod.climatology_test(config=cfg, inp=np.asarray(data), tinp=time_values, zinp=np.asarray(depth))
     return to_int_flags(flags)

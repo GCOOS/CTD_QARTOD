@@ -6,8 +6,8 @@
         "long_names": ["Temperature Sensor 1", "Temperature Sensor 2"]
       },
       "ranges": {
-        "degree_C": { "min": -5, "max": 35 },
-        "degree_Celsius": { "min": -5, "max": 35 }
+        "degree_C": { "min": 0, "max": 35 },
+        "degree_Celsius": { "min": 0, "max": 35 }
       }
     },
     "sbe_4c_conductivity": {
@@ -100,7 +100,11 @@
       "identifiers": {
         "long_names": []
       },
-      "ranges": {}
+      "ranges": {
+        " ": { "min": 0, "max": 50 },
+        "": { "min": 0, "max": 50 },
+        "1": { "min": 0, "max": 50 }
+      }
     }
   }
 }
