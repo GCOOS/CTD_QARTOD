@@ -1,5 +1,5 @@
 {
-  "data_root": "datasets/SFER_ORIGINAL",
+  "data_root": "datasets/SFER_DIMENSIONSandCALENDAR_FIXED",
   "output": {
     "mode": "duplicate",
     "directory": "output/SFER_QC"

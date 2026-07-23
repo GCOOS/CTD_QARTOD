@@ -1,70 +1,22 @@
 {
-  "surface_photosynthetically_available_radiation": {
-    "suspect_threshold": 200.0,
-    "fail_threshold": 800.0
-  },
-  "beam_attenuation": {
-    "suspect_threshold": 0.05,
-    "fail_threshold": 0.2
-  },
-  "sea_water_turbidity": {
-    "suspect_threshold": 2.0,
-    "fail_threshold": 8.0
-  },
-  "photosynthetically_available_radiation": {
-    "suspect_threshold": 200.0,
-    "fail_threshold": 800.0
-  },
-  "chlorophyll_concentration": {
-    "suspect_threshold": 5.0,
-    "fail_threshold": 20.0
-  },
-  "chlorophyll_fluorescence": {
-    "suspect_threshold": 5.0,
-    "fail_threshold": 20.0
-  },
-  "CDOM": {
-    "suspect_threshold": 2.0,
-    "fail_threshold": 8.0
-  },
   "sea_water_temperature": {
-    "suspect_threshold": 0.5,
-    "fail_threshold": 2.0
+    "suspect_threshold": 0.1,
+    "fail_threshold": 0.16
   },
   "sea_water_temperature_2": {
-    "suspect_threshold": 0.5,
-    "fail_threshold": 2.0
+    "suspect_threshold": 0.1,
+    "fail_threshold": 0.16
   },
   "sea_water_salinity": {
-    "suspect_threshold": 0.2,
-    "fail_threshold": 0.8
+    "suspect_threshold": 0.01,
+    "fail_threshold": 0.03
   },
   "sea_water_salinity_2": {
-    "suspect_threshold": 0.2,
-    "fail_threshold": 0.8
-  },
-  "sea_water_electrical_conductivity": {
     "suspect_threshold": 0.01,
-    "fail_threshold": 0.04
-  },
-  "sea_water_electrical_conductivity_2": {
-    "suspect_threshold": 0.01,
-    "fail_threshold": 0.04
-  },
-  "sea_water_pressure": {
-    "suspect_threshold": 30.0,
-    "fail_threshold": 120.0
+    "fail_threshold": 0.03
   },
   "dissolved_oxygen": {
-    "suspect_threshold": 0.3,
-    "fail_threshold": 1.0
-  },
-  "oxygen_saturation": {
-    "suspect_threshold": 5.0,
-    "fail_threshold": 15.0
-  },
-  "oxygen_saturation_2": {
-    "suspect_threshold": 5.0,
-    "fail_threshold": 15.0
+    "suspect_threshold": 0.024,
+    "fail_threshold": 0.06
   }
 }

@@ -94,8 +94,8 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 
 | Test                  | Description                                                                     | Categories |
 | --------------------- | ------------------------------------------------------------------------------- | ---------- |
-| `spike_test`          | Placeholder (all NOT_EVALUATED) until the ioos_qc implementation is enabled     | All        |
-| `rate_of_change_test` | Placeholder (all NOT_EVALUATED) until the count-based implementation is enabled | All        |
+| `spike_test`          | QARTOD average / neighbor-midpoint spike test                                    | Configured |
+| `rate_of_change_test` | Adjacent-sample absolute-change test                                             | Configured |
 | `flat_line_test`      | Count-based repeated-value check using `flat_line_config.json`                  | All        |
 
 
@@ -305,8 +305,8 @@ Each data variable that appears in the variable mapping and in the file gets QC 
 | Decreasing radiance test | `_qc_decreasing_radiance_test` | `decreasing_radiance_test_quality_flag` | PAR, in_water_radiance_irradiance                        |
 | Climatology test         | `_qc_climatology`              | `climatology_test_quality_flag`         | temperature, practical_salinity, oxygen_dissolved_oxygen |
 | Flat line test           | `_qc_flat_line`                | `flat_line_test_quality_flag`           | All mapped variables                                     |
-| Spike test               | `_qc_spike`                    | `spike_test_quality_flag`               | All mapped variables                                     |
-| Rate of change test      | `_qc_rate_of_change`           | `rate_of_change_test_quality_flag`      | All mapped variables                                     |
+| Spike test               | `_qc_spike`                    | `spike_test_quality_flag`               | Variables listed in `spike_thresholds.json`              |
+| Rate of change test      | `_qc_rate_of_change`           | `rate_of_change_test_quality_flag`      | Variables listed in `rate_of_change_thresholds.json`     |
 
 
 ### Mapped data variables
@@ -328,5 +328,4 @@ From `config/variable_mapping/walton_mapping.json` :
 | turbidity                       | `sea_water_turbidity`                                                      |
 | chlorophyll                     | `chlorophyll_concentration`, `chlorophyll_fluorescence`                    |
 | CDOM                            | `CDOM`                                                                     |
-
 
