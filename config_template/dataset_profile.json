@@ -14,15 +14,16 @@
     "sample_dimension": "z"
   },
   "paths": {
-    "variable_mapping": "config/variable_mapping/walton_mapping.json",
-    "station_coords": "config/location_test/Station_Mean_Coords.csv",
-    "location_config": "config/location_test/location_config.json",
-    "station_climatology": "config/climatology_test/station_climatology_config.json",
-    "station_depth_classification": "config/climatology_test/station_depth_classification.json",
-    "sensor_specs": "config/gross_range_test/sensor_specs.json",
-    "variable_sensor_map": "config/gross_range_test/variable_sensor_map.json",
-    "spike_thresholds": "config/spike_test/spike_thresholds.json",
-    "rate_of_change_thresholds": "config/rate_of_change_test/rate_of_change_thresholds.json",
-    "flat_line_config": "config/flat_line_test/flat_line_config.json"
+    "cnv_mapping": "config/YOUR_DATASET/cnv_mapping.json",
+    "variable_mapping": "config/YOUR_DATASET/qc_variable_mapping.json",
+    "station_coords": "config/YOUR_DATASET/location_test/Station_Mean_Coords.csv",
+    "location_config": "config/YOUR_DATASET/location_test/location_config.json",
+    "station_climatology": "config/YOUR_DATASET/climatology_test/station_climatology_config.json",
+    "station_depth_classification": "config/YOUR_DATASET/climatology_test/station_depth_classification.json",
+    "sensor_specs": "config/YOUR_DATASET/gross_range_test/sensor_specs.json",
+    "variable_sensor_map": "config/YOUR_DATASET/gross_range_test/variable_sensor_map.json",
+    "spike_thresholds": "config/YOUR_DATASET/spike_test/spike_thresholds.json",
+    "rate_of_change_thresholds": "config/YOUR_DATASET/rate_of_change_test/rate_of_change_thresholds.json",
+    "flat_line_config": "config/YOUR_DATASET/flat_line_test/flat_line_config.json"
   }
 }

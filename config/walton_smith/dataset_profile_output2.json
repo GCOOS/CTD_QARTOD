@@ -1,0 +1,28 @@
+{
+  "data_root": "datasets/SFER_CTD_SOAK_REMOVED",
+  "output": {
+    "mode": "duplicate",
+    "directory": "output_2/SFER_QC"
+  },
+  "metadata": {
+    "station": "station",
+    "cruise_id": "cruiseID",
+    "longitude": ["longitude", "lon"],
+    "latitude": ["latitude", "lat"],
+    "depth": ["depth"],
+    "time": ["time"],
+    "sample_dimension": "z"
+  },
+  "paths": {
+    "variable_mapping": "config/walton_smith/variable_mapping/walton_mapping.json",
+    "station_coords": "config/walton_smith/location_test/Station_Mean_Coords.csv",
+    "location_config": "config/walton_smith/location_test/location_config.json",
+    "station_climatology": "config/walton_smith/climatology_test/station_climatology_config.json",
+    "station_depth_classification": "config/walton_smith/climatology_test/station_depth_classification.json",
+    "sensor_specs": "config/walton_smith/gross_range_test/sensor_specs.json",
+    "variable_sensor_map": "config/walton_smith/gross_range_test/variable_sensor_map.json",
+    "spike_thresholds": "config/walton_smith/spike_test/spike_thresholds.json",
+    "rate_of_change_thresholds": "config/walton_smith/rate_of_change_test/rate_of_change_thresholds.json",
+    "flat_line_config": "config/walton_smith/flat_line_test/flat_line_config.json"
+  }
+}

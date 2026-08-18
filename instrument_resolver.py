@@ -91,7 +91,10 @@ def _sensor_present(
     return bool(long_names.intersection(instrument_long_names))
 
 
-def _find_unit_range(unit: Optional[str], ranges: Mapping[str, Mapping[str, float]]) -> Optional[Tuple[float, float]]:
+def _find_unit_range(
+    unit: Optional[str],
+    ranges: Mapping[str, Mapping[str, object]],
+) -> Optional[Tuple[float, float]]:
     """
     Find (min, max) for a unit key (case-insensitive).
     """
@@ -100,7 +103,11 @@ def _find_unit_range(unit: Optional[str], ranges: Mapping[str, Mapping[str, floa
     unit_lower = unit.lower()
     for unit_name, span in ranges.items():
         if unit_name.lower() == unit_lower and "min" in span and "max" in span:
-            return (float(span["min"]), float(span["max"]))
+            minimum = span["min"]
+            maximum = span["max"]
+            if minimum is None or maximum is None:
+                return None
+            return (float(minimum), float(maximum))
     return None
 
 

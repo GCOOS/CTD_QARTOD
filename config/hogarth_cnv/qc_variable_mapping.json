@@ -1,0 +1,17 @@
+{
+  "in_water_radiance_irradiance": [],
+  "above_water_radiance_irradiance": [],
+  "beam_attenuation": [],
+  "turbidity": ["sea_water_turbidity"],
+  "PAR": [],
+  "chlorophyll": ["chlorophyll_concentration"],
+  "CDOM": ["CDOM"],
+  "FDOM": [],
+  "backscattering_volume_scattering": [],
+  "temperature": ["sea_water_temperature"],
+  "practical_salinity": ["sea_water_salinity"],
+  "conductivity": ["sea_water_electrical_conductivity"],
+  "pressure": [],
+  "oxygen_dissolved_oxygen": ["dissolved_oxygen"],
+  "oxygen_saturation": ["oxygen_saturation", "oxygen_saturation_2"]
+}

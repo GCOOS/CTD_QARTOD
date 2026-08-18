@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "filename_pattern": "^(?P<cruise>[^_]+)_Stn\\.(?P<station>.+)_(?P<sequence>\\d+)_DatCnv_processed\\.cnv$",
+    "cruise_case": "upper",
+    "station_case": "upper",
+    "normalize_numeric_station": true
+  },
+  "structural_fields": {
+    "depth": {
+      "source_candidates": ["depSM"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "units": "m"
+    },
+    "time": {
+      "source_candidates": ["timeQ"],
+      "required": true,
+      "transform": {
+        "type": "epoch_offset",
+        "offset_seconds": 946684800
+      },
+      "units": "seconds since 1970-01-01T00:00:00Z",
+      "calendar": "gregorian"
+    },
+    "latitude": {
+      "source_candidates": ["latitude"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "reducer": "median",
+      "units": "degrees_north",
+      "retain_samples_as": "latitude_sample"
+    },
+    "longitude": {
+      "source_candidates": ["longitude"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "reducer": "median",
+      "units": "degrees_east",
+      "retain_samples_as": "longitude_sample"
+    }
+  },
+  "science_variables": {
+    "scan": {"target": "scan", "units": "1"},
+    "c0S/m": {
+      "target": "sea_water_electrical_conductivity",
+      "units": "S/m"
+    },
+    "t090C": {"target": "sea_water_temperature", "units": "deg C"},
+    "sal00": {"target": "sea_water_salinity", "units": "PSU"},
+    "oxsatMg/L": {"target": "oxygen_saturation_2", "units": "mg/l"},
+    "sbeox0Mg/L": {"target": "dissolved_oxygen", "units": "mg/l"},
+    "flECO-AFL": {
+      "target": "chlorophyll_concentration",
+      "units": "mg/m^3"
+    },
+    "wetCDOM": {"target": "CDOM", "units": "mg/m^3"},
+    "turbWETntu0": {"target": "sea_water_turbidity", "units": "NTU"},
+    "density00": {"target": "sea_water_density", "units": "kg/m^3"},
+    "svCM": {"target": "sound_velocity", "units": "m/s"},
+    "oxsolMg/L": {"target": "oxygen_saturation", "units": "mg/l"},
+    "timeS": {"target": "time_elapsed", "units": "seconds"},
+    "timeM": {"target": "seabird_elapsed_minutes", "units": "minutes"},
+    "timeH": {"target": "seabird_elapsed_hours", "units": "hours"},
+    "timeJ": {"target": "seabird_julian_day", "units": "days"},
+    "altM": {"target": "altimeter", "units": "m"},
+    "flag": {"target": "flag", "units": "1"}
+  }
+}

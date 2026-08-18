@@ -14,13 +14,13 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 import numpy as np
 import xarray as xr
 
-from dataset_profile import MetadataConfig
+from dataset_profile import MetadataConfig, WALTON_SMITH_CONFIG_DIR
 
 # CONFIG FILE PATHS
-# Config files live under config/ in subfolders named for the QC test (or variable_mapping).
-# Change these paths if you need to use different config files.
+# Default config files belong to the Walton Smith dataset. Other datasets
+# select their own paths through a dataset profile.
 
-CONFIG_DIR = Path(__file__).parent / "config"
+CONFIG_DIR = WALTON_SMITH_CONFIG_DIR
 
 # Standard variable name → dataset-specific variable names (Walton categories)
 VARIABLE_MAPPING_JSON = CONFIG_DIR / "variable_mapping" / "walton_mapping.json"
@@ -215,9 +215,11 @@ def _positive_float(value: object, default: float) -> float:
     return number
 
 
-def load_location_config(json_path: Path | str = LOCATION_CONFIG_JSON) -> Dict[str, float]:
-    """Load location-test config, falling back to defaults for missing or invalid fields."""
-    config: Dict[str, float] = dict(LOCATION_DEFAULTS)
+def load_location_config(
+    json_path: Path | str = LOCATION_CONFIG_JSON,
+) -> Dict[str, Optional[float]]:
+    """Load location-test config; an explicit null tolerance disables the test."""
+    config: Dict[str, Optional[float]] = dict(LOCATION_DEFAULTS)
     path = Path(json_path)
     if not path.exists():
         return config
@@ -225,6 +227,8 @@ def load_location_config(json_path: Path | str = LOCATION_CONFIG_JSON) -> Dict[s
         root = json.load(f)
     if not isinstance(root, dict):
         return config
+    if root.get("tolerance") is None and "tolerance" in root:
+        return {"tolerance": None}
     config["tolerance"] = _positive_float(root.get("tolerance"), LOCATION_DEFAULTS["tolerance"])
     return config
 

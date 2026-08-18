@@ -1,7 +1,8 @@
 """
-Main entry point for QC and ERDDAP XML sync.
+Main entry point for CNV conversion, QC, visualization, and ERDDAP XML sync.
 
 Usage:
+    python main.py convert-cnv --input-dir DIR --output-dir DIR ...
     python main.py qc [--base-dir DIR] ...
     python main.py erddap-xml [--input-xml PATH] [--data-root DIR] ...
     python main.py viz [--data-root DIR] ...
@@ -14,7 +15,13 @@ import logging
 import sys
 from pathlib import Path
 
-from dataset_profile import DEFAULT_PROFILE_PATH, load_dataset_profile, resolve_config_path
+from cnv_converter import convert_cnv_directory
+from dataset_profile import (
+    DEFAULT_CNV_PROFILE_PATH,
+    DEFAULT_PROFILE_PATH,
+    load_dataset_profile,
+    resolve_config_path,
+)
 from erddap_xml_sync import (
     add_erddap_xml_arguments,
     resolve_erddap_data_root,
@@ -134,14 +141,47 @@ def _add_viz_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=str(DEFAULT_CNV_PROFILE_PATH),
+        help=f"Path to dataset profile JSON (default: '{DEFAULT_CNV_PROFILE_PATH}')",
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Directory containing one cruise's Sea-Bird CNV and companion files",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output root for cruise netCDF files and conversion_report.json",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Atomically replace existing converted netCDF files",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose (debug) logging",
+    )
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="SFER CTD QC and ERDDAP datasets.xml sync",
+        description="SFER CTD CNV conversion, QC, and ERDDAP datasets.xml sync",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+    python main.py convert-cnv --profile config/hogarth_cnv/dataset_profile.json --input-dir cnv_data/cruise --output-dir output/SFER_CNV
     python main.py qc
-    python main.py qc --profile config/dataset_profile.json
+    python main.py qc --profile config/walton_smith/dataset_profile.json
     python main.py qc --base-dir /path/to/datasets/SFER_CTD_SOAK_REMOVED
     python main.py qc --no-sync-erddap-xml
     python main.py erddap-xml --data-root output/SFER_QC
@@ -150,6 +190,13 @@ Examples:
         """,
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    convert_parser = sub.add_parser(
+        "convert-cnv",
+        help="Convert NOAA AOML Sea-Bird CNV casts to standardized netCDF profiles",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_convert_cnv_arguments(convert_parser)
 
     qc_parser = sub.add_parser(
         "qc",
@@ -173,6 +220,59 @@ Examples:
     _add_viz_arguments(viz_parser)
 
     return parser.parse_args(argv)
+
+
+def _run_convert_cnv(args: argparse.Namespace) -> None:
+    setup_logging(verbose=args.verbose)
+    if not args.input_dir.is_dir():
+        logger.error("CNV input directory does not exist: %s", args.input_dir)
+        raise SystemExit(1)
+    try:
+        profile = load_dataset_profile(args.profile)
+        cnv_mapping = resolve_config_path("cnv_mapping", profile)
+        qc_variable_mapping = resolve_config_path("variable_mapping", profile)
+    except Exception as exc:
+        logger.error("Could not resolve CNV configuration: %s", exc)
+        raise SystemExit(1) from exc
+    for label, path in (
+        ("CNV mapping", cnv_mapping),
+        ("QC variable mapping", qc_variable_mapping),
+    ):
+        if not path.is_file():
+            logger.error("%s does not exist: %s", label, path)
+            raise SystemExit(1)
+
+    logger.info("Converting Sea-Bird CNV casts...")
+    logger.info("  Input directory:  %s", args.input_dir.absolute())
+    logger.info("  Output directory: %s", args.output_dir.absolute())
+    logger.info("  Dataset profile: %s", Path(args.profile).absolute())
+    logger.info("  CNV mapping:     %s", cnv_mapping.absolute())
+    logger.info("  QC mapping:       %s", qc_variable_mapping.absolute())
+    try:
+        report = convert_cnv_directory(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            profile=profile,
+            overwrite=args.overwrite,
+        )
+    except KeyboardInterrupt:
+        logger.warning("CNV conversion interrupted by user.")
+        raise SystemExit(1)
+    except Exception as exc:
+        logger.exception("CNV conversion failed: %s", exc)
+        raise SystemExit(1)
+
+    counts = report.as_dict()["counts"]
+    logger.info(
+        "CNV conversion complete: discovered=%s converted=%s skipped=%s failed=%s",
+        counts["cnv_discovered"],
+        counts["converted"],
+        counts["skipped"],
+        counts["failed"],
+    )
+    logger.info("Conversion report: %s", report.report_path.absolute())
+    if report.has_failures:
+        raise SystemExit(1)
 
 
 def _run_qc(args: argparse.Namespace) -> None:
@@ -304,7 +404,9 @@ def _run_viz(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
-    if args.command == "qc":
+    if args.command == "convert-cnv":
+        _run_convert_cnv(args)
+    elif args.command == "qc":
         _run_qc(args)
     elif args.command == "erddap-xml":
         _run_erddap_xml(args)

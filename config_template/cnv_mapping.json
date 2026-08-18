@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "filename_pattern": "^(?P<cruise>[^_]+)_(?P<station>[^_]+)_(?P<sequence>\\d+)\\.cnv$",
+    "cruise_case": "upper",
+    "station_case": "upper",
+    "normalize_numeric_station": true
+  },
+  "structural_fields": {
+    "depth": {
+      "source_candidates": ["YOUR_DEPTH_SOURCE"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "units": "YOUR_DEPTH_UNIT"
+    },
+    "time": {
+      "source_candidates": ["YOUR_TIME_SOURCE"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "units": "YOUR_CF_TIME_UNIT",
+      "calendar": "gregorian"
+    },
+    "latitude": {
+      "source_candidates": ["YOUR_LATITUDE_SOURCE"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "reducer": "median",
+      "units": "degrees_north",
+      "retain_samples_as": "latitude_sample"
+    },
+    "longitude": {
+      "source_candidates": ["YOUR_LONGITUDE_SOURCE"],
+      "required": true,
+      "transform": {"type": "identity"},
+      "reducer": "median",
+      "units": "degrees_east",
+      "retain_samples_as": "longitude_sample"
+    }
+  },
+  "science_variables": {
+    "YOUR_CNV_FIELD": {
+      "target": "YOUR_NETCDF_VARIABLE",
+      "units": "YOUR_SOURCE_UNIT"
+    }
+  }
+}

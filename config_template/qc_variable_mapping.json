@@ -8,18 +8,10 @@
   "CDOM": [],
   "FDOM": [],
   "backscattering_volume_scattering": [],
-  "temperature": [
-    "sea_water_temperature"
-  ],
-  "practical_salinity": [
-    "sea_water_salinity"
-  ],
-  "conductivity": [
-    "sea_water_electrical_conductivity"
-  ],
-  "pressure": [
-    "sea_water_pressure"
-  ],
+  "temperature": ["YOUR_NETCDF_VARIABLE"],
+  "practical_salinity": [],
+  "conductivity": [],
+  "pressure": [],
   "oxygen_dissolved_oxygen": [],
   "oxygen_saturation": []
 }

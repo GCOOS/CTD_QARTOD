@@ -11,7 +11,11 @@ from typing import Any, Iterable, Mapping
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parent
-DEFAULT_PROFILE_PATH = REPO_ROOT / "config" / "dataset_profile.json"
+WALTON_SMITH_CONFIG_DIR = REPO_ROOT / "config" / "walton_smith"
+DEFAULT_PROFILE_PATH = WALTON_SMITH_CONFIG_DIR / "dataset_profile.json"
+DEFAULT_CNV_PROFILE_PATH = (
+    REPO_ROOT / "config" / "hogarth_cnv" / "dataset_profile.json"
+)
 
 
 def _as_name_list(value: object, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -83,8 +87,9 @@ class OutputConfig:
 
 @dataclass(frozen=True)
 class PathsConfig:
-    """Optional overrides for config files that otherwise use qc_config defaults."""
+    """Optional dataset-specific conversion and QC configuration paths."""
 
+    cnv_mapping: Path | None = None
     variable_mapping: Path | None = None
     station_coords: Path | None = None
     location_config: Path | None = None
@@ -101,6 +106,7 @@ class PathsConfig:
         if not data:
             return cls()
         return cls(
+            cnv_mapping=_resolve_path(data.get("cnv_mapping"), base_dir),
             variable_mapping=_resolve_path(data.get("variable_mapping"), base_dir),
             station_coords=_resolve_path(data.get("station_coords"), base_dir),
             location_config=_resolve_path(data.get("location_config"), base_dir),
@@ -177,13 +183,17 @@ def resolve_config_path(
     profile: DatasetProfile | None = None,
     override: Path | str | None = None,
 ) -> Path:
-    """Resolve config path precedence: explicit override, profile paths, qc_config default."""
+    """Resolve config path precedence: explicit override, profile paths, QC default."""
     if override is not None:
         return Path(override)
     prof = profile or default_profile()
     profile_path = prof.paths.get(key)
     if profile_path is not None:
         return profile_path
+
+    # CNV source interpretation must always be explicitly owned by the profile.
+    if key == "cnv_mapping":
+        raise ValueError("Dataset profile does not define paths.cnv_mapping")
 
     # Local import avoids making qc_config depend on this module during import.
     import qc_config

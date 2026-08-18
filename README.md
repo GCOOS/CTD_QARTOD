@@ -1,15 +1,17 @@
-## NetCDF QC Pipeline
+## CNV Conversion and NetCDF QC Pipeline
 
 ### Components
 
-- `main.py`: CLI entry point with subcommands `qc` (NetCDF QC) and `erddap-xml` (sync ERDDAP `datasets.xml` blocks).
+- `cnv_mapping.py`: Loads the dataset-owned filename, structural-field, transform, and science-variable contract for CNV input.
+- `cnv_converter.py`: Parses Sea-Bird DatCnv `.cnv` files through that mapping, writes QC-compatible netCDF profiles atomically, and emits `conversion_report.json`.
+- `main.py`: CLI entry point with subcommands `convert-cnv`, `qc`, `erddap-xml`, and `viz`.
 - `erddap_xml_sync.py`: Updates `EDDTableFromNcCFFiles` dataset blocks so `fileDir` / `fileNameRegex` and `dataVariable` lists match NetCDF contents (including `*_qc_*` variables). By default creates missing XML dataset blocks from `datasets/GenerateDatasetsXml.xml` and removes blocks with no matching `.nc` under `--data-root`. Can be run standalone or via `main.py erddap-xml`.
 - `qc_config.py`: Centralized configuration including:
   - `QC_FLAGS`: QARTOD quality flag definitions
   - `ALL_CATEGORIES`: All variable categories from the mapping
   - `TEST_CATEGORIES`: Maps each test to the categories it applies to
   - Fallback config paths and small loader helpers used when a profile omits a path
-- `qc_data_loader.py`: Loads NetCDF, loads `walton_mapping.json`, finds variables needing QC, and locates lon/lat fields.
+- `qc_data_loader.py`: Loads NetCDF, loads the profile-selected QC variable mapping, finds variables needing QC, and locates lon/lat fields.
 - `qc_tests/`: Package of QC test modules (each `*_test` name matches the string written as `{var}_qc_{name}` in NetCDF, e.g. `location_test`, `gross_range_test`, `climatology_test`, `gap_test`, `syntax_test`, `decreasing_radiance_test`, `spike_test`, `rate_of_change_test`, `flat_line_test`) wrapping `ioos_qc` where applicable.
 - `qc_writer.py`: Writes QC arrays back to the dataset with standard QARTOD-like attributes.
 - `qc_runner.py`: Orchestrates QC for a file, directory, or the full dataset tree. Also provides individual test execution with `run_single_test()`.
@@ -25,35 +27,38 @@ Run the full unit suite from the repository root (after `pip install -r requirem
 python -m pytest tests/ -q
 ```
 
-### Config files (`config/`)
+### Dataset configuration (`config/`)
 
-Config is grouped by QC test (or `variable_mapping` for the Walton category → dataset-variable map). Dataset-level layout and config file paths are defined in `config/dataset_profile.json`; per-test folders own test-specific thresholds/settings.
+Configuration is owned by dataset family. The Walton Smith folder contains its
+profile and per-test QC settings. The Hogarth CNV folder independently owns
+CNV interpretation, QC category membership, instruments, units, and thresholds.
 
-For a **new dataset**, start from `[config_template/](config_template/README.md)`: copy the folder to `config/`, then edit each file (see the template README for a checklist).
+For a **new dataset**, start from [config_template/](config_template/README.md):
+copy it to `config/<dataset_name>/`, then validate every mapping,
+station file, threshold, and metadata value.
 
 ```
 config/
-├── dataset_profile.json              # data_root, output mode, metadata names, sample_dimension
-├── variable_mapping/
-│   └── walton_mapping.json          # Walton categories → dataset variable names
-├── location_test/
-│   ├── Station_Mean_Coords.csv      # Expected lat/lon per station
-│   └── location_config.json         # Location-test tolerance
-├── gross_range_test/
-│   ├── sensor_specs.json            # Sensor IDs + unit-aware ranges
-│   └── variable_sensor_map.json     # Variable → sensor mapping
-├── climatology_test/
-│   ├── station_climatology_config.json   # deep_cast_limits / shallow_cast_limits
-│   └── station_depth_classification.json # Station lists: deep_cast vs shallow_cast
-├── spike_test/
-│   └── spike_thresholds.json
-├── rate_of_change_test/
-│   └── rate_of_change_thresholds.json
-└── flat_line_test/
-    └── flat_line_config.json
+├── walton_smith/
+│   ├── dataset_profile.json
+│   ├── variable_mapping/
+│   ├── location_test/
+│   ├── gross_range_test/
+│   ├── climatology_test/
+│   ├── spike_test/
+│   ├── rate_of_change_test/
+│   └── flat_line_test/
+└── hogarth_cnv/
+    ├── dataset_profile.json
+    ├── cnv_mapping.json
+    ├── qc_variable_mapping.json
+    └── <per-test QC configuration>/
 ```
 
-The SFER profile uses `sample_dimension: "z"` because science variables are shaped `(profile, z)`, with `profile` size 1 and cast order along `z`. The `metadata.depth` field names the NetCDF variable containing depth values, not the dimension name.
+The Walton Smith profile uses `sample_dimension: "z"` because science variables
+are shaped `(profile, z)`, with `profile` size 1 and cast order along `z`. The
+`metadata.depth` field names the NetCDF variable containing depth values, not
+the dimension name.
 
 Output mode is set in the profile:
 
@@ -101,18 +106,62 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 
 ### Running via CLI
 
-The top-level command requires a **subcommand**: `qc`, `erddap-xml`, or `viz`.
+The top-level command requires a **subcommand**: `convert-cnv`, `qc`, `erddap-xml`, or `viz`.
 
 ```bash
 python main.py --help
+python main.py convert-cnv --help
 python main.py qc --help
 python main.py erddap-xml --help
 ```
 
+#### `convert-cnv` — create workflow-compatible netCDF from Sea-Bird CNV
+
+```bash
+python main.py convert-cnv \
+  --profile config/hogarth_cnv/dataset_profile.json \
+  --input-dir cnv_data/2026_07_Hogarth_NOAA_CTD \
+  --output-dir output/SFER_CNV
+```
+
+The command preserves the CNV files and mapped science values/units, writes one
+`(profile, z)` netCDF per cast, and records inventory, mapping provenance,
+structural source/transform choices, QC-mapping coverage, companion checks,
+missing metadata, duplicate station resolution, and failures in
+`output/SFER_CNV/conversion_report.json`. It refuses to overwrite an existing
+netCDF unless `--overwrite` is supplied.
+
+For Hogarth, `timeQ` is the one required numerical interpretation: the
+configured epoch offset is applied to every scan and written as
+`time(profile, z)`. Latitude and longitude are reduced to representative
+profile medians while their original per-scan arrays are retained. Science
+variables—including oxygen—are not numerically converted.
+
+Conversion does not create QARTOD flags. Pass the resulting cruise tree to the
+existing QC command, then use the QC output for visualization or publication:
+
+```bash
+python main.py qc \
+  --profile config/hogarth_cnv/dataset_profile.json \
+  --base-dir output/SFER_CNV \
+  --no-sync-erddap-xml
+python main.py viz --data-root output/SFER_QC
+python main.py erddap-xml --data-root output/SFER_QC
+```
+
+`cnv_mapping.json` maps CNV source names to the QC-facing NetCDF contract;
+`qc_variable_mapping.json` selects which resulting NetCDF variables enter each
+QC category. A different CNV dataset must explicitly select its own complete
+mapping through `paths.cnv_mapping`; there is no Hogarth mapping fallback.
+See the step-by-step
+[`docs/cnv-conversion-process.md`](docs/cnv-conversion-process.md) guide for how
+each configuration and CNV section is processed, how NetCDF is constructed,
+and where the existing QC pipeline takes over.
+
 #### `qc` — run QC on NetCDF trees
 
 ```
---profile                   Dataset profile JSON (default: config/dataset_profile.json)
+--profile                   Dataset profile JSON (default: config/walton_smith/dataset_profile.json)
 --base-dir                  Base directory containing cruise directories
 --verbose, -v               Debug logging
 --log-file                  Optional log file path
@@ -143,7 +192,7 @@ After QC adds `*_qc_*` variables, this step refreshes each matching `<dataset>` 
 --input-xml                 Input ERDDAP datasets XML (default: datasets/mod_CTD_datasets.xml)
 --output-xml                Output path when not using --in-place (default: output/erddap/mod_CTD_datasets_qc.xml)
 --data-root                 Root with cruise subdirs containing *.nc (default: profile output.directory when output.mode is duplicate, otherwise profile data_root)
---profile                   Dataset profile JSON (default: config/dataset_profile.json)
+--profile                   Dataset profile JSON (default: config/walton_smith/dataset_profile.json)
 --no-preserve-erddap-ui     Do not keep ERDDAP color-bar attributes from the input XML
 --filedir-prefix            Value written into each <fileDir> prefix (default: /data/erddap/<dataset_name> from --data-root)
 --dataset-template-xml      Template <dataset> XML for missing datasets (default: datasets/GenerateDatasetsXml.xml)
@@ -213,7 +262,7 @@ Process all cruise directories:
 
 ```python
 from qc_runner import run_qc_for_all
-run_qc_for_all()  # Uses config/dataset_profile.json by default
+run_qc_for_all()  # Uses config/walton_smith/dataset_profile.json by default
 ```
 
 Sync ERDDAP XML programmatically (same as `main.py erddap-xml`):
@@ -262,25 +311,25 @@ Individual tests return `QCTestResult` objects with:
 
 - **Gross ranges** (resolution order):
   1. `gross_range_overrides` (call-time)
-  2. Dynamic (instrument + unit from `instrument_resolver.py` using `config/gross_range_test/sensor_specs.json` + `variable_sensor_map.json`)
-- **Variable-to-sensor mapping**: edit `config/gross_range_test/variable_sensor_map.json`
-- **Sensor identifiers and limits**: edit `config/gross_range_test/sensor_specs.json` (`identifiers.long_names` is used for sensor matching)
-- **Location tolerance**: edit `config/location_test/location_config.json`
+  2. Dynamic (instrument + unit from `instrument_resolver.py` using `config/walton_smith/gross_range_test/sensor_specs.json` + `variable_sensor_map.json`)
+- **Variable-to-sensor mapping**: edit `config/walton_smith/gross_range_test/variable_sensor_map.json`
+- **Sensor identifiers and limits**: edit `config/walton_smith/gross_range_test/sensor_specs.json` (`identifiers.long_names` is used for sensor matching)
+- **Location tolerance**: edit `config/walton_smith/location_test/location_config.json`
 - **Test-to-category mapping**: edit `TEST_CATEGORIES` in `qc_config.py`
-- **Climatology limits**: edit `config/climatology_test/station_climatology_config.json`. **Station deep vs shallow**: edit `config/climatology_test/station_depth_classification.json`. Programmatic runners can still pass `climatology_overrides`.
+- **Climatology limits**: edit `config/walton_smith/climatology_test/station_climatology_config.json`. **Station deep vs shallow**: edit `config/walton_smith/climatology_test/station_depth_classification.json`. Programmatic runners can still pass `climatology_overrides`.
 - **ERDDAP XML sync paths**: pass flags to `main.py erddap-xml` / `run_erddap_xml_sync(...)`.
 
 ### Station resolution logic
 
 - Station ID is read from the `station` variable inside each NetCDF file.
-- Expected coordinates come from `config/location_test/Station_Mean_Coords.csv`.
+- Expected coordinates come from `config/walton_smith/location_test/Station_Mean_Coords.csv`.
 - If no station mapping is found, the location test returns NOT_EVALUATED.
 
 ### Climatology resolution logic
 
-- Station ID (same as above) is looked up in `config/climatology_test/station_depth_classification.json`: lists `deep_cast` and `shallow_cast` station IDs (case-insensitive match; trailing `.0` is stripped).
+- Station ID (same as above) is looked up in `config/walton_smith/climatology_test/station_depth_classification.json`: lists `deep_cast` and `shallow_cast` station IDs (case-insensitive match; trailing `.0` is stripped).
 - **Deep** is checked before **shallow** if a station were ever listed twice (should not happen).
-- The matching list selects either `deep_cast_limits` or `shallow_cast_limits` from `config/climatology_test/station_climatology_config.json` (variable name → list of rule dicts for `ioos_qc`).
+- The matching list selects either `deep_cast_limits` or `shallow_cast_limits` from `config/walton_smith/climatology_test/station_climatology_config.json` (variable name → list of rule dicts for `ioos_qc`).
 - If the station appears in neither list, or the chosen limits block is missing or empty, climatology is not applied (flags stay NOT_EVALUATED for that test).
 - `shallow_stable` is no longer used; only deep vs shallow cast types are supported.
 
@@ -311,7 +360,7 @@ Each data variable that appears in the variable mapping and in the file gets QC 
 
 ### Mapped data variables
 
-From `config/variable_mapping/walton_mapping.json` :
+From `config/walton_smith/variable_mapping/walton_mapping.json`:
 
 
 | Category                        | Variables                                                                  |
@@ -328,4 +377,3 @@ From `config/variable_mapping/walton_mapping.json` :
 | turbidity                       | `sea_water_turbidity`                                                      |
 | chlorophyll                     | `chlorophyll_concentration`, `chlorophyll_fluorescence`                    |
 | CDOM                            | `CDOM`                                                                     |
-

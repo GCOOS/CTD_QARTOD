@@ -251,7 +251,11 @@ def _spike_params_for_var(
         return None
     if "suspect_threshold" not in spike or "fail_threshold" not in spike:
         return None
-    return (float(spike["suspect_threshold"]), float(spike["fail_threshold"]))
+    suspect = spike["suspect_threshold"]
+    fail = spike["fail_threshold"]
+    if suspect is None or fail is None:
+        return None
+    return (float(suspect), float(fail))
 
 
 def _roc_threshold_for_var(
@@ -263,7 +267,10 @@ def _roc_threshold_for_var(
     roc = rate_of_change_thresholds.get(var_name)
     if not isinstance(roc, dict) or "threshold" not in roc:
         return None
-    v = float(roc["threshold"])
+    threshold = roc["threshold"]
+    if threshold is None:
+        return None
+    v = float(threshold)
     if not np.isfinite(v) or v <= 0:
         return None
     return v
@@ -276,7 +283,7 @@ def _run_common_tests(
     gross_ranges: Mapping[str, Mapping[str, tuple]] | None,
     climatology_config: Mapping[str, Iterable[Mapping]] | None,
     expected_location: Optional[tuple[float, float]],
-    location_tolerance: float,
+    location_tolerance: float | None,
     spike_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     rate_of_change_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     flat_line_config: Mapping[str, Any] | None = None,
@@ -330,7 +337,7 @@ def _run_single_test_for_var(
     gross_ranges: Mapping[str, Mapping[str, tuple]] | None,
     climatology_config: Mapping[str, Iterable[Mapping]] | None,
     expected_location: Optional[tuple[float, float]],
-    location_tolerance: float,
+    location_tolerance: float | None,
     spike_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     rate_of_change_thresholds: Mapping[str, Mapping[str, Any]] | None = None,
     flat_line_config: Mapping[str, Any] | None = None,
@@ -353,7 +360,12 @@ def _run_single_test_for_var(
 
     if test_name == "location_test":
         lon, lat = get_lon_lat(ds, prof.metadata)
-        if lon is not None and lat is not None and expected_location is not None:
+        if (
+            lon is not None
+            and lat is not None
+            and expected_location is not None
+            and location_tolerance is not None
+        ):
             lon_b = _broadcast_like(test_data_var, lon)
             lat_b = _broadcast_like(test_data_var, lat)
             expected_lat, expected_lon = expected_location

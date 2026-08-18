@@ -1,0 +1,5 @@
+{
+  "sea_water_temperature": {"units": "deg C", "threshold": null},
+  "sea_water_salinity": {"units": "PSU", "threshold": null},
+  "dissolved_oxygen": {"units": "mg/l", "threshold": null}
+}
