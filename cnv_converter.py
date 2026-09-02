@@ -1,628 +1,597 @@
-"""Parse NOAA AOML Sea-Bird CNV casts for the CTD QARTOD workflow."""
+"""Convert the confirmed Sea-Bird CNV format to profile NetCDF files."""
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 import re
+import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
 import xarray as xr
 
 from cnv_mapping import (
+    CnvHeaderColumn,
     CnvMapping,
-    StructuralFieldMapping,
-    TransformMapping,
+    SourceCandidate,
+    discover_cnv_files,
     load_cnv_mapping,
+    read_cnv_header,
 )
-from dataset_profile import DatasetProfile, MetadataConfig, resolve_config_path
-from qc_data_loader import flatten_mapping, load_mapping
-
-_NUMERIC_STATION_RE = re.compile(r"^(?P<integer>\d+)(?:\.(?P<fraction>\d+))?$")
-_NAME_RE = re.compile(r"^# name (?P<index>\d+) = (?P<name>[^:]+):\s*(?P<description>.*)$")
 
 
-@dataclass(frozen=True)
-class CnvColumn:
-    index: int
-    source_name: str
-    description: str
+_FILENAME_RE = re.compile(
+    r"^(?P<cruise>[^_]+)_Stn\.(?P<station>.+)\.cnv$", re.IGNORECASE
+)
+_NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
+_PROCESSING_STAGES = {
+    "datcnv",
+    "filter",
+    "alignctd",
+    "celltm",
+    "loopedit",
+    "derive",
+}
 
 
 @dataclass(frozen=True)
 class CnvSensor:
+    """One embedded Sea-Bird sensor record."""
+
     channel: int
     sensor_type: str
-    serial_number: str
-    calibration_date: str
-    coefficients: Mapping[str, str]
+    serial_number: str | None
+    calibration_date: str | None
 
 
 @dataclass(frozen=True)
 class CnvCast:
+    """One parsed cast with its filename-derived identity."""
+
     source_path: Path
     cruise_id: str
-    station_source: str
     station_id: str
-    sequence: int
-    header: Mapping[str, str]
-    columns: tuple[CnvColumn, ...]
+    embedded_filename: str | None
+    columns: tuple[CnvHeaderColumn, ...]
     values: np.ndarray
+    destination_sources: Mapping[str, SourceCandidate]
+    instrument_model: str
     sensors: tuple[CnvSensor, ...]
-    sensor_xml: str
+    sensor_parse_status: str
+    start_time: datetime
+    interval_seconds: float
+    processing: tuple[str, ...]
+    header_keys: tuple[str, ...]
+    warnings: tuple[str, ...]
 
-    def column(self, source_name: str) -> np.ndarray:
-        try:
-            index = next(
-                column.index for column in self.columns if column.source_name == source_name
-            )
-        except StopIteration as exc:
-            raise KeyError(source_name) from exc
-        return self.values[:, index]
+    def column(self, source_name: str, occurrence: int = 1) -> np.ndarray:
+        for column in self.columns:
+            if (
+                column.source_name == source_name
+                and column.occurrence == occurrence
+            ):
+                return self.values[:, column.index]
+        raise KeyError((source_name, occurrence))
 
 
 class CnvFormatError(ValueError):
-    """Raised when a CNV or companion file violates the expected format."""
-
-
-@dataclass(frozen=True)
-class ConversionReport:
-    """Result and on-disk location of one directory conversion."""
-
-    report_path: Path
-    data: Mapping[str, object]
-
-    def as_dict(self) -> dict[str, object]:
-        """Return the JSON-normalized report payload."""
-
-        return json.loads(json.dumps(self.data))
-
-    @property
-    def has_failures(self) -> bool:
-        counts = self.data["counts"]
-        return bool(counts["failed"])
-
-
-def _apply_case(value: str, case: str) -> str:
-    if case == "upper":
-        return value.upper()
-    if case == "lower":
-        return value.lower()
-    return value
-
-
-def canonical_station(
-    value: str,
-    case: str = "upper",
-    normalize_numeric: bool = True,
-) -> str:
-    """Apply configured case and numeric normalization to a station identifier."""
-
-    stripped = value.strip()
-    if not normalize_numeric:
-        return _apply_case(stripped, case)
-
-    match = _NUMERIC_STATION_RE.fullmatch(stripped)
-    if match is None:
-        return _apply_case(stripped, case)
-
-    integer = str(int(match.group("integer")))
-    fraction = (match.group("fraction") or "").rstrip("0")
-    return f"{integer}.{fraction}" if fraction else integer
+    """Raised when a CNV file violates the confirmed source contract."""
 
 
 def _format_error(path: Path, detail: str) -> CnvFormatError:
     return CnvFormatError(f"{path.name}: {detail}")
 
 
-def _sensor_coefficients(sensor_element: ET.Element) -> dict[str, str]:
-    coefficients: dict[str, str] = {}
-
-    def visit(element: ET.Element, prefix: str = "") -> None:
-        for child in element:
-            key = child.tag
-            if child.attrib:
-                attributes = ",".join(
-                    f"{name}={value}" for name, value in sorted(child.attrib.items())
-                )
-                key = f"{key}[{attributes}]"
-            path = f"{prefix}.{key}" if prefix else key
-            if len(child):
-                visit(child, path)
-            elif child.tag not in {"SerialNumber", "CalibrationDate"}:
-                coefficients[path] = (child.text or "").strip()
-
-    visit(sensor_element)
-    return coefficients
+def _station_id(value: str) -> str:
+    match = _NUMERIC_STATION_RE.fullmatch(value.strip())
+    if match is None:
+        return value.strip()
+    return f"{int(match.group('number'))}{match.group('suffix')}"
 
 
-def _sensors_from_wrappers(wrappers: Sequence[ET.Element]) -> tuple[CnvSensor, ...]:
+def filename_identity(path: Path | str) -> tuple[str, str]:
+    """Derive cruise and station only from the actual CNV basename."""
+
+    source = Path(path)
+    match = _FILENAME_RE.fullmatch(source.name)
+    if match is None:
+        raise _format_error(
+            source,
+            "filename must match <cruiseID>_Stn.<station>.cnv",
+        )
+    return match.group("cruise").upper(), _station_id(match.group("station"))
+
+
+def _embedded_stem(value: str) -> str:
+    return PurePosixPath(value.replace("\\", "/")).stem
+
+
+def _parse_sensors(
+    header_lines: Sequence[str],
+) -> tuple[tuple[CnvSensor, ...], str, tuple[str, ...]]:
+    xml_lines: list[str] = []
+    in_sensors = False
+    for line in header_lines:
+        if line.startswith("# <Sensors"):
+            in_sensors = True
+        if in_sensors:
+            xml_lines.append(line[2:] if line.startswith("# ") else line[1:])
+        if line.startswith("# </Sensors>"):
+            break
+    if not xml_lines:
+        return (), "absent", ()
+    if not xml_lines[-1].strip().endswith("</Sensors>"):
+        return (), "malformed", ("embedded Sensors XML is malformed",)
+    try:
+        root = ET.fromstring("\n".join(xml_lines))
+    except ET.ParseError:
+        return (), "malformed", ("embedded Sensors XML is malformed",)
+
     sensors: list[CnvSensor] = []
-    for fallback_channel, wrapper in enumerate(wrappers, start=1):
-        sensor_element = next(iter(wrapper), None)
-        if sensor_element is None or sensor_element.tag == "NotInUse":
+    warnings: list[str] = []
+    for fallback_channel, wrapper in enumerate(root.findall("sensor"), start=1):
+        element = next(iter(wrapper), None)
+        if element is None or element.tag == "NotInUse":
             continue
-        channel_text = wrapper.attrib.get("Channel")
-        channel = int(channel_text) if channel_text is not None else fallback_channel
+        try:
+            channel = int(wrapper.attrib.get("Channel", fallback_channel))
+        except ValueError:
+            channel = fallback_channel
+            warnings.append(f"invalid sensor channel for {element.tag}")
         sensors.append(
             CnvSensor(
                 channel=channel,
-                sensor_type=sensor_element.tag,
-                serial_number=(sensor_element.findtext("SerialNumber") or "").strip(),
+                sensor_type=element.tag,
+                serial_number=(element.findtext("SerialNumber") or "").strip()
+                or None,
                 calibration_date=(
-                    sensor_element.findtext("CalibrationDate") or ""
-                ).strip(),
-                coefficients=_sensor_coefficients(sensor_element),
+                    element.findtext("CalibrationDate") or ""
+                ).strip()
+                or None,
             )
         )
-    return tuple(sensors)
+    return tuple(sensors), "parsed", tuple(warnings)
 
 
-def _parse_embedded_sensors(path: Path, header_text: str) -> tuple[tuple[CnvSensor, ...], str]:
-    sensor_lines: list[str] = []
-    inside_sensors = False
-    for line in header_text.splitlines():
-        if line.startswith("# <Sensors"):
-            inside_sensors = True
-        if inside_sensors:
-            sensor_lines.append(line[2:] if line.startswith("# ") else line[1:])
-        if line.startswith("# </Sensors>"):
-            break
+def _header_fields(header_lines: Sequence[str]) -> tuple[dict[str, str], tuple[str, ...]]:
+    fields: dict[str, str] = {}
+    processing: list[str] = []
+    for line in header_lines:
+        if not line.startswith(("* ", "# ")):
+            continue
+        content = line[2:].strip()
+        key = content.split(maxsplit=1)[0].split(":", 1)[0]
+        if key.split("_", 1)[0].casefold() in _PROCESSING_STAGES:
+            processing.append(content)
+        elif " = " in content:
+            name, value = content.split(" = ", 1)
+            fields[name.strip()] = value.strip()
+    return fields, tuple(processing)
 
-    if not sensor_lines or not sensor_lines[-1].strip().endswith("</Sensors>"):
-        raise _format_error(path, "missing complete embedded Sensors XML")
 
-    sensor_xml = "\n".join(sensor_lines)
-    try:
-        root = ET.fromstring(sensor_xml)
-    except ET.ParseError as exc:
-        raise _format_error(path, f"invalid embedded Sensors XML: {exc}") from exc
-    return _sensors_from_wrappers(root.findall("sensor")), sensor_xml
+def _mapped_destinations(
+    path: Path,
+    columns: Sequence[CnvHeaderColumn],
+    mapping: CnvMapping,
+) -> dict[str, SourceCandidate]:
+    structural = {
+        *mapping.required_fields.values(),
+        mapping.vertical_field,
+    }
+    destination_counts: Counter[str] = Counter()
+    destinations: dict[str, SourceCandidate] = {}
+    for column in columns:
+        candidate = SourceCandidate(column.source_name, column.occurrence)
+        if candidate in structural:
+            continue
+        specification = mapping.science_variables.get(column.source_name)
+        if specification is None:
+            raise _format_error(
+                path, f"unmapped source variable {column.source_name!r}"
+            )
+        if specification.action == "ignore":
+            continue
+        base = specification.target_name
+        if base is None:
+            raise AssertionError("loaded map action requires a target")
+        destination_counts[base] += 1
+        number = destination_counts[base]
+        destination = base if number == 1 else f"{base}_{number}"
+        if destination in destinations:
+            raise _format_error(
+                path, f"mapped destination collision for {destination!r}"
+            )
+        destinations[destination] = candidate
+    return destinations
 
 
 def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
-    """Parse one Sea-Bird DatCnv ASCII file and validate its declared schema."""
+    """Parse one final-format CNV file using its actual filename identity."""
 
-    source_path = Path(path)
-    filename_match = mapping.identity.filename_pattern.fullmatch(source_path.name)
-    if filename_match is None:
-        raise _format_error(source_path, "filename does not match the DatCnv convention")
-
-    text = source_path.read_text(encoding="utf-8", errors="strict")
-    if text.count("*END*") != 1:
-        raise _format_error(source_path, "expected one *END* delimiter")
-    header_text, data_text = text.split("*END*", maxsplit=1)
-
-    header: dict[str, str] = {}
-    columns: list[CnvColumn] = []
-    for line in header_text.splitlines():
-        name_match = _NAME_RE.fullmatch(line)
-        if name_match is not None:
-            columns.append(
-                CnvColumn(
-                    index=int(name_match.group("index")),
-                    source_name=name_match.group("name").strip(),
-                    description=name_match.group("description").strip(),
-                )
-            )
-            continue
-        if line.startswith("# ") and " = " in line:
-            key, value = line[2:].split(" = ", maxsplit=1)
-            header[key.strip()] = value.strip()
-
+    source = Path(path)
+    cruise_id, station_id = filename_identity(source)
+    lines = source.read_text(encoding="utf-8", errors="strict").splitlines()
+    delimiters = [index for index, line in enumerate(lines) if line == "*END*"]
+    if len(delimiters) != 1:
+        raise _format_error(source, "expected one standalone *END* delimiter")
+    header_lines = lines[: delimiters[0]]
+    data_lines = lines[delimiters[0] + 1 :]
+    if (
+        not header_lines
+        or not header_lines[0].startswith("* Sea-Bird ")
+        or not header_lines[0].endswith(" Data File:")
+    ):
+        raise _format_error(source, "missing Sea-Bird model line")
+    instrument_model = header_lines[0][2:-11]
+    columns = read_cnv_header(source)
+    fields, processing = _header_fields(header_lines)
     try:
-        declared_columns = int(header["nquan"])
-        declared_rows = int(header["nvalues"])
-        bad_flag = float(header["bad_flag"])
+        nquan = int(fields["nquan"])
+        nvalues = int(fields["nvalues"])
+        bad_flag = float(fields["bad_flag"])
+        interval_match = re.fullmatch(r"seconds:\s*(.+)", fields["interval"])
+        if interval_match is None:
+            raise ValueError("interval must use seconds:")
+        interval = float(interval_match.group(1))
+        start_time = datetime.strptime(
+            fields["start_time"].split("[", 1)[0].strip(),
+            "%b %d %Y %H:%M:%S",
+        ).replace(tzinfo=timezone.utc)
     except (KeyError, ValueError) as exc:
-        raise _format_error(source_path, f"invalid required header value: {exc}") from exc
-
-    ordered_columns = sorted(columns, key=lambda column: column.index)
-    indices = [column.index for column in ordered_columns]
-    if len(ordered_columns) != declared_columns or indices != list(range(declared_columns)):
-        raise _format_error(
-            source_path,
-            f"declared {declared_columns} columns but parsed indices {indices}",
-        )
+        raise _format_error(source, f"invalid required header value: {exc}") from exc
+    if nquan != len(columns):
+        raise _format_error(source, "nquan does not match the column declarations")
+    if nvalues < 1:
+        raise _format_error(source, "CNV file has no data rows")
+    if not np.isfinite(interval) or interval <= 0 or not np.isfinite(bad_flag):
+        raise _format_error(source, "invalid interval or bad_flag")
 
     rows: list[np.ndarray] = []
     for row_number, line in enumerate(
-        (line for line in data_text.splitlines() if line.strip()), start=1
+        (line for line in data_lines if line.strip()), start=1
     ):
         row = np.fromstring(line, sep=" ", dtype=float)
-        if row.size != declared_columns:
+        if row.size != nquan:
             raise _format_error(
-                source_path,
-                f"data row {row_number} expected {declared_columns} columns but found {row.size}",
+                source,
+                f"data row {row_number} does not match the column declarations",
             )
         rows.append(row)
-
-    if len(rows) != declared_rows:
-        raise _format_error(
-            source_path,
-            f"declared {declared_rows} data rows but found {len(rows)}",
-        )
-
+    if len(rows) != nvalues:
+        raise _format_error(source, "nvalues does not match the numerical table")
     values = np.vstack(rows).astype(float, copy=False)
     values[values == bad_flag] = np.nan
-    elapsed_source = next(
-        (
-            source_name
-            for source_name, variable in mapping.science_variables.items()
-            if variable.target == "time_elapsed"
-        ),
-        None,
-    )
-    elapsed_index = next(
-        (
-            column.index
-            for column in ordered_columns
-            if column.source_name == elapsed_source
-        ),
-        None,
-    )
-    if elapsed_index is not None:
-        elapsed = values[:, elapsed_index]
-        if np.any(np.diff(elapsed[np.isfinite(elapsed)]) < 0):
-            raise _format_error(
-                source_path, f"nonmonotonic {elapsed_source} values"
-            )
 
-    sensors, sensor_xml = _parse_embedded_sensors(source_path, header_text)
-    station_source = filename_match.group("station")
-    cruise_source = filename_match.group("cruise")
-    return CnvCast(
-        source_path=source_path,
-        cruise_id=_apply_case(cruise_source, mapping.identity.cruise_case),
-        station_source=station_source,
-        station_id=canonical_station(
-            station_source,
-            case=mapping.identity.station_case,
-            normalize_numeric=mapping.identity.normalize_numeric_station,
-        ),
-        sequence=int(filename_match.group("sequence")),
-        header=header,
-        columns=tuple(ordered_columns),
-        values=values,
-        sensors=sensors,
-        sensor_xml=sensor_xml,
-    )
-
-
-def sensor_signature(
-    sensors: Sequence[CnvSensor],
-) -> tuple[tuple[str, str, str], ...]:
-    """Return the identity fields suitable for CNV/XMLCON comparison."""
-
-    return tuple(
-        (sensor.sensor_type, sensor.serial_number, sensor.calibration_date)
-        for sensor in sensors
-    )
-
-
-def validate_xmlcon(cast: CnvCast, xmlcon_path: Path | str) -> dict[str, object]:
-    """Compare embedded CNV sensor identities with a companion XMLCON file."""
-
-    path = Path(xmlcon_path)
-    cnv_signature = sensor_signature(cast.sensors)
-    if not path.is_file():
-        return {
-            "status": "missing",
-            "cnv_signature": list(cnv_signature),
-            "xmlcon_signature": [],
-        }
-
-    try:
-        root = ET.parse(path).getroot()
-    except ET.ParseError as exc:
-        raise _format_error(path, f"invalid XMLCON XML: {exc}") from exc
-    wrappers = root.findall(".//Sensor")
-    xmlcon_signature = sensor_signature(_sensors_from_wrappers(wrappers))
-    return {
-        "status": "match" if cnv_signature == xmlcon_signature else "mismatch",
-        "cnv_signature": list(cnv_signature),
-        "xmlcon_signature": list(xmlcon_signature),
+    declared = {
+        SourceCandidate(column.source_name, column.occurrence)
+        for column in columns
     }
+    required = {*mapping.required_fields.values(), mapping.vertical_field}
+    missing = required - declared
+    if missing:
+        names = ", ".join(
+            f"{item.name} occurrence {item.occurrence}"
+            for item in sorted(missing, key=lambda item: (item.name, item.occurrence))
+        )
+        raise _format_error(source, f"missing required source column: {names}")
+
+    destinations = _mapped_destinations(source, columns, mapping)
+    time_candidate = mapping.required_fields["time"]
+    elapsed = values[
+        :,
+        next(
+            column.index
+            for column in columns
+            if SourceCandidate(column.source_name, column.occurrence)
+            == time_candidate
+        ),
+    ]
+    if not np.all(np.isfinite(elapsed)) or np.any(np.diff(elapsed) < 0):
+        raise _format_error(source, "timeS values must be finite and monotonic")
+    latitude = values[:, next(column.index for column in columns if column.source_name == "latitude")]
+    longitude = values[:, next(column.index for column in columns if column.source_name == "longitude")]
+    if (
+        not np.all(np.isfinite(latitude))
+        or np.any((latitude < -90) | (latitude > 90))
+        or not np.all(np.isfinite(longitude))
+        or np.any((longitude < -180) | (longitude > 180))
+    ):
+        raise _format_error(source, "latitude or longitude samples are invalid")
+
+    sensors, sensor_status, sensor_warnings = _parse_sensors(header_lines)
+    warnings = list(sensor_warnings)
+    embedded_filename = fields.get("FileName")
+    if (
+        embedded_filename
+        and _embedded_stem(embedded_filename).casefold() != source.stem.casefold()
+    ):
+        warnings.append("embedded filename differs from actual filename")
+    known_fields = {
+        "FileName",
+        "NMEA Latitude",
+        "NMEA Longitude",
+        "nquan",
+        "nvalues",
+        "bad_flag",
+        "interval",
+        "start_time",
+    }
+    return CnvCast(
+        source_path=source,
+        cruise_id=cruise_id,
+        station_id=station_id,
+        embedded_filename=embedded_filename,
+        columns=columns,
+        values=values,
+        destination_sources=destinations,
+        instrument_model=instrument_model,
+        sensors=sensors,
+        sensor_parse_status=sensor_status,
+        start_time=start_time,
+        interval_seconds=interval,
+        processing=processing,
+        header_keys=tuple(sorted(set(fields) - known_fields)),
+        warnings=tuple(warnings),
+    )
+
+
+def _source_column(cast: CnvCast, candidate: SourceCandidate) -> CnvHeaderColumn:
+    return next(
+        column
+        for column in cast.columns
+        if SourceCandidate(column.source_name, column.occurrence) == candidate
+    )
 
 
 def _finite_range(values: np.ndarray) -> tuple[float, float]:
     finite = values[np.isfinite(values)]
-    if finite.size == 0:
-        raise ValueError("cannot derive coverage from values that are all missing")
-    return float(np.min(finite)), float(np.max(finite))
+    if not finite.size:
+        raise CnvFormatError("cannot calculate metadata from all-missing values")
+    return float(finite.min()), float(finite.max())
 
 
-def _utc_iso(unix_seconds: float) -> str:
-    return datetime.fromtimestamp(unix_seconds, tz=timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+def _range_attributes(values: np.ndarray) -> dict[str, float]:
+    finite = values[np.isfinite(values)]
+    if not finite.size:
+        return {}
+    return {"valid_min": float(finite.min()), "valid_max": float(finite.max())}
 
 
-def _source_processing(cast: CnvCast) -> str:
-    stages = ["Sea-Bird DatCnv conversion"]
-    if cast.header.get("datcnv_ox_hysteresis_correction", "").lower() == "yes":
-        stages.append("oxygen hysteresis correction")
-    if cast.header.get("datcnv_ox_tau_correction", "").lower() == "yes":
-        stages.append("oxygen tau correction")
-    return "; ".join(stages)
+def _utc_iso(value: datetime) -> str:
+    utc_value = value.astimezone(timezone.utc)
+    timespec = "microseconds" if utc_value.microsecond else "seconds"
+    return utc_value.isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
-def _source_for_role(cast: CnvCast, field: StructuralFieldMapping) -> str:
-    available = {column.source_name for column in cast.columns}
-    for candidate in field.source_candidates:
-        if candidate in available:
-            return candidate
-    if field.required:
-        candidates = ", ".join(field.source_candidates)
-        raise CnvFormatError(
-            f"{cast.source_path.name}: required structural source is missing; "
-            f"tried {candidates}"
-        )
-    return ""
+def _iso_duration(seconds: float) -> str:
+    return f"PT{seconds:.7g}S"
 
 
-def _transform_values(values: np.ndarray, transform: TransformMapping) -> np.ndarray:
-    transformed = values.astype(float, copy=True)
-    if transform.kind == "epoch_offset":
-        transformed += transform.offset_seconds
-    return transformed
-
-
-def _metadata_target(metadata: MetadataConfig, role: str) -> str:
-    names = getattr(metadata, role)
-    return names[0]
-
-
-def _column_description(cast: CnvCast, source_name: str) -> str:
-    return next(
-        column.description
-        for column in cast.columns
-        if column.source_name == source_name
-    )
-
-
-def _coordinate_names(metadata: MetadataConfig) -> str:
-    return " ".join(
-        _metadata_target(metadata, role)
-        for role in ("time", "longitude", "latitude", "depth")
-    )
-
-
-def _structural_attrs(
-    role: str,
-    source_name: str,
-    field: StructuralFieldMapping,
-) -> dict[str, object]:
-    attrs: dict[str, object] = {
-        "source_name": source_name,
-        "source_transform": field.transform.kind,
-        "coverage_content_type": "coordinate",
-    }
-    if field.transform.kind == "epoch_offset":
-        attrs["source_transform_offset_seconds"] = field.transform.offset_seconds
-    if field.reducer:
-        attrs["source_reducer"] = field.reducer
-    if field.units:
-        attrs["units"] = field.units
-    if field.calendar:
-        attrs["calendar"] = field.calendar
-
-    attrs.update(
-        {
-            "depth": {
-                "standard_name": "depth",
-                "long_name": "Depth",
-                "positive": "down",
-                "axis": "Z",
-            },
-            "time": {
-                "standard_name": "time",
-                "long_name": "Profile sample time",
-                "axis": "T",
-            },
-            "latitude": {
-                "standard_name": "latitude",
-                "long_name": "Profile latitude",
-                "axis": "Y",
-            },
-            "longitude": {
-                "standard_name": "longitude",
-                "long_name": "Profile longitude",
-                "axis": "X",
-            },
-        }[role]
-    )
-    return attrs
-
-
-def build_netcdf_dataset(
+def _instrument_reference(
     cast: CnvCast,
     mapping: CnvMapping,
-    metadata: MetadataConfig,
-    output_stem: str,
+    destination: str,
+    candidate: SourceCandidate,
+) -> str | None:
+    specification = mapping.science_variables[candidate.name]
+    if specification.sensor_tag is None:
+        return None
+    matching = [
+        index
+        for index, sensor in enumerate(cast.sensors, start=1)
+        if sensor.sensor_type == specification.sensor_tag
+    ]
+    if not matching:
+        return None
+    target_number = 0
+    for current_destination, current_candidate in cast.destination_sources.items():
+        current = mapping.science_variables[current_candidate.name]
+        if current.target_name == specification.target_name:
+            target_number += 1
+        if current_destination == destination:
+            break
+    # ponytail: embedded sensor type and order are the only portable link; add
+    # explicit per-source sensor links only if a dataset disproves that ordering.
+    return f"instrument{matching[min(target_number, len(matching)) - 1]}"
+
+
+def _processing_comment(processing: Sequence[str]) -> str | None:
+    useful: list[str] = []
+    for item in processing:
+        key = item.split(" = ", 1)[0].casefold()
+        if key.endswith(("_date", "_in")) or "\\" in item:
+            continue
+        useful.append(item)
+    return "; ".join(useful) or None
+
+
+def _build_dataset(
+    cast: CnvCast,
+    mapping: CnvMapping,
+    stem: str,
+    source: str,
+    target: str,
 ) -> xr.Dataset:
-    """Build one QC-compatible profile Dataset from a mapped CNV cast."""
-
-    sample_count = cast.values.shape[0]
-    sample_dimension = metadata.sample_dimension
-    profile_values = np.array([0], dtype=np.int32)
-    sample_values = np.arange(sample_count, dtype=np.int32)
-    ds = xr.Dataset(
-        coords={
-            "profile": xr.DataArray(
-                profile_values,
-                dims=("profile",),
-                attrs={
-                    "cf_role": "profile_id",
-                    "long_name": output_stem,
-                    "ioos_category": "Identifier",
-                    "units": "1",
-                },
-            ),
-            sample_dimension: xr.DataArray(
-                sample_values,
-                dims=(sample_dimension,),
-                attrs={"long_name": "sample index"},
-            ),
-        }
-    )
-
-    structural_values: dict[str, np.ndarray] = {}
-    selected_structural_sources: dict[str, str] = {}
-    for role in ("depth", "time", "latitude", "longitude"):
-        field = mapping.structural_fields[role]
-        source_name = _source_for_role(cast, field)
-        if not source_name:
-            continue
-        selected_structural_sources[role] = source_name
-        source_values = cast.column(source_name)
-        transformed = _transform_values(source_values, field.transform)
-        structural_values[role] = transformed
-
-        target = _metadata_target(metadata, role)
-        if field.retain_samples_as:
-            ds[field.retain_samples_as] = xr.DataArray(
-                source_values[np.newaxis, :],
-                dims=("profile", sample_dimension),
-                attrs={
-                    "long_name": f"Source samples for {target}",
-                    "source_name": source_name,
-                    "source_description": _column_description(cast, source_name),
-                    **({"units": field.units} if field.units else {}),
-                },
-            )
-
-        if field.reducer == "median":
-            output_values = np.array([float(np.nanmedian(transformed))])
-            dims = ("profile",)
-        else:
-            output_values = transformed[np.newaxis, :]
-            dims = ("profile", sample_dimension)
-        ds[target] = xr.DataArray(
-            output_values,
-            dims=dims,
-            attrs=_structural_attrs(role, source_name, field),
-        )
-
-    science_targets: list[str] = []
-    for column in cast.columns:
-        specification = mapping.science_variables.get(column.source_name)
-        if specification is None:
-            continue
-        target = specification.target
-        values = cast.column(column.source_name).astype(float, copy=True)
-        ds[target] = xr.DataArray(
-            values[np.newaxis, :],
-            dims=("profile", sample_dimension),
-            attrs={
-                "units": specification.units,
-                "source_name": column.source_name,
-                "source_description": column.description,
-                "coordinates": _coordinate_names(metadata),
+    time_candidate = mapping.required_fields["time"]
+    latitude_candidate = mapping.required_fields["latitude"]
+    longitude_candidate = mapping.required_fields["longitude"]
+    depth_candidate = mapping.vertical_field
+    time = cast.column(time_candidate.name, time_candidate.occurrence)
+    latitude = cast.column(latitude_candidate.name, latitude_candidate.occurrence)
+    longitude = cast.column(longitude_candidate.name, longitude_candidate.occurrence)
+    depth = cast.column(depth_candidate.name, depth_candidate.occurrence)
+    time_min, time_max = _finite_range(time)
+    latitude_min, latitude_max = _finite_range(latitude)
+    longitude_min, longitude_max = _finite_range(longitude)
+    depth_min, depth_max = _finite_range(depth)
+    depth_units = _source_column(cast, depth_candidate).units or "m"
+    rows = time.size
+    coordinates = "time longitude latitude depth"
+    data: dict[str, tuple[tuple[str, ...], object, dict[str, object]]] = {
+        "profile": (
+            ("profile",),
+            np.array([0], dtype=np.int32),
+            {"cf_role": "profile_id", "long_name": stem},
+        ),
+        "time": (
+            ("profile", "z"),
+            time[None, :],
+            {
+                "long_name": "Elapsed Time in Seconds",
+                "standard_name": "time",
+                "axis": "T",
+                "units": f"seconds since {cast.start_time.isoformat()}",
+                "calendar": "proleptic_gregorian",
+                "coordinates": coordinates,
+                "coverage_content_type": "physicalMeasurement",
+                "ioos_category": "Time",
+                **_range_attributes(time),
+            },
+        ),
+        "depth": (
+            ("profile", "z"),
+            depth[None, :],
+            {
+                "long_name": "Depth",
+                "standard_name": "depth",
+                "units": depth_units,
+                "positive": "down",
+                "axis": "Z",
+                "coordinates": coordinates,
                 "grid_mapping": "crs",
                 "coverage_content_type": "physicalMeasurement",
+                **_range_attributes(depth),
             },
-        )
-        if target not in {
-            "scan",
-            "flag",
-            "time_elapsed",
-            "seabird_elapsed_minutes",
-            "seabird_elapsed_hours",
-            "seabird_julian_day",
-        }:
-            science_targets.append(target)
-
-    latitude_values = structural_values["latitude"]
-    longitude_values = structural_values["longitude"]
-    depth_values = structural_values["depth"]
-    time_values = structural_values["time"]
-    latitude_min, latitude_max = _finite_range(latitude_values)
-    longitude_min, longitude_max = _finite_range(longitude_values)
-    depth_min, depth_max = _finite_range(depth_values)
-    time_start, time_end = _finite_range(time_values)
-
-    ds[metadata.station] = xr.DataArray(
-        np.full((1, sample_count), cast.station_id, dtype=object),
-        dims=("profile", sample_dimension),
-        attrs={"long_name": "Station identifier", "ioos_category": "Identifier"},
-    )
-    ds[metadata.cruise_id] = xr.DataArray(
-        np.full((1, sample_count), cast.cruise_id, dtype=object),
-        dims=("profile", sample_dimension),
-        attrs={"long_name": "Cruise identifier", "ioos_category": "Identifier"},
-    )
-    ds["crs"] = xr.DataArray(
-        np.int32(0),
-        attrs={
-            "long_name": "WGS 84 geographic coordinate reference system",
-            "grid_mapping_name": "latitude_longitude",
-            "longitude_of_prime_meridian": 0.0,
-            "semi_major_axis": 6_378_137.0,
-            "inverse_flattening": 298.257223563,
-            "epsg_code": "EPSG:4326",
-        },
-    )
-    ds["instrument"] = xr.DataArray(
-        "",
-        attrs={
-            "long_name": "Sea-Bird SBE 25plus CTD",
-            "make_model": "Sea-Bird SBE 25plus",
-            "serial_number": "",
-            "calibration_date": "",
-        },
-    )
-    for index, sensor in enumerate(cast.sensors, start=1):
-        ds[f"instrument{index}"] = xr.DataArray(
+        ),
+        "latitude": (
+            ("profile", "z"),
+            latitude[None, :],
+            {
+                "standard_name": "latitude",
+                "long_name": "Latitude",
+                "units": "degrees_north",
+                "axis": "Y",
+                **_range_attributes(latitude),
+            },
+        ),
+        "longitude": (
+            ("profile", "z"),
+            longitude[None, :],
+            {
+                "standard_name": "longitude",
+                "long_name": "Longitude",
+                "units": "degrees_east",
+                "axis": "X",
+                **_range_attributes(longitude),
+            },
+        ),
+        "station": (
+            ("profile", "z"),
+            np.full((1, rows), cast.station_id, dtype=object),
+            {"long_name": "Station identifier", "ioos_category": "Identifier"},
+        ),
+        "cruiseID": (
+            ("profile", "z"),
+            np.full((1, rows), cast.cruise_id, dtype=object),
+            {"long_name": "Cruise identifier", "ioos_category": "Identifier"},
+        ),
+        "crs": (
+            (),
+            np.int32(0),
+            {
+                "grid_mapping_name": "latitude_longitude",
+                "longitude_of_prime_meridian": 0.0,
+                "semi_major_axis": 6378137.0,
+                "inverse_flattening": 298.257223563,
+                "epsg_code": "EPSG:4326",
+            },
+        ),
+        "instrument": (
+            (),
             "",
-            attrs={
-                "long_name": sensor.sensor_type,
-                "make_model": sensor.sensor_type,
-                "serial_number": sensor.serial_number,
-                "calibration_date": sensor.calibration_date,
-                "sensor_type": sensor.sensor_type,
-                "channel": sensor.channel,
-                "calibration_coefficients": json.dumps(
-                    dict(sensor.coefficients), sort_keys=True, separators=(",", ":")
-                ),
+            {
+                "long_name": f"CTD {cast.instrument_model}",
+                "make_model": cast.instrument_model,
+                "serial_number": "",
+                "calibration_date": "",
             },
+        ),
+    }
+    for number, sensor in enumerate(cast.sensors, start=1):
+        attributes: dict[str, object] = {
+            "long_name": sensor.sensor_type,
+            "make_model": sensor.sensor_type,
+            "channel": sensor.channel,
+        }
+        if sensor.serial_number is not None:
+            attributes["serial_number"] = sensor.serial_number
+        if sensor.calibration_date is not None:
+            attributes["calibration_date"] = sensor.calibration_date
+        data[f"instrument{number}"] = ((), "", attributes)
+    for destination, candidate in cast.destination_sources.items():
+        source_column = _source_column(cast, candidate)
+        values = cast.column(candidate.name, candidate.occurrence)
+        specification = mapping.science_variables[candidate.name]
+        attributes: dict[str, object] = {
+            "long_name": source_column.description or destination,
+            **specification.attributes,
+            "source_name": candidate.name,
+            "source_occurrence": candidate.occurrence,
+            "source_description": source_column.description,
+            "coordinates": coordinates,
+            "grid_mapping": "crs",
+            "coverage_content_type": "physicalMeasurement",
+            **_range_attributes(values),
+        }
+        if source_column.units is not None:
+            attributes["units"] = source_column.units
+        instrument = _instrument_reference(
+            cast, mapping, destination, candidate
         )
+        if instrument is not None:
+            attributes["instrument"] = instrument
+        data[destination] = (("profile", "z"), values[None, :], attributes)
 
-    title_date = _utc_iso(time_start)[:10]
-    depth_target = _metadata_target(metadata, "depth")
-    derived_attrs: dict[str, object] = {
+    dataset = xr.Dataset(data_vars=data)
+    profile_variables = [
+        "profile",
+        "depth",
+        *cast.destination_sources,
+    ]
+    dataset.attrs = {
         "title": (
             f"CTD data from SFER cruise {cast.cruise_id}, "
-            f"station {cast.station_id}, {title_date}"
+            f"station {cast.station_id}, {cast.start_time.date().isoformat()}"
         ),
-        "id": output_stem,
-        "station_name": output_stem,
-        "instrument": "CTD Sea-Bird SBE 25plus",
-        "cdm_profile_variables": ", ".join(["profile", *science_targets]),
-        "cdm_altitude_proxy": depth_target,
-        "source": "NOAA AOML Sea-Bird DatCnv processed ASCII",
+        "id": cast.cruise_id,
+        "station_name": stem,
+        "instrument": f"CTD {cast.instrument_model}",
+        "source": "Sea-Bird CNV processed ASCII",
         "source_file": cast.source_path.name,
-        "source_format": "Sea-Bird CNV (DatCnv ASCII)",
-        "source_station": cast.station_source,
-        "source_sequence": cast.sequence,
-        "source_processing": _source_processing(cast),
-        "source_processing_parameters": json.dumps(
-            {
-                key: value
-                for key, value in cast.header.items()
-                if key.startswith("datcnv_")
-            },
-            sort_keys=True,
-            separators=(",", ":"),
+        "source_format": "Sea-Bird CNV",
+        "processing_level": "Geophysical units from processed CNV data",
+        "featureType": "Profile",
+        "cdm_data_type": "Profile",
+        "cdm_altitude_proxy": "depth",
+        "cdm_profile_variables": ", ".join(profile_variables),
+        "history": (
+            f"{_utc_iso(datetime.now(timezone.utc))}: converted {source} "
+            f"to {target} by CTD_QARTOD"
         ),
-        "processing_level": "Geophysical units from Sea-Bird DatCnv output",
-        "time_coverage_start": _utc_iso(time_start),
-        "time_coverage_end": _utc_iso(time_end),
+        "time_coverage_start": _utc_iso(
+            cast.start_time + timedelta(seconds=time_min)
+        ),
+        "time_coverage_end": _utc_iso(
+            cast.start_time + timedelta(seconds=time_max)
+        ),
+        "time_coverage_duration": _iso_duration(time_max - time_min),
+        "time_coverage_resolution": _iso_duration(cast.interval_seconds),
         "geospatial_lat_min": latitude_min,
         "geospatial_lat_max": latitude_max,
         "geospatial_lat_units": "degrees_north",
@@ -631,354 +600,231 @@ def build_netcdf_dataset(
         "geospatial_lon_units": "degrees_east",
         "geospatial_vertical_min": depth_min,
         "geospatial_vertical_max": depth_max,
-        "geospatial_vertical_units": "m",
+        "geospatial_vertical_units": depth_units,
         "geospatial_vertical_positive": "down",
         "geospatial_bounds_crs": "EPSG:4326",
-        "history": "Converted from NOAA AOML Sea-Bird CNV by CTD_QARTOD",
-        "cnv_structural_sources": json.dumps(
-            selected_structural_sources, sort_keys=True, separators=(",", ":")
-        ),
     }
-    ds.attrs = derived_attrs
-    return ds
+    comment = _processing_comment(cast.processing)
+    if comment is not None:
+        dataset.attrs["comment"] = comment
+    return dataset
 
 
-def assign_output_stems(casts: Sequence[CnvCast]) -> dict[Path, str]:
-    """Assign deterministic, collision-free output stems to parsed casts."""
+def _validate_temporary(path: Path, cast: CnvCast, stem: str) -> None:
+    with xr.open_dataset(path, decode_cf=False) as dataset:
+        if (
+            dataset.sizes.get("profile") != 1
+            or dataset.sizes.get("z") != cast.values.shape[0]
+        ):
+            raise ValueError("temporary NetCDF dimensions do not match the cast")
+        for name in ("time", "longitude", "latitude", "depth"):
+            if name not in dataset or dataset[name].dims != ("profile", "z"):
+                raise ValueError(
+                    f"temporary NetCDF structural variable {name!r} is invalid"
+                )
+        if (
+            dataset.attrs.get("id") != cast.cruise_id
+            or dataset.attrs.get("station_name") != stem
+        ):
+            raise ValueError("temporary NetCDF identity attributes are invalid")
+        if (
+            str(dataset["station"].values[0, 0]) != cast.station_id
+            or str(dataset["cruiseID"].values[0, 0]) != cast.cruise_id
+        ):
+            raise ValueError("temporary NetCDF identity values are invalid")
 
-    assignments: dict[Path, str] = {}
-    occurrences: Counter[str] = Counter()
-    for cast in sorted(
-        casts,
-        key=lambda item: (
-            item.cruise_id,
-            item.station_id,
-            item.sequence,
-            item.source_path.name,
-        ),
-    ):
-        station_token = cast.station_id.replace(".", "_")
-        base = f"{cast.cruise_id}_{station_token}"
-        occurrences[base] += 1
-        number = occurrences[base]
-        assignments[cast.source_path] = base if number == 1 else f"{base}-{number}"
-    return assignments
 
-
-def write_netcdf(
-    ds: xr.Dataset,
-    path: Path | str,
-    overwrite: bool = False,
-) -> Path:
-    """Write a Dataset completely before atomically installing the final file."""
-
-    output_path = Path(path)
-    temporary_path = output_path.with_name(f".{output_path.name}.cnvtmp")
-    if output_path.exists() and not overwrite:
-        ds.close()
-        raise FileExistsError(f"refusing to overwrite existing {output_path}")
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    encoding = {
-        name: {"dtype": "float64", "zlib": True, "complevel": 4}
-        for name, variable in ds.variables.items()
-        if np.issubdtype(variable.dtype, np.floating) and variable.ndim > 0
-    }
+def _write_cast(
+    cast: CnvCast,
+    mapping: CnvMapping,
+    target: Path,
+    stem: str,
+    source: str,
+    output_root: Path,
+    overwrite: bool,
+) -> None:
+    if target.exists() and not overwrite:
+        raise FileExistsError(f"refusing to overwrite existing {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    dataset: xr.Dataset | None = None
     try:
-        ds.to_netcdf(
-            temporary_path,
-            mode="w",
-            format="NETCDF4",
-            engine="netcdf4",
-            encoding=encoding,
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp.nc",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        relative_target = target.relative_to(output_root).as_posix()
+        dataset = _build_dataset(cast, mapping, stem, source, relative_target)
+        dataset.to_netcdf(
+            temporary, mode="w", format="NETCDF4", engine="netcdf4"
         )
-        ds.close()
-        temporary_path.replace(output_path)
-    except Exception:
-        ds.close()
-        if temporary_path.exists():
-            temporary_path.unlink()
+        dataset.close()
+        dataset = None
+        _validate_temporary(temporary, cast, stem)
+        os.replace(temporary, target)
+    except BaseException:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
         raise
-    return output_path
+    finally:
+        if dataset is not None:
+            dataset.close()
 
 
-def _source_base(path: Path) -> str:
-    suffix = "_datcnv_processed"
-    stem = path.stem
-    return stem[: -len(suffix)] if stem.lower().endswith(suffix) else stem
-
-
-def _selected_structural_sources(
-    cast: CnvCast, mapping: CnvMapping
-) -> dict[str, str]:
-    return {
-        role: _source_for_role(cast, mapping.structural_fields[role])
-        for role in ("depth", "time", "latitude", "longitude")
-    }
-
-
-def _coverage_record(cast: CnvCast, mapping: CnvMapping) -> dict[str, object]:
-    sources = _selected_structural_sources(cast, mapping)
-    values = {
-        role: _transform_values(
-            cast.column(source_name), mapping.structural_fields[role].transform
-        )
-        for role, source_name in sources.items()
-    }
-    depth_min, depth_max = _finite_range(values["depth"])
-    latitude_min, latitude_max = _finite_range(values["latitude"])
-    longitude_min, longitude_max = _finite_range(values["longitude"])
-    time_min, time_max = _finite_range(values["time"])
-    return {
-        "sample_count": int(cast.values.shape[0]),
-        "depth_min_m": depth_min,
-        "depth_max_m": depth_max,
-        "latitude_min": latitude_min,
-        "latitude_max": latitude_max,
-        "longitude_min": longitude_min,
-        "longitude_max": longitude_max,
-        "time_start": _utc_iso(time_min),
-        "time_end": _utc_iso(time_max),
-    }
-
-
-def _write_report(path: Path, payload: Mapping[str, object]) -> None:
-    temporary_path = path.with_name(f".{path.name}.cnvtmp")
+def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
     try:
-        temporary_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        with tempfile.NamedTemporaryFile(
+            "w",
             encoding="utf-8",
-        )
-        temporary_path.replace(path)
-    except Exception:
-        if temporary_path.exists():
-            temporary_path.unlink()
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temporary, path)
+    except BaseException:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
         raise
 
 
-def convert_cnv_directory(
-    input_dir: Path | str,
-    output_dir: Path | str,
-    profile: DatasetProfile,
+def convert_cnv(
+    input_path: Path | str,
+    output_root: Path | str,
+    mapping_path: Path | str,
+    report_path: Path | str | None = None,
     overwrite: bool = False,
-) -> ConversionReport:
-    """Convert all top-level CNV files and write a complete batch report."""
+) -> dict[str, object]:
+    """Convert one CNV file or every CNV recursively found under a folder."""
 
-    source_root = Path(input_dir)
-    destination_root = Path(output_dir)
-    if not source_root.is_dir():
-        raise NotADirectoryError(f"CNV input directory does not exist: {source_root}")
-    source_resolved = source_root.resolve()
-    destination_resolved = destination_root.resolve()
-    if destination_resolved == source_resolved or destination_resolved.is_relative_to(
-        source_resolved
-    ):
-        raise ValueError("output directory must be outside the CNV source directory")
-
-    mapping_path = resolve_config_path("cnv_mapping", profile)
-    qc_mapping_path = resolve_config_path("variable_mapping", profile)
+    paths = discover_cnv_files(input_path)
+    output = Path(output_root)
+    source_input = Path(input_path)
+    if source_input.is_dir():
+        source_resolved = source_input.resolve()
+        output_resolved = output.resolve()
+        if output_resolved == source_resolved or output_resolved.is_relative_to(
+            source_resolved
+        ):
+            raise ValueError("output directory must be outside the CNV source directory")
+        source_base = source_input
+    else:
+        source_base = source_input.parent
     mapping = load_cnv_mapping(mapping_path)
-    qc_mapping = load_mapping(qc_mapping_path)
-    inventory = sorted(path for path in source_root.iterdir() if path.is_file())
-    by_suffix: dict[str, list[Path]] = {}
-    for path in inventory:
-        by_suffix.setdefault(path.suffix.lower(), []).append(path)
-    cnv_paths = by_suffix.get(".cnv", [])
-    xmlcon_paths = by_suffix.get(".xmlcon", [])
-    cnv_base_keys = {_source_base(path).casefold() for path in cnv_paths}
-    xmlcon_by_key = {path.stem.casefold(): path for path in xmlcon_paths}
 
-    parsed_casts: list[CnvCast] = []
-    failures: list[dict[str, object]] = []
-    for cnv_path in cnv_paths:
+    records: dict[Path, dict[str, object]] = {}
+    parsed: list[CnvCast] = []
+    for path in paths:
+        source = path.relative_to(source_base).as_posix()
+        record: dict[str, object] = {"source": source, "warnings": []}
+        records[path] = record
         try:
-            parsed_casts.append(parse_cnv(cnv_path, mapping))
+            cast = parse_cnv(path, mapping)
         except Exception as exc:
-            failures.append(
+            record.update(
                 {
-                    "source_file": cnv_path.name,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
+                    "status": "failed",
+                    "failure_reason": str(exc),
                 }
             )
-
-    output_stems = assign_output_stems(parsed_casts)
-    converted: list[dict[str, object]] = []
-    skipped: list[dict[str, object]] = []
-    companion_suffixes = (".xmlcon", ".hex", ".hdr", ".mrk", ".bl")
-    companions_by_suffix = {
-        suffix: {path.stem.casefold(): path for path in by_suffix.get(suffix, [])}
-        for suffix in companion_suffixes
-    }
-    duplicate_groups: dict[tuple[str, str], list[dict[str, object]]] = {}
-
-    for cast in sorted(
-        parsed_casts,
-        key=lambda item: (
-            item.cruise_id,
-            item.station_id,
-            item.sequence,
-            item.source_path.name,
-        ),
-    ):
-        stem = output_stems[cast.source_path]
-        output_path = destination_root / cast.cruise_id / f"{stem}.nc"
-        base_key = _source_base(cast.source_path).casefold()
-        xmlcon_path = xmlcon_by_key.get(base_key)
-        xmlcon_result = validate_xmlcon(
-            cast, xmlcon_path if xmlcon_path is not None else source_root / "missing.XMLCON"
+            continue
+        record.update(
+            {
+                "status": "prepared",
+                "cruise_id": cast.cruise_id,
+                "station": cast.station_id,
+                "embedded_filename": cast.embedded_filename,
+                "start_time": cast.start_time.isoformat(),
+                "warnings": list(cast.warnings),
+                "sensor_parse_status": cast.sensor_parse_status,
+                "instrument_count": len(cast.sensors),
+                "schema": [
+                    {
+                        "name": column.source_name,
+                        "occurrence": column.occurrence,
+                    }
+                    for column in cast.columns
+                ],
+                "resolved_source_map": {
+                    destination: {
+                        "name": candidate.name,
+                        "occurrence": candidate.occurrence,
+                    }
+                    for destination, candidate in cast.destination_sources.items()
+                },
+            }
         )
-        companion_status = {
-            suffix.removeprefix("."): (
-                companions_by_suffix[suffix][base_key].name
-                if base_key in companions_by_suffix[suffix]
-                else None
+        parsed.append(cast)
+
+    groups: dict[tuple[str, str], list[CnvCast]] = defaultdict(list)
+    for cast in parsed:
+        groups[(cast.cruise_id, cast.station_id)].append(cast)
+    for group in groups.values():
+        group.sort(
+            key=lambda cast: (
+                cast.start_time,
+                cast.source_path.as_posix().casefold(),
             )
-            for suffix in companion_suffixes
-        }
-        record = {
-            "source_file": cast.source_path.name,
-            "cruise_id": cast.cruise_id,
-            "station_source": cast.station_source,
-            "station_id": cast.station_id,
-            "sequence": cast.sequence,
-            "output_stem": stem,
-            "output_file": str(output_path),
-            "coverage": _coverage_record(cast, mapping),
-            "structural_sources": _selected_structural_sources(cast, mapping),
-            "xmlcon": xmlcon_result,
-            "companions": companion_status,
-        }
-        duplicate_groups.setdefault((cast.cruise_id, cast.station_id), []).append(record)
-        try:
-            ds = build_netcdf_dataset(cast, mapping, profile.metadata, stem)
-            write_netcdf(ds, output_path, overwrite=overwrite)
-            converted.append(record)
-        except FileExistsError as exc:
-            skipped.append({**record, "reason": str(exc)})
-        except Exception as exc:
-            failures.append(
+        )
+        for repeat, cast in enumerate(group, start=1):
+            stem = f"{cast.cruise_id}_{cast.station_id}" + (
+                "" if repeat == 1 else f"-{repeat}"
+            )
+            target = output / cast.cruise_id / f"{stem}.nc"
+            record = records[cast.source_path]
+            record.update(
                 {
-                    "source_file": cast.source_path.name,
-                    "cruise_id": cast.cruise_id,
-                    "station_id": cast.station_id,
-                    "sequence": cast.sequence,
-                    "output_file": str(output_path),
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
+                    "repeat": repeat,
+                    "output": str(target),
+                    "output_stem": stem,
                 }
             )
+            try:
+                _write_cast(
+                    cast,
+                    mapping,
+                    target,
+                    stem,
+                    str(record["source"]),
+                    output,
+                    overwrite,
+                )
+            except Exception as exc:
+                record.update(
+                    {
+                        "status": "failed",
+                        "failure_reason": str(exc),
+                        "validation": "failed",
+                    }
+                )
+            else:
+                record.update({"status": "converted", "validation": "passed"})
 
-    schema_counts: Counter[tuple[str, ...]] = Counter(
-        tuple(column.source_name for column in cast.columns) for cast in parsed_casts
-    )
-    schemas = [
-        {"columns": list(schema), "cast_count": count}
-        for schema, count in sorted(schema_counts.items())
-    ]
-    unknown_columns = sorted(
-        {
-            column.source_name
-            for cast in parsed_casts
-            for column in cast.columns
-            if column.source_name
-            not in {
-                *mapping.science_variables,
-                *(
-                    candidate
-                    for field in mapping.structural_fields.values()
-                    for candidate in field.source_candidates
-                ),
-            }
-        }
-    )
-    qc_variables = flatten_mapping(qc_mapping)
-    science_targets = {
-        variable.target for variable in mapping.science_variables.values()
-    }
-    duplicate_resolutions = [
-        {
-            "cruise_id": cruise_id,
-            "station_id": station_id,
-            "outputs": [str(record["output_stem"]) for record in records],
-            "source_sequences": [int(record["sequence"]) for record in records],
-        }
-        for (cruise_id, station_id), records in sorted(duplicate_groups.items())
-        if len(records) > 1
-    ]
-    missing_processed_cnv = [
-        {"source_stem": path.stem, "xmlcon_file": path.name}
-        for path in sorted(xmlcon_paths, key=lambda item: item.name.casefold())
-        if path.stem.casefold() not in cnv_base_keys
-    ]
-    companion_counts = {
-        suffix.removeprefix("."): len(by_suffix.get(suffix, []))
-        for suffix in (".cnv", *companion_suffixes)
-    }
-    known_suffix_count = sum(companion_counts.values())
-    companion_counts["other"] = len(inventory) - known_suffix_count
-
-    report_path = destination_root / "conversion_report.json"
+    ordered_records = [records[path] for path in paths]
+    statuses = Counter(str(record["status"]) for record in ordered_records)
     payload: dict[str, object] = {
-        "converter": "CTD_QARTOD cnv_converter",
-        "converter_version": "0.2.0",
-        "conversion_time_utc": datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
-        "input_directory": str(source_root),
-        "output_directory": str(destination_root),
-        "dataset_profile": (
-            str(profile.profile_path) if profile.profile_path is not None else None
-        ),
-        "cnv_mapping": str(mapping_path),
-        "qc_variable_mapping": str(qc_mapping_path),
+        "input": str(source_input),
+        "output_root": str(output),
+        "mapping": str(mapping_path),
         "counts": {
-            "cnv_discovered": len(cnv_paths),
-            "parsed": len(parsed_casts),
-            "converted": len(converted),
-            "skipped": len(skipped),
-            "failed": len(failures),
+            "cnv_discovered": len(paths),
+            "converted": statuses["converted"],
+            "failed": statuses["failed"],
         },
-        "companion_counts": companion_counts,
-        "converted": converted,
-        "skipped": skipped,
-        "failed": failures,
-        "missing_processed_cnv": missing_processed_cnv,
-        "schemas": schemas,
-        "unknown_columns": unknown_columns,
-        "source_to_target": {
-            source: variable.target
-            for source, variable in mapping.science_variables.items()
-        },
-        "structural_fields": {
-            role: {
-                "source_candidates": list(field.source_candidates),
-                "output": _metadata_target(profile.metadata, role),
-                "transform": field.transform.kind,
-                "offset_seconds": field.transform.offset_seconds,
-                "reducer": field.reducer,
-                "retain_samples_as": field.retain_samples_as,
-            }
-            for role, field in mapping.structural_fields.items()
-        },
-        "mapped_variables_absent_from_qc_mapping": sorted(
-            science_targets - qc_variables
-        ),
-        "qc_mapping_coverage": {
-            "mapped_science_variable_count": len(science_targets),
-            "qc_mapped_variable_count": len(science_targets & qc_variables),
-        },
-        "duplicate_resolutions": duplicate_resolutions,
-        "metadata_gaps": [
-            "platform call sign and external platform identifiers",
-            "creator and contributor identities and contact details",
-            "publication and metadata modification dates",
-            "acknowledgment, references, info URL, and metadata URL",
-            "fixed program-level geospatial bounds",
-            "processing stages not recorded in the CNV header",
-        ],
+        "records": ordered_records,
     }
-    report = ConversionReport(report_path=report_path, data=payload)
-    _write_report(report_path, report.as_dict())
-    return report
+    _atomic_json(
+        Path(report_path)
+        if report_path is not None
+        else output / "conversion_report.json",
+        payload,
+    )
+    return payload

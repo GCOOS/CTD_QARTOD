@@ -1,46 +1,38 @@
 {
-  "schema_version": 1,
-  "identity": {
-    "filename_pattern": "^(?P<cruise>[^_]+)_(?P<station>[^_]+)_(?P<sequence>\\d+)\\.cnv$",
-    "cruise_case": "upper",
-    "station_case": "upper",
-    "normalize_numeric_station": true
+  "schema_version": 3,
+  "inspection": {
+    "cnv_file_count": 1,
+    "inspected_file_count": 1,
+    "failed_files": []
   },
-  "structural_fields": {
-    "depth": {
-      "source_candidates": ["YOUR_DEPTH_SOURCE"],
-      "required": true,
-      "transform": {"type": "identity"},
-      "units": "YOUR_DEPTH_UNIT"
-    },
-    "time": {
-      "source_candidates": ["YOUR_TIME_SOURCE"],
-      "required": true,
-      "transform": {"type": "identity"},
-      "units": "YOUR_CF_TIME_UNIT",
-      "calendar": "gregorian"
-    },
-    "latitude": {
-      "source_candidates": ["YOUR_LATITUDE_SOURCE"],
-      "required": true,
-      "transform": {"type": "identity"},
-      "reducer": "median",
-      "units": "degrees_north",
-      "retain_samples_as": "latitude_sample"
-    },
-    "longitude": {
-      "source_candidates": ["YOUR_LONGITUDE_SOURCE"],
-      "required": true,
-      "transform": {"type": "identity"},
-      "reducer": "median",
-      "units": "degrees_east",
-      "retain_samples_as": "longitude_sample"
-    }
+  "required_fields": {
+    "time": {"source_name": "timeS", "target_name": "time"},
+    "longitude": {"source_name": "longitude", "target_name": "longitude"},
+    "latitude": {"source_name": "latitude", "target_name": "latitude"}
+  },
+  "vertical_field": {
+    "source_name": "depSM",
+    "source_occurrence": 1,
+    "target_name": "depth"
   },
   "science_variables": {
     "YOUR_CNV_FIELD": {
-      "target": "YOUR_NETCDF_VARIABLE",
-      "units": "YOUR_SOURCE_UNIT"
+      "observed": {
+        "file_count": 1,
+        "max_occurrences_per_file": 1,
+        "units": ["SOURCE_UNIT"],
+        "descriptions": ["Source description [SOURCE_UNIT]"]
+      },
+      "action": "map",
+      "target_name": "source_description",
+      "attributes": {
+        "long_name": "Source description",
+        "standard_name": null,
+        "standard_name_url": null,
+        "ioos_category": null,
+        "ncei_name": null
+      },
+      "sensor_tag": null
     }
   }
 }

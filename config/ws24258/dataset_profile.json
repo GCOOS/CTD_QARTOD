@@ -1,0 +1,51 @@
+{
+  "data_root": "output/WS24258_CNV",
+  "output": {
+    "mode": "duplicate",
+    "directory": "output/WS24258_QC"
+  },
+  "metadata": {
+    "station": "station",
+    "cruise_id": "cruiseID",
+    "longitude": ["longitude", "lon"],
+    "latitude": ["latitude", "lat"],
+    "depth": ["depth"],
+    "time": ["time"],
+    "sample_dimension": "z"
+  },
+  "qc_test_modes": {
+    "gap_test": "not_evaluated",
+    "syntax_test": "not_evaluated"
+  },
+  "erddap": {
+    "output_xml": "output/erddap/ws24258_datasets.xml",
+    "filedir_prefix": "/data/erddap/WS24258_QC",
+    "dataset_id_prefix": "",
+    "required_global_attributes": [
+      "title",
+      "summary",
+      "institution",
+      "publisher_name",
+      "publisher_email",
+      "license"
+    ],
+    "global_add_attributes": {
+      "_NCProperties": null,
+      "infoUrl": "https://www.aoml.noaa.gov/phod/sfp/index.php",
+      "sourceUrl": "(local files)"
+    }
+  },
+  "paths": {
+    "cnv_mapping": "config/ws24258/cnv_mapping.json",
+    "variable_mapping": "config/ws24258/qc_variable_mapping.json",
+    "station_coords": "config/ws24258/location_test/Station_Mean_Coords.csv",
+    "location_config": "config/ws24258/location_test/location_config.json",
+    "station_climatology": "config/ws24258/climatology_test/station_climatology_config.json",
+    "station_depth_classification": "config/ws24258/climatology_test/station_depth_classification.json",
+    "sensor_specs": "config/ws24258/gross_range_test/sensor_specs.json",
+    "variable_sensor_map": "config/ws24258/gross_range_test/variable_sensor_map.json",
+    "spike_thresholds": "config/ws24258/spike_test/spike_thresholds.json",
+    "rate_of_change_thresholds": "config/ws24258/rate_of_change_test/rate_of_change_thresholds.json",
+    "flat_line_config": "config/ws24258/flat_line_test/flat_line_config.json"
+  }
+}

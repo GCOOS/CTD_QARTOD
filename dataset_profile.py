@@ -10,12 +10,16 @@ from typing import Any, Iterable, Mapping
 
 import numpy as np
 
+from xml_generator.config import ErddapConfig
+
 REPO_ROOT = Path(__file__).resolve().parent
 WALTON_SMITH_CONFIG_DIR = REPO_ROOT / "config" / "walton_smith"
 DEFAULT_PROFILE_PATH = WALTON_SMITH_CONFIG_DIR / "dataset_profile.json"
 DEFAULT_CNV_PROFILE_PATH = (
     REPO_ROOT / "config" / "hogarth_cnv" / "dataset_profile.json"
 )
+QC_TEST_MODE_NAMES = ("gap_test", "syntax_test")
+QC_TEST_MODES = {"not_evaluated", "run"}
 
 
 def _as_name_list(value: object, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -125,6 +129,32 @@ class PathsConfig:
         return getattr(self, key)
 
 
+def _load_qc_test_modes(data: object) -> dict[str, str]:
+    if not isinstance(data, Mapping):
+        raise ValueError("dataset profile must define a qc_test_modes JSON object")
+    expected = set(QC_TEST_MODE_NAMES)
+    actual = set(data)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        details = []
+        if missing:
+            details.append(f"missing: {', '.join(missing)}")
+        if extra:
+            details.append(f"unknown: {', '.join(extra)}")
+        raise ValueError(f"qc_test_modes must define exactly gap_test and syntax_test ({'; '.join(details)})")
+
+    modes: dict[str, str] = {}
+    for name in QC_TEST_MODE_NAMES:
+        mode = data[name]
+        if not isinstance(mode, str) or mode not in QC_TEST_MODES:
+            raise ValueError(
+                f"qc_test_modes.{name} must be 'not_evaluated' or 'run'"
+            )
+        modes[name] = mode
+    return modes
+
+
 @dataclass(frozen=True)
 class DatasetProfile:
     """Dataset-level configuration for file layout, metadata names, and output."""
@@ -133,6 +163,18 @@ class DatasetProfile:
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
+    qc_test_modes: Mapping[str, str] = field(
+        default_factory=lambda: {
+            "gap_test": "not_evaluated",
+            "syntax_test": "not_evaluated",
+        }
+    )
+    erddap: ErddapConfig = field(
+        default_factory=lambda: ErddapConfig(
+            output_xml=REPO_ROOT / "output" / "erddap" / "datasets.xml",
+            filedir_prefix="/data/erddap",
+        )
+    )
     profile_path: Path | None = None
 
     @classmethod
@@ -149,18 +191,10 @@ class DatasetProfile:
             metadata=MetadataConfig.from_mapping(data.get("metadata") if isinstance(data.get("metadata"), Mapping) else None),
             output=OutputConfig.from_mapping(data.get("output") if isinstance(data.get("output"), Mapping) else None, base_dir),
             paths=PathsConfig.from_mapping(data.get("paths") if isinstance(data.get("paths"), Mapping) else None, base_dir),
+            qc_test_modes=_load_qc_test_modes(data.get("qc_test_modes")),
+            erddap=ErddapConfig.from_mapping(data.get("erddap"), base_dir),
             profile_path=profile_path,
         )
-
-    def with_data_root(self, data_root: Path | str) -> "DatasetProfile":
-        return DatasetProfile(
-            data_root=_resolve_path(str(data_root)) or Path(data_root),
-            metadata=self.metadata,
-            output=self.output,
-            paths=self.paths,
-            profile_path=self.profile_path,
-        )
-
 
 def load_dataset_profile(path: Path | str = DEFAULT_PROFILE_PATH) -> DatasetProfile:
     profile_path = Path(path).expanduser()
@@ -181,39 +215,13 @@ def default_profile() -> DatasetProfile:
 def resolve_config_path(
     key: str,
     profile: DatasetProfile | None = None,
-    override: Path | str | None = None,
 ) -> Path:
-    """Resolve config path precedence: explicit override, profile paths, QC default."""
-    if override is not None:
-        return Path(override)
+    """Return a configuration path explicitly selected by the dataset profile."""
     prof = profile or default_profile()
     profile_path = prof.paths.get(key)
     if profile_path is not None:
         return profile_path
-
-    # CNV source interpretation must always be explicitly owned by the profile.
-    if key == "cnv_mapping":
-        raise ValueError("Dataset profile does not define paths.cnv_mapping")
-
-    # Local import avoids making qc_config depend on this module during import.
-    import qc_config
-
-    fallback_by_key = {
-        "variable_mapping": qc_config.VARIABLE_MAPPING_JSON,
-        "station_coords": qc_config.STATION_COORDS_CSV,
-        "location_config": qc_config.LOCATION_CONFIG_JSON,
-        "station_climatology": qc_config.STATION_CLIMATOLOGY_JSON,
-        "station_depth_classification": qc_config.STATION_DEPTH_CLASSIFICATION_JSON,
-        "sensor_specs": qc_config.SENSOR_SPECS_JSON,
-        "variable_sensor_map": qc_config.VARIABLE_SENSOR_MAP_JSON,
-        "spike_thresholds": qc_config.SPIKE_THRESHOLDS_JSON,
-        "rate_of_change_thresholds": qc_config.RATE_OF_CHANGE_THRESHOLDS_JSON,
-        "flat_line_config": qc_config.FLAT_LINE_CONFIG_JSON,
-    }
-    try:
-        return fallback_by_key[key]
-    except KeyError as exc:
-        raise KeyError(f"Unknown config path key: {key}") from exc
+    raise ValueError(f"Dataset profile does not define paths.{key}")
 
 
 def resolve_sample_axis_index(dims: tuple[str, ...], sample_dimension: str) -> int:

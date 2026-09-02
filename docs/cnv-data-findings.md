@@ -159,7 +159,7 @@ Gregorian calendar.
 | Field | CNV | Derived | Configured | Unavailable |
 | --- | :---: | :---: | :---: | :---: |
 | Cruise, source station, sequence | filename | canonical identifiers/output stem |  |  |
-| Measurements, source descriptions/units | yes | configured NetCDF names; values and units preserved | `config/hogarth_cnv/cnv_mapping.json` |  |
+| Measurements, source descriptions/units | yes | configured NetCDF names; values and parsed source units preserved | CNV `# name` declarations and `config/hogarth_cnv/cnv_mapping.json` |  |
 | Cast time and spatial coverage | per-scan values | profile coordinates and min/max |  |  |
 | CTD and sensor identity | SBE 25plus header; XML channels, types, SensorID, serials, calibration dates | scalar instrument variables, excluding SensorID |  | exact model for some sensors; CTD and altimeter serials |
 | Sensor calibration coefficients | embedded XML | flattened calibration JSON |  | calibration certificates and traceability records |
@@ -232,13 +232,11 @@ Then use the existing netCDF workflow:
 
 ```bash
 PYTHONPATH=. uv run python main.py qc \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --base-dir output/SFER_CNV \
-  --no-sync-erddap-xml
+  --profile config/hogarth_cnv/dataset_profile.json
 PYTHONPATH=. uv run python main.py viz \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --data-root output/SFER_QC
-PYTHONPATH=. uv run python main.py erddap-xml --data-root output/SFER_QC
+  --profile config/hogarth_cnv/dataset_profile.json
+PYTHONPATH=. uv run python main.py erddap-xml \
+  --profile config/hogarth_cnv/dataset_profile.json
 ```
 
 Conversion creates source netCDF only. QC output remains separate under the

@@ -2,9 +2,11 @@
 Helpers to write QC results back into NetCDF datasets.
 """
 
+import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 import xarray as xr
@@ -13,10 +15,6 @@ from dataset_profile import DatasetProfile
 from qc_config import QC_FLAGS
 
 logger = logging.getLogger(__name__)
-
-# Variables that must keep on-disk CF numeric time encoding (not calendar decode).
-_PRESERVE_TIME_ENCODING_VARS = frozenset({"time", "time_elapsed"})
-
 
 QC_TEST_METADATA = {
     "gap_test": ("gap", "gap_test_quality_flag", "Gap Test"),
@@ -90,7 +88,25 @@ def _qc_attrs(data_var: xr.DataArray, test_name: str) -> dict:
     }
 
 
-def write_qc_results(ds: xr.Dataset, var_name: str, test_name: str, flags: Iterable[int]) -> xr.Dataset:
+def _json_default(value: object) -> object:
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value)
+    raise TypeError(f"Cannot encode {type(value).__name__} as QC configuration JSON")
+
+
+def write_qc_results(
+    ds: xr.Dataset,
+    var_name: str,
+    test_name: str,
+    flags: Iterable[int],
+    *,
+    applied_config: Mapping[str, object] | None = None,
+    config_source: str = "built-in",
+) -> xr.Dataset:
     """
     Add a per-test QC variable to the dataset.
     """
@@ -107,11 +123,26 @@ def write_qc_results(ds: xr.Dataset, var_name: str, test_name: str, flags: Itera
     summary_parts = [f"{flag_names.get(u, str(u))}={c}" for u, c in zip(unique, counts)]
     logger.debug("    %s: %s", qc_name, ", ".join(summary_parts))
 
+    attrs = _qc_attrs(data_var, test_name)
+    attrs.update(
+        {
+            "ioos_qc_test": test_name,
+            "ioos_qc_target": var_name,
+            "ioos_qc_module": f"qc_tests.{test_name}",
+            "ioos_qc_config": json.dumps(
+                dict(applied_config or {}),
+                default=_json_default,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            "ioos_qc_config_source": config_source,
+        }
+    )
     ds[qc_name] = xr.DataArray(
         flag_array,
         coords=data_var.coords,
         dims=data_var.dims,
-        attrs=_qc_attrs(data_var, test_name),
+        attrs=attrs,
     )
     return ds
 
@@ -198,15 +229,11 @@ def resolve_output_path(input_path: Path | str, profile: DatasetProfile, data_ro
     data_root_path = Path(data_root)
     try:
         rel_path = path.resolve().relative_to(data_root_path.resolve())
-    except ValueError:
-        rel_path = Path(path.name)
+    except ValueError as exc:
+        raise ValueError(
+            f"Input path is outside data root: {path} (root: {data_root_path})"
+        ) from exc
     return profile.output.directory / rel_path
-
-
-def _is_cf_time_like(var_name: str, var: xr.DataArray) -> bool:
-    if var_name in _PRESERVE_TIME_ENCODING_VARS:
-        return True
-    return str(var.attrs.get("standard_name") or "") == "time"
 
 
 def _netcdf_encoding(ds: xr.Dataset) -> dict[str, dict]:
@@ -221,6 +248,22 @@ def _netcdf_encoding(ds: xr.Dataset) -> dict[str, dict]:
             enc["dtype"] = str(var.dtype)
         encoding[name] = enc
     return encoding
+
+
+def append_qc_history(
+    ds: xr.Dataset,
+    *,
+    timestamp: str | None = None,
+) -> xr.Dataset:
+    """Append a UTC QC processing entry without replacing source history."""
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace(
+            "+00:00", "Z"
+        )
+    entry = f"{timestamp}: QARTOD QC applied by CTD_QARTOD"
+    existing = str(ds.attrs.get("history") or "").strip()
+    ds.attrs["history"] = f"{existing}\n{entry}" if existing else entry
+    return ds
 
 
 def save_dataset(ds: xr.Dataset, path: Path | str) -> None:
@@ -285,5 +328,3 @@ def save_dataset(ds: xr.Dataset, path: Path | str) -> None:
     temp_path.replace(path)
     
     logger.debug("Saved %s with %d QC variables", path.name, len(qc_vars))
-
-

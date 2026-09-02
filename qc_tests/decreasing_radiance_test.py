@@ -9,7 +9,6 @@ from qc_config import QC_FLAGS
 def decreasing_radiance_test(
     data: xr.DataArray | np.ndarray,
     depth: xr.DataArray | np.ndarray | None = None,
-    non_increasing: bool = True,
 ) -> np.ndarray:
     """
     Check that optical/bio-optical values decrease when depth increases,
@@ -24,7 +23,6 @@ def decreasing_radiance_test(
         FAIL   when depth and value change in the same direction
         MISSING when data or depth is NaN
     """
-    _ = non_increasing  # reserved for future use
     arr = np.asarray(data, dtype=float)
     if depth is None:
         return np.full(arr.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)

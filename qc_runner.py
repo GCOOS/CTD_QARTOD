@@ -8,7 +8,6 @@ variables embedded in each file — no filename parsing is required.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -33,6 +32,12 @@ from qc_config import (
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
+from qc_manifest import (
+    QCRunSummary,
+    build_qc_run_manifest,
+    utc_now,
+    write_qc_run_manifest,
+)
 from instrument_resolver import resolve_gross_ranges
 from qc_data_loader import (
     get_coord_for_var,
@@ -41,7 +46,6 @@ from qc_data_loader import (
     get_station_id,
     get_cruise_id,
     get_variable_category,
-    get_scalar_var,
     load_mapping,
     load_nc_file,
 )
@@ -51,16 +55,16 @@ from qc_tests import (
     climatology_test,
     decreasing_radiance_test,
     flat_line_test,
-    gap_test,
     gross_range_test,
     location_test,
     rate_of_change_test,
     spike_test,
-    syntax_test,
 )
+from qc_validation import REQUIRED_QC_PATHS, validate_qc_profile
 from qc_writer import (
     aggregate_qc_flags,
     aggregate_qc_variable_name,
+    append_qc_history,
     qc_variable_name,
     resolve_output_path,
     save_dataset,
@@ -83,55 +87,6 @@ _IMPLEMENTED_TESTS = (
 )
 
 
-def _date_from_iso_like(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
-        return text[:10]
-    return None
-
-
-def _date_from_time_var(ds: xr.Dataset, profile: DatasetProfile) -> str | None:
-    for name in profile.metadata.time:
-        if name not in ds:
-            continue
-        value = np.asarray(ds[name].values).flat[0]
-        iso_date = _date_from_iso_like(value)
-        if iso_date:
-            return iso_date
-
-        units = str(ds[name].attrs.get("units") or "").strip().lower()
-        if np.issubdtype(np.asarray(value).dtype, np.number) and units.startswith("seconds since 1970-01-01"):
-            date = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=float(value))
-            return date.date().isoformat()
-    return None
-
-
-def _sfer_metadata_date(ds: xr.Dataset, profile: DatasetProfile) -> str:
-    for attr_name in ("time_coverage_start", "time_coverage_end"):
-        date = _date_from_iso_like(ds.attrs.get(attr_name))
-        if date:
-            return date
-    return _date_from_time_var(ds, profile) or "unknown"
-
-
-def refresh_sfer_qc_metadata(ds: xr.Dataset, profile: DatasetProfile | None = None) -> xr.Dataset:
-    """Refresh SFER display metadata before writing QC output."""
-    prof = profile or default_profile()
-    cruise_id = get_scalar_var(ds, prof.metadata.cruise_id) or "unknown"
-    station = get_scalar_var(ds, prof.metadata.station) or "unknown"
-    date = _sfer_metadata_date(ds, prof)
-
-    if "profile" in ds:
-        ds["profile"].attrs["long_name"] = f"{cruise_id}_{station}"
-    else:
-        logger.warning("Dataset has no profile variable; cannot refresh profile long_name")
-
-    ds.attrs["title"] = f"CTD data from SFER cruise {cruise_id}, station {station}, {date}"
-    return ds
-
-
 def _should_run_test(test_name: str, category: str | None) -> bool:
     """Return True if *test_name* should run for the given variable category."""
     cats = TEST_CATEGORIES.get(test_name)
@@ -140,14 +95,30 @@ def _should_run_test(test_name: str, category: str | None) -> bool:
 
 def _broadcast_like(target: xr.DataArray, source: xr.DataArray | None) -> Optional[np.ndarray]:
     """
-    Broadcast source to the shape of target, if present.
+    Broadcast source to target by named dimensions, if present.
     """
     if source is None:
         return None
-    try:
-        return np.broadcast_to(np.asarray(source), target.shape)
-    except ValueError:
-        return np.full(target.shape, np.asarray(source).flat[0])
+    extra_dims = set(source.dims) - set(target.dims)
+    if extra_dims:
+        if all(source.sizes[dim] == 1 for dim in extra_dims):
+            source = source.squeeze(tuple(extra_dims), drop=True)
+            extra_dims = set(source.dims) - set(target.dims)
+    if extra_dims:
+        names = ", ".join(sorted(extra_dims))
+        raise ValueError(
+            f"cannot broadcast source dimensions ({names}) to target {target.dims}"
+        )
+    ordered_dims = tuple(dim for dim in target.dims if dim in source.dims)
+    ordered = source.transpose(*ordered_dims)
+    shape = tuple(source.sizes.get(dim, 1) for dim in target.dims)
+    for dim in ordered_dims:
+        if source.sizes[dim] not in (1, target.sizes[dim]):
+            raise ValueError(
+                f"cannot broadcast dimension {dim!r} of size {source.sizes[dim]} "
+                f"to size {target.sizes[dim]}"
+            )
+    return np.broadcast_to(np.asarray(ordered).reshape(shape), target.shape)
 
 
 def _iter_attr_values(value: object) -> Iterable[object]:
@@ -276,6 +247,59 @@ def _roc_threshold_for_var(
     return v
 
 
+def _test_provenance(
+    test_name: str,
+    var_name: str,
+    profile: DatasetProfile,
+    *,
+    gross_ranges: Mapping[str, Mapping[str, tuple]] | None,
+    climatology_config: Mapping[str, Iterable[Mapping]] | None,
+    expected_location: tuple[float, float] | None,
+    location_tolerance: float | None,
+    spike_thresholds: Mapping[str, Mapping[str, Any]] | None,
+    rate_of_change_thresholds: Mapping[str, Mapping[str, Any]] | None,
+    flat_line_config: Mapping[str, Any] | None,
+) -> tuple[dict[str, object], str]:
+    def sources(*keys: str) -> str:
+        return ";".join(str(resolve_config_path(key, profile)) for key in keys)
+
+    if test_name in profile.qc_test_modes:
+        source = str(profile.profile_path) if profile.profile_path else "dataset profile"
+        return {"mode": profile.qc_test_modes[test_name]}, source
+    if test_name == "location_test":
+        location = None
+        if expected_location is not None:
+            location = {
+                "latitude": expected_location[0],
+                "longitude": expected_location[1],
+            }
+        return {
+            "expected_location": location,
+            "tolerance": location_tolerance,
+        }, sources("station_coords", "location_config")
+    if test_name == "gross_range_test":
+        return {
+            "ranges": (gross_ranges or {}).get(var_name)
+        }, sources("sensor_specs", "variable_sensor_map")
+    if test_name == "decreasing_radiance_test":
+        return {"direction": "decreases_with_increasing_depth"}, "built-in"
+    if test_name == "climatology_test":
+        return {
+            "limits": (climatology_config or {}).get(var_name)
+        }, sources("station_climatology", "station_depth_classification")
+    if test_name == "flat_line_test":
+        return dict(flat_line_config or {}), sources("flat_line_config")
+    if test_name == "spike_test":
+        return {
+            "thresholds": (spike_thresholds or {}).get(var_name)
+        }, sources("spike_thresholds")
+    if test_name == "rate_of_change_test":
+        return {
+            "thresholds": (rate_of_change_thresholds or {}).get(var_name)
+        }, sources("rate_of_change_thresholds")
+    raise ValueError(f"Unknown test_name: {test_name}")
+
+
 def _run_common_tests(
     ds: xr.Dataset,
     var_name: str,
@@ -312,7 +336,26 @@ def _run_common_tests(
             flat_line_config=flat_line_config,
             profile=prof,
         )
-        ds = write_qc_results(ds, var_name, test_name, flags)
+        applied_config, config_source = _test_provenance(
+            test_name,
+            var_name,
+            prof,
+            gross_ranges=gross_ranges,
+            climatology_config=climatology_config,
+            expected_location=expected_location,
+            location_tolerance=location_tolerance,
+            spike_thresholds=spike_thresholds,
+            rate_of_change_thresholds=rate_of_change_thresholds,
+            flat_line_config=flat_line_config,
+        )
+        ds = write_qc_results(
+            ds,
+            var_name,
+            test_name,
+            flags,
+            applied_config=applied_config,
+            config_source=config_source,
+        )
         flag_arrays.append(np.asarray(flags, dtype=np.int8))
         qc_names.append(qc_variable_name(var_name, test_name))
 
@@ -352,11 +395,11 @@ def _run_single_test_for_var(
     missing_mask = _missing_mask_for_var(data_var)
     test_data_var = _data_var_with_missing_as_nan(data_var, missing_mask)
 
-    if test_name == "gap_test":
-        return _apply_missing_flags(gap_test(test_data_var), missing_mask)
-
-    if test_name == "syntax_test":
-        return _apply_missing_flags(syntax_test(test_data_var), missing_mask)
+    if test_name in prof.qc_test_modes:
+        if prof.qc_test_modes[test_name] == "run":
+            raise ValueError(f"{test_name} run mode is not implemented")
+        flags = np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int)
+        return _apply_missing_flags(flags, missing_mask)
 
     if test_name == "location_test":
         lon, lat = get_lon_lat(ds, prof.metadata)
@@ -407,7 +450,7 @@ def _run_single_test_for_var(
                 data_var.dims,
                 prof.metadata.sample_dimension,
             )
-        flags = decreasing_radiance_test(aligned_data, depth=aligned_depth, non_increasing=True)
+        flags = decreasing_radiance_test(aligned_data, depth=aligned_depth)
         return _apply_missing_flags(restore_flags_shape(flags, data_var.shape, moved_axis), missing_mask)
 
     if test_name == "climatology_test":
@@ -472,7 +515,7 @@ def run_qc_for_file(
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
-) -> None:
+) -> Path:
     """
     Run QC for a single NetCDF file and write results back to the same file.
 
@@ -517,8 +560,7 @@ def run_qc_for_file(
         classification_json_path=station_depth_file,
         metadata=prof.metadata,
     )
-    if clim_config and climatology_overrides:
-        clim_config = {**clim_config, **climatology_overrides}
+    clim_config = {**(clim_config or {}), **(climatology_overrides or {})}
 
     spike_thresholds = load_spike_thresholds(spike_file)
     rate_of_change_thresholds = load_rate_of_change_thresholds(rate_file)
@@ -546,9 +588,10 @@ def run_qc_for_file(
         )
 
     output_path = resolve_output_path(nc_path, prof, root_for_output)
-    ds = refresh_sfer_qc_metadata(ds, prof)
+    ds = append_qc_history(ds)
     save_dataset(ds, output_path)
     logger.info("  Saved QC results to %s", output_path)
+    return output_path
 
 
 def run_qc_for_directory(
@@ -557,26 +600,30 @@ def run_qc_for_directory(
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
     profile: DatasetProfile | None = None,
     data_root: Path | str | None = None,
-) -> None:
+) -> List[Path]:
     """
     Run QC for all NetCDF files in a directory (non-recursive).
     """
     dir_path = Path(dir_path)
     prof = profile or default_profile()
-    nc_files = list(dir_path.glob("*.nc"))
+    nc_files = sorted(dir_path.glob("*.nc"))
     logger.info("Processing directory: %s (%d files)", dir_path.name, len(nc_files))
     
+    output_paths: List[Path] = []
     for i, nc_file in enumerate(nc_files, 1):
         logger.debug("File %d/%d: %s", i, len(nc_files), nc_file.name)
-        run_qc_for_file(
+        output_path = run_qc_for_file(
             nc_file,
             gross_range_overrides=gross_range_overrides,
             climatology_overrides=climatology_overrides,
             profile=prof,
             data_root=data_root,
         )
+        if output_path is not None:
+            output_paths.append(output_path)
     
     logger.info("Completed directory: %s", dir_path.name)
+    return output_paths
 
 
 def run_qc_for_all(
@@ -584,7 +631,7 @@ def run_qc_for_all(
     gross_range_overrides: Mapping[str, Mapping[str, tuple]] | None = None,
     climatology_overrides: Mapping[str, Iterable[Mapping]] | None = None,
     profile: DatasetProfile | None = None,
-) -> None:
+) -> QCRunSummary:
     """
     Run QC for all SFER_CTD cruise directories (one level deep).
 
@@ -593,18 +640,53 @@ def run_qc_for_all(
     """
     prof = profile or default_profile()
     base_dir = Path(base_dir) if base_dir is not None else prof.data_root
-    cruise_dirs = [child for child in base_dir.iterdir() if child.is_dir()]
-    logger.info("Found %d cruise directories in %s", len(cruise_dirs), base_dir)
-    
-    for i, cruise_dir in enumerate(cruise_dirs, 1):
-        logger.info("Processing cruise %d/%d: %s", i, len(cruise_dirs), cruise_dir.name)
-        run_qc_for_directory(
-            cruise_dir,
-            gross_range_overrides=gross_range_overrides,
-            climatology_overrides=climatology_overrides,
-            profile=prof,
-            data_root=base_dir,
-        )
+    nc_files = sorted(base_dir.glob("*/*.nc"))
+    configured_paths = {
+        key: path
+        for key in REQUIRED_QC_PATHS
+        if (path := prof.paths.get(key)) is not None
+    }
+    manifest_path, manifest = build_qc_run_manifest(
+        prof, base_dir, configured_paths, len(nc_files)
+    )
+    write_qc_run_manifest(manifest_path, manifest)
+    written_paths: list[Path] = []
+
+    try:
+        validate_qc_profile(prof)
+        if not nc_files:
+            raise ValueError(f"No NetCDF files found under {base_dir}")
+        logger.info("Found %d NetCDF files in %s", len(nc_files), base_dir)
+        for index, nc_file in enumerate(nc_files, 1):
+            logger.info("Processing file %d/%d: %s", index, len(nc_files), nc_file)
+            output_path = run_qc_for_file(
+                nc_file,
+                gross_range_overrides=gross_range_overrides,
+                climatology_overrides=climatology_overrides,
+                profile=prof,
+                data_root=base_dir,
+            )
+            manifest["counts"]["processed"] += 1
+            if output_path is not None:
+                written_paths.append(output_path)
+                manifest["counts"]["written"] += 1
+            write_qc_run_manifest(manifest_path, manifest)
+    except BaseException as exc:
+        manifest["status"] = "failed"
+        manifest["completed_at"] = utc_now()
+        manifest["counts"]["failed"] += 1
+        manifest["error"] = f"{type(exc).__name__}: {exc}"
+        write_qc_run_manifest(manifest_path, manifest)
+        raise
+
+    manifest["status"] = "complete"
+    manifest["completed_at"] = utc_now()
+    write_qc_run_manifest(manifest_path, manifest)
+    return QCRunSummary(
+        manifest_path=manifest_path,
+        discovered=len(nc_files),
+        written_paths=tuple(written_paths),
+    )
 
 
 def list_available_tests() -> List[str]:
@@ -666,8 +748,7 @@ def run_single_test(
         classification_json_path=resolve_config_path("station_depth_classification", prof),
         metadata=prof.metadata,
     )
-    if clim_config and climatology_overrides:
-        clim_config = {**clim_config, **climatology_overrides}
+    clim_config = {**(clim_config or {}), **(climatology_overrides or {})}
 
     spike_thresholds = load_spike_thresholds(resolve_config_path("spike_thresholds", prof))
     rate_of_change_thresholds = load_rate_of_change_thresholds(

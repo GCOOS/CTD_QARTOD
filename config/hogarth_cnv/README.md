@@ -18,7 +18,7 @@ units are preserved unchanged.
 | File | Responsibility |
 | --- | --- |
 | `dataset_profile.json` | Selects this dataset's mappings, QC files, source NetCDF root, QC output root, and QC-facing metadata names |
-| `cnv_mapping.json` | Defines the cruise/station filename pattern, structural fields and transforms, CNV-to-NetCDF science names, and source units |
+| `cnv_mapping.json` | Defines the cruise/station filename pattern, structural fields and transforms, and CNV-to-NetCDF science names; science units come from each CNV column description |
 | `qc_variable_mapping.json` | Groups resulting NetCDF variables into the existing QC categories |
 | `gross_range_test/` | Records sensor identities and source-unit range templates |
 | `spike_test/` | Records per-variable spike-threshold templates and units |
@@ -66,9 +66,7 @@ when intentionally replacing a previous conversion.
 
 ```bash
 PYTHONPATH=. uv run python main.py qc \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --base-dir output/SFER_CNV \
-  --no-sync-erddap-xml
+  --profile config/hogarth_cnv/dataset_profile.json
 ```
 
 The profile uses duplicate-output mode, so source NetCDF remains under
@@ -78,11 +76,10 @@ The profile uses duplicate-output mode, so source NetCDF remains under
 
 ```bash
 PYTHONPATH=. uv run python main.py viz \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --data-root output/SFER_QC
+  --profile config/hogarth_cnv/dataset_profile.json
 
 PYTHONPATH=. uv run python main.py erddap-xml \
-  --data-root output/SFER_QC
+  --profile config/hogarth_cnv/dataset_profile.json
 ```
 
 ## QC configuration status
@@ -95,6 +92,10 @@ emits `NOT_EVALUATED` for these tests instead of inheriting Walton limits.
 The shared SFER station-coordinate table is explicitly selected in
 `dataset_profile.json`, but location remains disabled for every station while
 its tolerance is `null`. Flat-line settings remain populated and active.
+`qc_test_modes` explicitly keeps gap and syntax at `not_evaluated`; selecting
+`run` fails preflight until those tests have real implementations. ERDDAP output,
+server path, required globals, and XML additions also live in the profile. QC and ERDDAP remain two
+explicit commands, and QC writes `output/SFER_QC/qc_run_manifest.json`.
 
 Add limits only after scientific review. Enter them in the units recorded by
 the corresponding template; no converter change is required. Regenerate QC

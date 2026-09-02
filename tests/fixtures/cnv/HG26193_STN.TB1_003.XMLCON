@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SBE_InstrumentConfiguration>
+  <Instrument>
+    <TCP_Sensors>
+      <Sensor index="0"><TemperatureSensor><SerialNumber>6623</SerialNumber><CalibrationDate>24-Jul-25</CalibrationDate><G>4.31743361e-003</G></TemperatureSensor></Sensor>
+      <Sensor index="1"><ConductivitySensor><SerialNumber>0351</SerialNumber><CalibrationDate>23-Jul-25</CalibrationDate><Coefficients equation="1"><G>-4.17077203e+000</G></Coefficients></ConductivitySensor></Sensor>
+      <Sensor index="2"><PressureSensor><SerialNumber>1230</SerialNumber><CalibrationDate>11-Sep-25</CalibrationDate><PA0>6.53668010e-001</PA0></PressureSensor></Sensor>
+    </TCP_Sensors>
+    <ExternalVoltageSensors>
+      <Sensor index="0"><OxygenSensor><SerialNumber>1959</SerialNumber><CalibrationDate>18-Jul-25</CalibrationDate><CalibrationCoefficients equation="1"><Soc>4.4347e-001</Soc></CalibrationCoefficients></OxygenSensor></Sensor>
+      <Sensor index="2"><FluoroWetlabCDOM_Sensor><SerialNumber>FLCDRTD-1111</SerialNumber><CalibrationDate>25-Jul-2025</CalibrationDate><ScaleFactor>102.000</ScaleFactor></FluoroWetlabCDOM_Sensor></Sensor>
+      <Sensor index="4"><FluoroWetlabECO_AFL_FL_Sensor><SerialNumber>FLNTURTD-2022</SerialNumber><CalibrationDate>24-Jul-2025</CalibrationDate><ScaleFactor>1.00000000e+001</ScaleFactor></FluoroWetlabECO_AFL_FL_Sensor></Sensor>
+      <Sensor index="5"><TurbidityMeter><SerialNumber>FLNTURTD-2022</SerialNumber><CalibrationDate>24-Jul-2025</CalibrationDate><ScaleFactor>5.000000</ScaleFactor></TurbidityMeter></Sensor>
+      <Sensor index="6"><AltimeterSensor><SerialNumber></SerialNumber><CalibrationDate>2020</CalibrationDate><ScaleFactor>15.000</ScaleFactor></AltimeterSensor></Sensor>
+    </ExternalVoltageSensors>
+  </Instrument>
+</SBE_InstrumentConfiguration>

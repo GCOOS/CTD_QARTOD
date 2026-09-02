@@ -8,10 +8,10 @@ adjusted per variable or dataset without touching the QC logic.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-import numpy as np
 import xarray as xr
 
 from dataset_profile import MetadataConfig, WALTON_SMITH_CONFIG_DIR
@@ -50,12 +50,9 @@ RATE_OF_CHANGE_THRESHOLDS_JSON = (
 )
 FLAT_LINE_CONFIG_JSON = CONFIG_DIR / "flat_line_test" / "flat_line_config.json"
 
-# ERDDAP datasets.xml defaults (used by main.py erddap-xml and erddap_xml_sync.py)
+# ERDDAP implementation constants. Dataset paths and policy live in the profile.
 _DATASETS_DIR = Path(__file__).parent / "datasets"
-ERDDAP_OUTPUT_DIR = Path(__file__).parent / "output" / "erddap"
-ERDDAP_DATASETS_XML = _DATASETS_DIR / "mod_CTD_datasets.xml"
 ERDDAP_DATASET_TEMPLATE_XML = _DATASETS_DIR / "GenerateDatasetsXml.xml"
-ERDDAP_DATASETS_XML_OUTPUT = ERDDAP_OUTPUT_DIR / "mod_CTD_datasets_qc.xml"
 # ERDDAP server path: bigParentDirectory/data/erddap/<dataset_name>/...
 ERDDAP_FILEDIR_BASE = "/data/erddap"
 
@@ -68,18 +65,6 @@ QC_FLAGS = {
     "SUSPECT": 3,
     "FAIL": 4,
     "MISSING": 9,
-}
-
-LOCATION_DEFAULTS = {
-    "tolerance": 0.01,
-}
-
-# Flat-line test defaults (QARTOD-style count-based implementation).
-# REP_CNT values are "number of previous observations".
-FLAT_LINE_DEFAULTS = {
-    "rep_cnt_suspect": 3,
-    "rep_cnt_fail": 5,
-    "eps": 0.0,
 }
 
 ALL_CATEGORIES = frozenset({
@@ -150,27 +135,27 @@ def load_station_climatology_config(json_path: Path | str = STATION_CLIMATOLOGY_
     Load the station climatology limits JSON (deep_cast_limits / shallow_cast_limits only).
     """
     path = Path(json_path)
-    if not path.exists():
-        return {}
     with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        root = json.load(f)
+    if not isinstance(root, dict):
+        raise ValueError(f"Station climatology config must be a JSON object: {path}")
+    return root
 
 
 def _load_variable_thresholds_json(json_path: Path | str) -> Dict[str, Any]:
     """
-    Load a flat ``{ "<var_name>": { ... }, ... }`` thresholds file, or legacy ``{ "variables": {...} }``.
+    Load a flat ``{ "<var_name>": { ... }, ... }`` thresholds file.
     """
     path = Path(json_path)
-    if not path.exists():
-        return {}
     with path.open("r", encoding="utf-8") as f:
         root = json.load(f)
     if not isinstance(root, dict):
-        return {}
-    block = root.get("variables")
-    if isinstance(block, dict):
-        return block
-    return {k: v for k, v in root.items() if isinstance(v, dict)}
+        raise ValueError(f"Threshold config must be a JSON object: {path}")
+    if "variables" in root:
+        raise ValueError("legacy 'variables' threshold wrapper is not supported")
+    if not all(isinstance(value, dict) for value in root.values()):
+        raise ValueError(f"Threshold entries must be JSON objects: {path}")
+    return root
 
 
 def load_spike_thresholds(json_path: Path | str = SPIKE_THRESHOLDS_JSON) -> Dict[str, Any]:
@@ -185,33 +170,13 @@ def load_rate_of_change_thresholds(
     return _load_variable_thresholds_json(json_path)
 
 
-def _positive_int(value: object, default: int) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return default
-    if isinstance(value, bool) or number < 1:
-        return default
-    return number
-
-
-def _nonnegative_float(value: object, default: float) -> float:
+def _finite_float(value: object, label: str) -> float:
     try:
         number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number < 0:
-        return default
-    return number
-
-
-def _positive_float(value: object, default: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if not np.isfinite(number) or number <= 0:
-        return default
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a finite number") from exc
+    if isinstance(value, bool) or not math.isfinite(number):
+        raise ValueError(f"{label} must be a finite number")
     return number
 
 
@@ -219,40 +184,42 @@ def load_location_config(
     json_path: Path | str = LOCATION_CONFIG_JSON,
 ) -> Dict[str, Optional[float]]:
     """Load location-test config; an explicit null tolerance disables the test."""
-    config: Dict[str, Optional[float]] = dict(LOCATION_DEFAULTS)
     path = Path(json_path)
-    if not path.exists():
-        return config
     with path.open("r", encoding="utf-8") as f:
         root = json.load(f)
     if not isinstance(root, dict):
-        return config
-    if root.get("tolerance") is None and "tolerance" in root:
+        raise ValueError(f"Location config must be a JSON object: {path}")
+    if "tolerance" not in root:
+        raise ValueError("location tolerance is required")
+    if root["tolerance"] is None:
         return {"tolerance": None}
-    config["tolerance"] = _positive_float(root.get("tolerance"), LOCATION_DEFAULTS["tolerance"])
-    return config
+    tolerance = _finite_float(root["tolerance"], "location tolerance")
+    if tolerance <= 0:
+        raise ValueError("location tolerance must be positive or null")
+    return {"tolerance": tolerance}
 
 
 def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict[str, Any]:
-    """Load global flat-line test config, falling back to defaults for missing or invalid fields."""
-    config: Dict[str, Any] = dict(FLAT_LINE_DEFAULTS)
+    """Load and validate the global flat-line test config."""
     path = Path(json_path)
-    if not path.exists():
-        return config
     with path.open("r", encoding="utf-8") as f:
         root = json.load(f)
     if not isinstance(root, dict):
-        return config
-
-    config["rep_cnt_suspect"] = _positive_int(root.get("rep_cnt_suspect"), FLAT_LINE_DEFAULTS["rep_cnt_suspect"])
-    config["rep_cnt_fail"] = _positive_int(root.get("rep_cnt_fail"), FLAT_LINE_DEFAULTS["rep_cnt_fail"])
-    config["eps"] = _nonnegative_float(root.get("eps"), FLAT_LINE_DEFAULTS["eps"])
-
-    if config["rep_cnt_fail"] < config["rep_cnt_suspect"]:
-        config["rep_cnt_suspect"] = FLAT_LINE_DEFAULTS["rep_cnt_suspect"]
-        config["rep_cnt_fail"] = FLAT_LINE_DEFAULTS["rep_cnt_fail"]
-
-    return config
+        raise ValueError(f"Flat-line config must be a JSON object: {path}")
+    for key in ("rep_cnt_suspect", "rep_cnt_fail"):
+        value = root.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"{key} must be a positive integer")
+    eps = _finite_float(root.get("eps"), "flat-line eps")
+    if eps < 0:
+        raise ValueError("flat-line eps must be nonnegative")
+    if root["rep_cnt_fail"] < root["rep_cnt_suspect"]:
+        raise ValueError("rep_cnt_fail must be >= rep_cnt_suspect")
+    return {
+        "rep_cnt_suspect": root["rep_cnt_suspect"],
+        "rep_cnt_fail": root["rep_cnt_fail"],
+        "eps": eps,
+    }
 
 
 def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLASSIFICATION_JSON) -> Dict[str, Any]:
@@ -260,10 +227,11 @@ def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLAS
     Load station → deep_cast / shallow_cast membership lists.
     """
     path = Path(json_path)
-    if not path.exists():
-        return {}
     with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        root = json.load(f)
+    if not isinstance(root, dict):
+        raise ValueError(f"Station depth classification must be a JSON object: {path}")
+    return root
 
 
 def get_climatology_config_for_file(

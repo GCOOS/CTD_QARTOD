@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "models": {
+    "Sea-Bird SBE 9": {"long_name": "CTD Sea-Bird SBE 9", "make_model": "Sea-Bird SBE 9"},
+    "Sea-Bird SBE 25plus": {"long_name": "CTD Sea-Bird SBE 25plus", "make_model": "Sea-Bird SBE 25plus"}
+  },
+  "platform_aliases": {"R/V FG Walton Smith": "RV_FG_Walton_Smith", "RVWS": "RV_FG_Walton_Smith"},
+  "sensor_tags": {
+    "TemperatureSensor": {"long_name": "Temperature sensor", "make_model": "Sea-Bird temperature sensor"},
+    "ConductivitySensor": {"long_name": "Conductivity sensor", "make_model": "Sea-Bird conductivity sensor"},
+    "PressureSensor": {"long_name": "Pressure sensor", "make_model": "Sea-Bird pressure sensor"},
+    "OxygenSensor": {"long_name": "Oxygen sensor", "make_model": "Sea-Bird oxygen sensor"},
+    "FluoroWetlabECO_AFL_FL_Sensor": {"long_name": "Fluorometer", "make_model": "WET Labs ECO"},
+    "TurbidityMeter": {"long_name": "Turbidity sensor", "make_model": "WET Labs ECO"},
+    "AltimeterSensor": {"long_name": "Altimeter", "make_model": "Sea-Bird altimeter"},
+    "FluoroSeapointSensor": {"long_name": "Chlorophyll fluorometer", "make_model": "Seapoint fluorometer"},
+    "FluoroWetlabCDOM_Sensor": {"long_name": "CDOM fluorometer", "make_model": "WET Labs ECO CDOM"},
+    "FluoroWetlabWetstarSensor": {"long_name": "Chlorophyll fluorometer", "make_model": "WET Labs WETStar"},
+    "PAR_BiosphericalLicorChelseaSensor": {"long_name": "Photosynthetically available radiation sensor", "make_model": "Biospherical/Licor/Chelsea PAR sensor"},
+    "SPAR_Sensor": {"long_name": "Surface photosynthetically available radiation sensor", "make_model": "Biospherical/Licor/Chelsea SPAR sensor"},
+    "TransChelseaSeatechWetlabCStarSensor": {"long_name": "Beam transmission sensor", "make_model": "Chelsea/Seatech/WET Labs C-Star"},
+    "WET_LabsCStar": {"long_name": "Beam transmission sensor", "make_model": "WET Labs C-Star"}
+  },
+  "structural_fields": {
+    "time": {"source_candidates": [{"name": "timeS", "occurrence": 1}]},
+    "depth": {"source_candidates": [{"name": "depSM", "occurrence": 1}]}
+  },
+  "science_variables": {
+    "sea_water_pressure": {"source_candidates": [{"name":"prDM","occurrence":1},{"name":"prdM","occurrence":1}],"attributes":{"long_name":"Sea Water Pressure","standard_name":"sea_water_pressure","standard_name_url":"http://mmisw.org/ont/cf/parameter/sea_water_pressure","ioos_category":"Pressure","ncei_name":"WATER PRESSURE"},"sensor_tag":"PressureSensor"},
+    "sea_water_temperature": {"source_candidates": [{"name":"t090C","occurrence":1}],"attributes":{"long_name":"sea_water_temperature","standard_name":"sea_water_temperature","standard_name_url":"http://mmisw.org/ont/ioos/parameter/water_temperature","ioos_category":"Temperature","ncei_name":"TEMPERATURE"},"sensor_tag":"TemperatureSensor"},
+    "sea_water_temperature_2": {"source_candidates": [{"name":"t190C","occurrence":1}],"attributes":{"long_name":"Temperature 2","standard_name":"sea_water_temperature","standard_name_url":"http://mmisw.org/ont/ioos/parameter/water_temperature","ioos_category":"Temperature","ncei_name":"TEMPERATURE"},"sensor_tag":"TemperatureSensor","sensor_occurrence":2},
+    "sea_water_electrical_conductivity": {"source_candidates": [{"name":"c0S/m","occurrence":1}],"attributes":{"long_name":"Conductivity","standard_name":"sea_water_electrical_conductivity","standard_name_url":"http://mmisw.org/ont/ioos/parameter/sea_water_electrical_conductivity","ioos_category":"Salinity","ncei_name":"CONDUCTIVITY"},"sensor_tag":"ConductivitySensor"},
+    "sea_water_electrical_conductivity_2": {"source_candidates": [{"name":"c1S/m","occurrence":1}],"attributes":{"long_name":"Conductivity sensor 2","standard_name":"sea_water_electrical_conductivity","standard_name_url":"http://mmisw.org/ont/ioos/parameter/sea_water_electrical_conductivity","ioos_category":"Salinity","ncei_name":"CONDUCTIVITY"},"sensor_tag":"ConductivitySensor","sensor_occurrence":2},
+    "chlorophyll_fluorescence": {"source_candidates": [{"name":"flSP","occurrence":1}],"attributes":{"long_name":"Seapoint Chlorophyll Fluorescence","standard_name":"chlorophyll_a_fluorescense_in_sea_water","standard_name_url":"http://mmisw.org/ont/ioos/parameter/chlorophyll_flourescence","ioos_category":"Ocean Color"},"sensor_tag":"FluoroSeapointSensor"},
+    "chlorophyll_concentration": {"source_candidates": [{"name":"wetStar","occurrence":1},{"name":"flECO-AFL","occurrence":1}],"attributes":{"long_name":"Chloropyhll_a concentration from fluorescence, WET Labs ECO-AFL/FL","standard_name":"mass_concentration_of_chlorophyll_a_in_sea_water","standard_name_url":"http://mmisw.org/ont/cf/parameter/mass_concentration_of_chlorophyll_a_in_sea_water","ioos_category":"Ocean Color","ncei_name":"other"},"sensor_links":[{"source_candidate":{"name":"wetStar","occurrence":1},"sensor_tag":"FluoroWetlabWetstarSensor"},{"source_candidate":{"name":"flECO-AFL","occurrence":1},"sensor_tag":"FluoroWetlabECO_AFL_FL_Sensor"}]},
+    "CDOM": {"source_candidates": [{"name":"wetCDOM","occurrence":1}],"attributes":{"long_name":"CDOM concentration from Fluorescence, WET Labs CDOM","standard_name":"CDOM","standard_name_url":"http://mmisw.org/ont/ioos/parameter/cdom","ioos_category":"Optical Properties","ncei_name":"other"},"sensor_tag":"FluoroWetlabCDOM_Sensor"},
+    "sea_water_turbidity": {"source_candidates": [{"name":"turbWETntu0","occurrence":1}],"attributes":{"long_name":"Sea Water Turbidity, WET Labs ECO","standard_name":"sea_water_turbidity","standard_name_url":"http://mmisw.org/ont/cf/parameter/sea_water_turbidity","ioos_category":"Optical Properties","ncei_name":"TURBIDITY"},"sensor_tag":"TurbidityMeter"},
+    "beam_attenuation": {"source_candidates": [{"name":"bat","occurrence":1},{"name":"CStarAt0","occurrence":1}],"attributes":{"long_name":"Beam Attenuation, WET Labs C-Star","standard_name":"volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water","standard_name_url":"http://mmisw.org/ont/cf/parameter/volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water","ioos_category":"Optical Properties"},"sensor_links":[{"source_candidate":{"name":"bat","occurrence":1},"sensor_tag":"TransChelseaSeatechWetlabCStarSensor"},{"source_candidate":{"name":"CStarAt0","occurrence":1},"sensor_tag":"WET_LabsCStar"}]},
+    "beam_transmission": {"source_candidates": [{"name":"xmiss","occurrence":1},{"name":"CStarTr0","occurrence":1}],"attributes":{"long_name":"Beam Transmission, WET Labs C-Star","ioos_category":"Optical Properties"},"sensor_links":[{"source_candidate":{"name":"xmiss","occurrence":1},"sensor_tag":"TransChelseaSeatechWetlabCStarSensor"},{"source_candidate":{"name":"CStarTr0","occurrence":1},"sensor_tag":"WET_LabsCStar"}]},
+    "dissolved_oxygen": {"source_candidates": [{"name":"sbeox0ML/L","occurrence":1}],"attributes":{"long_name":"Dissolved Oxygen","ioos_category":"Dissolved O2","ncei_name":"DISSOLVED OXYGEN"},"sensor_tag":"OxygenSensor"},
+    "oxygen_saturation": {"source_candidates": [{"name":"oxsatML/L","occurrence":1}],"attributes":{"long_name":"Oxygen saturation","standard_name":"fractional_saturation_of_oxygen_in_sea_water","standard_name_url":"http://mmisw.org/ont/cf/fractional_saturation_of_oxygen_in_sea_water","ioos_category":"Dissolved O2","ncei_name":"OXYGEN SATURATION"},"sensor_tag":"OxygenSensor","sensor_occurrence":1},
+    "oxygen_saturation_2": {"source_candidates": [{"name":"oxsatML/L","occurrence":2}],"attributes":{"long_name":"Oxygen Saturation 2","standard_name":"fractional_saturation_of_oxygen_in_sea_water","standard_name_url":"http://mmisw.org/ont/cf/fractional_saturation_of_oxygen_in_sea_water","ioos_category":"Dissolved O2","ncei_name":"OXYGEN SATURATION"},"sensor_tag":"OxygenSensor","sensor_occurrence":1},
+    "photosynthetically_available_radiation": {"source_candidates": [{"name":"par","occurrence":1}],"attributes":{"long_name":"PAR"},"sensor_tag":"PAR_BiosphericalLicorChelseaSensor"},
+    "surface_photosynthetically_available_radiation": {"source_candidates": [{"name":"spar","occurrence":1}],"attributes":{"long_name":"Surface PAR"},"sensor_tag":"SPAR_Sensor"},
+    "altimeter": {"source_candidates": [{"name":"altM","occurrence":1}],"attributes":{"long_name":"Altimeter","standard_name":"altimeter_range","standard_name_url":"http://mmisw.org/ont/cf/parameter/altimeter_range","ioos_category":"Location"},"sensor_tag":"AltimeterSensor"},
+    "descent_rate": {"source_candidates": [{"name":"dz/dtM","occurrence":1}],"attributes":{"long_name":"Descent rate"}},
+    "sea_water_salinity": {"source_candidates": [{"name":"sal00","occurrence":1}],"attributes":{"long_name":"Sea water salinity"}},
+    "sea_water_salinity_2": {"source_candidates": [{"name":"sal11","occurrence":1}],"attributes":{"long_name":"Second sea water salinity"}},
+    "sound_velocity": {"source_candidates": [{"name":"svCM","occurrence":1}],"attributes":{"long_name":"Sound velocity"}},
+    "sea_water_sigma_t": {"source_candidates": [{"name":"sigma-t00","occurrence":1}],"attributes":{"long_name":"Sigma-t"}},
+    "sea_water_sigma_t_2": {"source_candidates": [{"name":"sigma-t11","occurrence":1}],"attributes":{"long_name":"Second sigma-t"}},
+    "flag": {"source_candidates": [{"name":"flag","occurrence":1}],"attributes":{"long_name":"Sea-Bird source flag"}}
+  }
+}

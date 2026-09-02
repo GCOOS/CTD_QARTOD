@@ -1,22 +1,19 @@
-#!/usr/bin/env python3
-"""
-Sync ERDDAP datasets XML from NetCDF files.
+"""Library helpers to sync ERDDAP datasets XML from NetCDF files.
 
 This script updates EDDTableFromNcCFFiles <dataset> blocks so that:
 1) fileDir/fileNameRegex point to the selected data root layout,
 2) dataVariable entries (names, types, and addAttributes) match NetCDF contents, and
 3) missing dataset blocks are created from a template, and
-4) dataset blocks with no matching NetCDF under --data-root are removed.
-
-
+4) configured orphan dataset blocks are removed.
 """
 
 from __future__ import annotations
 
-import argparse
 import copy
 import logging
+import os
 import re
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
@@ -25,17 +22,15 @@ import numpy as np
 import xarray as xr
 from lxml import etree
 
-from dataset_profile import DatasetProfile, default_profile, load_dataset_profile
+from dataset_profile import DatasetProfile, default_profile
 from qc_config import (
     ERDDAP_DATASET_TEMPLATE_XML,
-    ERDDAP_DATASETS_XML,
-    ERDDAP_DATASETS_XML_OUTPUT,
     ERDDAP_FILEDIR_BASE,
 )
 
 logger = logging.getLogger("erddap_xml_sync")
 
-# ERDDAP display attributes not present in NetCDF; preserved when --preserve-erddap-ui is set.
+# ERDDAP display attributes not present in NetCDF; optionally preserved by profile policy.
 ERDDAP_UI_ATTR_NAMES = frozenset(
     {
         "colorBarMaximum",
@@ -46,6 +41,38 @@ ERDDAP_UI_ATTR_NAMES = frozenset(
 )
 
 NC_ATTRS_SKIP = frozenset({"_ChunkSizes"})
+TIME_PRECISION = "1970-01-01T00:00:00.000Z"
+CONVERTER_GLOBAL_ATTR_NAMES = (
+    "title",
+    "id",
+    "station_name",
+    "instrument",
+    "platform",
+    "platform_name",
+    "source",
+    "processing_level",
+    "featureType",
+    "cdm_data_type",
+    "cdm_altitude_proxy",
+    "cdm_profile_variables",
+    "comment",
+    "history",
+    "time_coverage_start",
+    "time_coverage_end",
+    "time_coverage_duration",
+    "time_coverage_resolution",
+    "geospatial_lat_min",
+    "geospatial_lat_max",
+    "geospatial_lat_units",
+    "geospatial_lon_min",
+    "geospatial_lon_max",
+    "geospatial_lon_units",
+    "geospatial_vertical_min",
+    "geospatial_vertical_max",
+    "geospatial_vertical_units",
+    "geospatial_vertical_positive",
+    "geospatial_bounds_crs",
+)
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -173,11 +200,15 @@ def _infer_ioos_category(var_name: str, attrs: Mapping[str, object]) -> str | No
 def nc_attrs_to_add_attributes(
     nc_attrs: Mapping[str, object],
     var_name: str,
+    destination_name: str,
     preserved_ui: Mapping[str, str] | None = None,
 ) -> etree.Element:
     """Build <addAttributes> from NetCDF variable attributes."""
     add_attrs = etree.Element("addAttributes")
     merged: dict[str, object] = dict(nc_attrs)
+    merged.pop("time_precision", None)
+    if destination_name == "time":
+        merged["time_precision"] = TIME_PRECISION
 
     ioos = _infer_ioos_category(var_name, merged)
     if ioos:
@@ -202,15 +233,22 @@ def nc_attrs_to_add_attributes(
     return add_attrs
 
 
-def read_nc_variable_metadata(nc_path: Path) -> List[Tuple[str, str, Dict[str, Any]]]:
-    """Return ordered (variable_name, erddap_dataType, attrs) from a NetCDF file."""
+def read_nc_metadata(
+    nc_path: Path,
+) -> Tuple[List[Tuple[str, str, Dict[str, Any]]], Dict[str, Any]]:
+    """Return variable metadata and converter-owned global attributes."""
     with xr.open_dataset(nc_path, decode_cf=False, mask_and_scale=False) as ds:
         result: List[Tuple[str, str, Dict[str, Any]]] = []
         for name in ds.variables:
             var = ds[name]
             attrs = {k: _normalize_attr_value(v) for k, v in dict(var.attrs).items()}
             result.append((name, erddap_data_type(var.dtype), attrs))
-        return result
+        global_attrs = {
+            name: _normalize_attr_value(ds.attrs[name])
+            for name in CONVERTER_GLOBAL_ATTR_NAMES
+            if name in ds.attrs and ds.attrs[name] is not None
+        }
+        return result, global_attrs
 
 
 def _split_ancillary_variables(value: object) -> list[str]:
@@ -244,6 +282,11 @@ def _order_nc_metadata_for_erddap(
 ) -> list[Tuple[str, str, Dict[str, Any]]]:
     """Order ERDDAP variables for profile/axis fields, then data variables and QC flags."""
     metadata = list(nc_metadata)
+    names = {item[0] for item in metadata}
+    if "time_elapsed" in names:
+        metadata = [item for item in metadata if item[0] != "time"]
+    elif "time" not in names:
+        raise ValueError("NetCDF has neither 'time' nor 'time_elapsed'.")
     prof = profile or default_profile()
     by_name = {item[0]: item for item in metadata}
     ordered: list[Tuple[str, str, Dict[str, Any]]] = []
@@ -331,6 +374,40 @@ def _replace_add_attributes(data_var_elem: etree._Element, new_add_attrs: etree.
     data_var_elem.append(new_add_attrs)
 
 
+def _sync_global_attributes(
+    dataset_elem: etree._Element,
+    nc_attrs: Mapping[str, object],
+) -> None:
+    if not nc_attrs:
+        return
+    add_attrs = dataset_elem.find("addAttributes")
+    if add_attrs is None:
+        add_attrs = etree.Element("addAttributes")
+        first_data_variable = dataset_elem.find("dataVariable")
+        if first_data_variable is None:
+            dataset_elem.append(add_attrs)
+        else:
+            dataset_elem.insert(dataset_elem.index(first_data_variable), add_attrs)
+    existing = {
+        att.get("name"): att
+        for att in add_attrs.findall("att")
+        if att.get("name") is not None
+    }
+    for name in CONVERTER_GLOBAL_ATTR_NAMES:
+        if name not in nc_attrs:
+            continue
+        value = nc_attrs[name]
+        att = existing.get(name)
+        if att is None:
+            att = etree.SubElement(add_attrs, "att")
+            att.set("name", name)
+        att.attrib.pop("type", None)
+        attr_type = _erddap_attr_type(name, value)
+        if attr_type:
+            att.set("type", attr_type)
+        att.text = _format_attr_text(value)
+
+
 def _load_dataset_template(template_xml: Path, dataset_type: str) -> etree._Element:
     """Load a dataset template from a single <dataset> file or full datasets.xml."""
     parser = etree.XMLParser(remove_blank_text=True, strip_cdata=False)
@@ -355,15 +432,24 @@ def _load_dataset_template(template_xml: Path, dataset_type: str) -> etree._Elem
 
 def _build_datavariable(
     source_name: str,
+    destination_name: str,
     data_type: str,
     nc_attrs: Mapping[str, object],
     preserved_ui: Mapping[str, str] | None = None,
 ) -> etree._Element:
     dv = etree.Element("dataVariable")
     etree.SubElement(dv, "sourceName").text = source_name
-    etree.SubElement(dv, "destinationName").text = source_name
+    etree.SubElement(dv, "destinationName").text = destination_name
     etree.SubElement(dv, "dataType").text = data_type
-    _replace_add_attributes(dv, nc_attrs_to_add_attributes(nc_attrs, source_name, preserved_ui))
+    _replace_add_attributes(
+        dv,
+        nc_attrs_to_add_attributes(
+            nc_attrs,
+            source_name,
+            destination_name,
+            preserved_ui,
+        ),
+    )
     return dv
 
 
@@ -392,20 +478,33 @@ def _sync_datavariables_for_dataset(
     reused = 0
     created = 0
     for source_name, data_type, nc_attrs in nc_metadata:
+        existing = existing_by_source.get(source_name)
+        destination_name = "time" if source_name in {"time", "time_elapsed"} else source_name
         preserved_ui = None
-        if preserve_erddap_ui and source_name in existing_by_source:
-            preserved_ui = _extract_erddap_ui_attrs(existing_by_source[source_name])
-            dv = copy.deepcopy(existing_by_source[source_name])
+        if preserve_erddap_ui and existing is not None:
+            preserved_ui = _extract_erddap_ui_attrs(existing)
+            dv = copy.deepcopy(existing)
             _ensure_child_text(dv, "sourceName", source_name)
-            _ensure_child_text(dv, "destinationName", source_name)
+            _ensure_child_text(dv, "destinationName", destination_name)
             _ensure_child_text(dv, "dataType", data_type)
             _replace_add_attributes(
                 dv,
-                nc_attrs_to_add_attributes(nc_attrs, source_name, preserved_ui),
+                nc_attrs_to_add_attributes(
+                    nc_attrs,
+                    source_name,
+                    destination_name,
+                    preserved_ui,
+                ),
             )
             reused += 1
         else:
-            dv = _build_datavariable(source_name, data_type, nc_attrs, preserved_ui)
+            dv = _build_datavariable(
+                source_name,
+                destination_name,
+                data_type,
+                nc_attrs,
+                preserved_ui,
+            )
             created += 1
         dataset_elem.append(dv)
 
@@ -491,9 +590,8 @@ def _filedir_prefix_from_data_root(data_root: Path) -> str:
 def resolve_filedir_prefix(data_root: Path, filedir_prefix: str | None = None) -> str:
     """Resolve the ERDDAP fileDir prefix.
 
-    If the caller did not explicitly set --filedir-prefix, use
-    ``/data/erddap/<dataset_folder_name>`` derived from --data-root
-    (e.g. ``output/SFER_QC`` -> ``/data/erddap/SFER_QC``).
+    If a direct library caller omits a prefix, derive
+    ``/data/erddap/<dataset_folder_name>`` from the data root.
     """
     if filedir_prefix:
         return filedir_prefix.rstrip("/")
@@ -654,7 +752,10 @@ def sync_xml(
     matched_keys: set[Tuple[str, str]] = set()
     datasets = [d for d in root.findall("dataset") if d.get("type") == dataset_type]
 
-    nc_metadata_cache: Dict[Path, List[Tuple[str, str, Dict[str, Any]]]] = {}
+    nc_metadata_cache: Dict[
+        Path,
+        Tuple[List[Tuple[str, str, Dict[str, Any]]], Dict[str, Any]],
+    ] = {}
 
     updated_count = 0
     skipped_count = 0
@@ -677,11 +778,12 @@ def sync_xml(
 
         matched_keys.add(key)
         if nc_path not in nc_metadata_cache:
-            nc_metadata_cache[nc_path] = _order_nc_metadata_for_erddap(
-                read_nc_variable_metadata(nc_path),
-                prof,
+            variable_metadata, global_attrs = read_nc_metadata(nc_path)
+            nc_metadata_cache[nc_path] = (
+                _order_nc_metadata_for_erddap(variable_metadata, prof),
+                global_attrs,
             )
-        metadata = nc_metadata_cache[nc_path]
+        metadata, global_attrs = nc_metadata_cache[nc_path]
 
         cruise, _ = key
         current_dataset_id = dataset.get("datasetID")
@@ -689,6 +791,7 @@ def sync_xml(
             dataset.set("datasetID", prefixed_dataset_id(current_dataset_id, dataset_id_prefix))
         _ensure_child_text(dataset, "fileDir", f"{filedir_prefix.rstrip('/')}/{cruise}/")
         _ensure_child_text(dataset, "fileNameRegex", nc_path.name)
+        _sync_global_attributes(dataset, global_attrs)
         reused, created = _sync_datavariables_for_dataset(
             dataset,
             metadata,
@@ -724,13 +827,16 @@ def sync_xml(
                         filedir_prefix,
                         dataset_id_prefix,
                     )
-                    metadata = nc_metadata_cache.get(nc_path)
-                    if metadata is None:
-                        metadata = _order_nc_metadata_for_erddap(
-                            read_nc_variable_metadata(nc_path),
-                            prof,
+                    cached_metadata = nc_metadata_cache.get(nc_path)
+                    if cached_metadata is None:
+                        variable_metadata, global_attrs = read_nc_metadata(nc_path)
+                        cached_metadata = (
+                            _order_nc_metadata_for_erddap(variable_metadata, prof),
+                            global_attrs,
                         )
-                        nc_metadata_cache[nc_path] = metadata
+                        nc_metadata_cache[nc_path] = cached_metadata
+                    metadata, global_attrs = cached_metadata
+                    _sync_global_attributes(new_dataset, global_attrs)
                     _sync_datavariables_for_dataset(
                         new_dataset,
                         metadata,
@@ -740,11 +846,24 @@ def sync_xml(
                     created_count += 1
 
     output_xml.parent.mkdir(parents=True, exist_ok=True)
-    _write_preserving_non_dataset_xml(
-        input_xml=input_xml,
-        output_xml=output_xml,
-        root=root,
-    )
+    with tempfile.NamedTemporaryFile(
+        dir=output_xml.parent,
+        prefix=f".{output_xml.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temporary_xml = Path(handle.name)
+    try:
+        _write_preserving_non_dataset_xml(
+            input_xml=input_xml,
+            output_xml=temporary_xml,
+            root=root,
+        )
+        etree.parse(str(temporary_xml))
+        os.replace(temporary_xml, output_xml)
+        etree.parse(str(output_xml))
+    finally:
+        temporary_xml.unlink(missing_ok=True)
 
     logger.info("Updated dataset blocks: %d", updated_count)
     logger.info("Skipped existing blocks (unparseable or kept orphan): %d", skipped_count)
@@ -806,155 +925,22 @@ def run_erddap_xml_sync(
 def run_erddap_xml_sync_for_profile(
     profile: DatasetProfile | None = None,
     *,
-    input_xml: Path | None = None,
-    output_xml: Path | None = None,
-    data_root: Path | str | None = None,
-    filedir_prefix: str | None = None,
-    dataset_template_xml: Path = ERDDAP_DATASET_TEMPLATE_XML,
-    dataset_id_prefix: str = "",
-    create_missing_datasets: bool = True,
-    remove_orphan_datasets: bool = True,
-    preserve_erddap_ui: bool = True,
     verbose: bool = False,
 ) -> Path:
-    """Sync ERDDAP XML using dataset profile defaults (QC output tree when duplicate mode)."""
+    """Sync ERDDAP XML using only the selected dataset profile."""
     prof = profile or default_profile()
+    config = prof.erddap
     return run_erddap_xml_sync(
-        input_xml=input_xml or ERDDAP_DATASETS_XML,
-        output_xml=output_xml or ERDDAP_DATASETS_XML_OUTPUT,
-        data_root=resolve_erddap_data_root(prof, data_root),
+        input_xml=config.input_xml,
+        output_xml=config.output_xml,
+        data_root=resolve_erddap_data_root(prof),
         profile=prof,
-        filedir_prefix=filedir_prefix,
-        dataset_template_xml=dataset_template_xml,
-        dataset_id_prefix=dataset_id_prefix,
-        create_missing_datasets=create_missing_datasets,
-        remove_orphan_datasets=remove_orphan_datasets,
+        filedir_prefix=config.filedir_prefix,
+        dataset_template_xml=config.dataset_template_xml,
+        dataset_id_prefix=config.dataset_id_prefix,
+        create_missing_datasets=config.create_missing_datasets,
+        remove_orphan_datasets=config.remove_orphan_datasets,
         in_place=False,
-        preserve_erddap_ui=preserve_erddap_ui,
+        preserve_erddap_ui=config.preserve_erddap_ui,
         verbose=verbose,
     )
-
-
-def add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register ERDDAP XML sync CLI flags on *parser* (subparser or standalone)."""
-    from dataset_profile import DEFAULT_PROFILE_PATH
-
-    parser.add_argument(
-        "--profile",
-        type=str,
-        default=str(DEFAULT_PROFILE_PATH),
-        help=f"Dataset profile JSON for default --data-root (default: '{DEFAULT_PROFILE_PATH}')",
-    )
-    parser.add_argument(
-        "--input-xml",
-        type=Path,
-        default=ERDDAP_DATASETS_XML,
-        help=f"Input ERDDAP datasets XML file (default: '{ERDDAP_DATASETS_XML}')",
-    )
-    parser.add_argument(
-        "--output-xml",
-        type=Path,
-        default=ERDDAP_DATASETS_XML_OUTPUT,
-        help=f"Output XML path (default: '{ERDDAP_DATASETS_XML_OUTPUT}')",
-    )
-    parser.add_argument(
-        "--data-root",
-        type=Path,
-        default=None,
-        help=(
-            "Root containing cruise directories with .nc files "
-            "(default: profile duplicate output dir or data_root)"
-        ),
-    )
-    parser.add_argument(
-        "--filedir-prefix",
-        type=str,
-        default=None,
-        help=(
-            "ERDDAP fileDir prefix used in each dataset block "
-            f"(default: {ERDDAP_FILEDIR_BASE}/<dataset_name> from --data-root)"
-        ),
-    )
-    parser.add_argument(
-        "--dataset-template-xml",
-        type=Path,
-        default=ERDDAP_DATASET_TEMPLATE_XML,
-        help=(
-            "Dataset XML template used when creating missing dataset blocks "
-            f"(default: '{ERDDAP_DATASET_TEMPLATE_XML}')"
-        ),
-    )
-    parser.add_argument(
-        "--dataset-id-prefix",
-        type=str,
-        default="",
-        help="Prefix to add to synced ERDDAP datasetID values, e.g. 'SFER_CTD_'.",
-    )
-    parser.add_argument(
-        "--dataset-type",
-        type=str,
-        default="EDDTableFromNcCFFiles",
-        help="Dataset type tag to sync.",
-    )
-    parser.add_argument(
-        "--no-create-missing-datasets",
-        action="store_true",
-        help="Do not create new dataset blocks for NetCDF files absent from the XML.",
-    )
-    parser.add_argument(
-        "--keep-orphan-datasets",
-        action="store_true",
-        help=(
-            "Keep dataset blocks whose cruise/filename is not present under --data-root "
-            "(default: remove them)."
-        ),
-    )
-    parser.add_argument(
-        "--in-place",
-        action="store_true",
-        help="Overwrite input XML instead of writing to --output-xml (not recommended).",
-    )
-    parser.add_argument(
-        "--no-preserve-erddap-ui",
-        action="store_true",
-        help="Do not preserve ERDDAP color bar attributes from the input XML.",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable debug logging.",
-    )
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Sync ERDDAP datasets.xml blocks against NetCDF files (including QC metadata)."
-    )
-    add_erddap_xml_arguments(parser)
-    return parser.parse_args(argv)
-
-
-def main(argv: list[str] | None = None) -> None:
-    args = parse_args(argv)
-    prof = load_dataset_profile(args.profile)
-    data_root = resolve_erddap_data_root(prof, args.data_root)
-    run_erddap_xml_sync(
-        input_xml=args.input_xml,
-        output_xml=args.output_xml,
-        data_root=data_root,
-        profile=prof,
-        filedir_prefix=args.filedir_prefix,
-        dataset_template_xml=args.dataset_template_xml,
-        dataset_id_prefix=args.dataset_id_prefix,
-        dataset_type=args.dataset_type,
-        create_missing_datasets=not args.no_create_missing_datasets,
-        remove_orphan_datasets=not args.keep_orphan_datasets,
-        in_place=args.in_place,
-        preserve_erddap_ui=not args.no_preserve_erddap_ui,
-        verbose=args.verbose,
-    )
-
-
-if __name__ == "__main__":
-    main()

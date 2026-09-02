@@ -13,6 +13,28 @@
     "time": ["time"],
     "sample_dimension": "z"
   },
+  "qc_test_modes": {
+    "gap_test": "not_evaluated",
+    "syntax_test": "not_evaluated"
+  },
+  "erddap": {
+    "output_xml": "output/erddap/datasets.xml",
+    "filedir_prefix": "/data/erddap/SFER_CTD",
+    "dataset_id_prefix": "",
+    "required_global_attributes": [
+      "title",
+      "summary",
+      "institution",
+      "publisher_name",
+      "publisher_email",
+      "license"
+    ],
+    "global_add_attributes": {
+      "_NCProperties": null,
+      "infoUrl": "https://www.aoml.noaa.gov/phod/sfp/index.php",
+      "sourceUrl": "(local files)"
+    }
+  },
   "paths": {
     "variable_mapping": "config/walton_smith/variable_mapping/walton_mapping.json",
     "station_coords": "config/walton_smith/location_test/Station_Mean_Coords.csv",

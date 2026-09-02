@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "station_patterns": [
+    {
+      "name": "mr_marker_variant",
+      "pattern": "(?i)(?:stn|sta)[._ ]*(?P<station>mr)(?P<variant>v2|b)(?:ws\\d+)?$"
+    },
+    {
+      "name": "21lk_marker_variant",
+      "pattern": "(?i)(?:stn|sta)[._ ]*0*(?P<station>21lk)(?P<variant>b)?(?:ws\\d+)?$"
+    },
+    {
+      "name": "station_marker_with_cruise_suffix",
+      "pattern": "(?i)(?:stn|sta)[._ ]*(?P<station>[a-z]+\\d+(?:[._]\\d+)?|[a-z]+|\\d+(?:[._]\\d+)?)(?:[-_ ]?(?P<variant>recast|do_up|surface|do|up|b|v2|\\(1\\)))?ws\\d+$"
+    },
+    {
+      "name": "station_marker",
+      "pattern": "(?i)(?:stn|sta)[._ ]*(?P<station>[a-z]+\\d+(?:[._]\\d+)?|\\d+(?:[._]\\d+)?|[a-z]+)(?:[-_ ]?(?P<variant>do_up|surface|recast|do|up|b|v2|\\(1\\)))?(?:ws\\d+)?$"
+    },
+    {
+      "name": "mr_delimited_variant",
+      "pattern": "(?i)[_-](?P<station>mr)(?P<variant>v2|b)$"
+    },
+    {
+      "name": "numeric_variant_suffix",
+      "pattern": "(?i)(?:^|[_-])(?P<station>\\d+(?:[._-]\\d+)?)(?P<variant>do_up|surface|recast|do|up|b|v2|\\(1\\))$"
+    },
+    {
+      "name": "zero_prefixed_named_suffix",
+      "pattern": "(?i)[_-]\\d{2}(?P<station>(?:cal|ch)\\d+)$"
+    },
+    {
+      "name": "named_suffix",
+      "pattern": "(?i)[_-](?P<station>[a-z]*\\d+(?:[._]\\d+)?[a-z]*|[a-z]+)(?P<variant>v2|b|do_up|do|up|surface|\\(1\\))?$"
+    },
+    {
+      "name": "delimited_numeric",
+      "pattern": "(?i)(?:^|[_-])(?P<station>\\d+(?:[._-]\\d+)?)(?:[_-]?(?P<variant>do_up|do|up|surface|b|v2|\\(1\\)))?$"
+    },
+    {
+      "name": "ws1418_compact",
+      "pattern": "(?i)^ws1418(?P<station>\\d+(?:\\.\\d+)?)(?:\\.?(?P<variant>b))?$"
+    },
+    {
+      "name": "compact_numeric",
+      "pattern": "(?i)^(?:ws|sav)\\d+(?P<station>\\d{1,3})$"
+    }
+  ],
+  "overrides": {
+    "WS19119_cnv/WS19119_Stn_Captiva_Bluehole.cnv": {
+      "station": "CAPTIVA BLUEHOLE",
+      "variant": null
+    }
+  },
+  "exclusion_patterns": [
+    "(?i)(?:deck|dunk|wet|test|tst)"
+  ],
+  "nonstandard_extensions": {
+    ".2cnv": "not an exact .cnv source"
+  }
+}

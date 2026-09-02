@@ -2,19 +2,19 @@
 
 ### Components
 
-- `cnv_mapping.py`: Loads the dataset-owned filename, structural-field, transform, and science-variable contract for CNV input.
-- `cnv_converter.py`: Parses Sea-Bird DatCnv `.cnv` files through that mapping, writes QC-compatible netCDF profiles atomically, and emits `conversion_report.json`.
-- `main.py`: CLI entry point with subcommands `convert-cnv`, `qc`, `erddap-xml`, and `viz`.
-- `erddap_xml_sync.py`: Updates `EDDTableFromNcCFFiles` dataset blocks so `fileDir` / `fileNameRegex` and `dataVariable` lists match NetCDF contents (including `*_qc_*` variables). By default creates missing XML dataset blocks from `datasets/GenerateDatasetsXml.xml` and removes blocks with no matching `.nc` under `--data-root`. Can be run standalone or via `main.py erddap-xml`.
+- `cnv_mapping.py`: Recursively inventories CNV headers and derives source-keyed mappings from stable comments and units.
+- `cnv_converter.py`: Derives cruise/station identity from actual filenames, writes QC-compatible NetCDF profiles atomically, and emits `conversion_report.json`.
+- `main.py`: CLI entry point with subcommands `inspect-cnv`, `convert-cnv`, `qc`, `erddap-xml`, and `viz`.
+- `xml_generator/`: Builds a complete `EDDTableFromNcCFFiles` `datasets.xml` from NetCDF metadata and the selected dataset profile. It does not read or modify an existing XML/template.
 - `qc_config.py`: Centralized configuration including:
   - `QC_FLAGS`: QARTOD quality flag definitions
   - `ALL_CATEGORIES`: All variable categories from the mapping
   - `TEST_CATEGORIES`: Maps each test to the categories it applies to
-  - Fallback config paths and small loader helpers used when a profile omits a path
+  - Strict loader helpers for profile-selected configuration
 - `qc_data_loader.py`: Loads NetCDF, loads the profile-selected QC variable mapping, finds variables needing QC, and locates lon/lat fields.
 - `qc_tests/`: Package of QC test modules (each `*_test` name matches the string written as `{var}_qc_{name}` in NetCDF, e.g. `location_test`, `gross_range_test`, `climatology_test`, `gap_test`, `syntax_test`, `decreasing_radiance_test`, `spike_test`, `rate_of_change_test`, `flat_line_test`) wrapping `ioos_qc` where applicable.
-- `qc_writer.py`: Writes QC arrays back to the dataset with standard QARTOD-like attributes.
-- `qc_runner.py`: Orchestrates QC for a file, directory, or the full dataset tree. Also provides individual test execution with `run_single_test()`.
+- `qc_writer.py`: Writes QC arrays with QARTOD-like attributes, applied configuration provenance, and appended processing history.
+- `qc_runner.py`: Orchestrates QC for a file, directory, or the full dataset tree. Batch runs preflight the complete configuration and write `qc_run_manifest.json`. It also provides individual test execution with `run_single_test()`.
 - `qc_result_viz.py`: Contains `QCTestResult` dataclass for storing test results and provides visualization via `plot_profile()` with a 3-panel layout.
 - `station_resolver.py`: Looks up expected station coordinates from `Station_Mean_Coords.csv` using station ID from the NetCDF file.
 - `instrument_resolver.py`: Extracts instrument metadata from each NetCDF, reads variable units, verifies sensor presence, and builds dynamic gross range spans using `sensor_specs.json` + `variable_sensor_map.json`.
@@ -65,6 +65,11 @@ Output mode is set in the profile:
 - `in_place`: write QC variables back to the source NetCDF files.
 - `duplicate`: write a mirrored dataset tree under `output.directory` (default `output/`) without modifying source files.
 
+The same profile explicitly controls `gap_test` and `syntax_test` through
+`qc_test_modes`, and owns the ERDDAP output path, server path, metadata
+requirements, and deliberate XML overrides through `erddap`. Every listed QC path is required; there are no hidden
+fallback files or CLI path overrides.
+
 ### QC Flags
 
 
@@ -86,8 +91,8 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 
 | Test                       | Description                                                     | Categories                                               |
 | -------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
-| `gap_test`                 | Placeholder (all NOT_EVALUATED)                                 | All                                                      |
-| `syntax_test`              | Placeholder (all NOT_EVALUATED)                                 | All                                                      |
+| `gap_test`                 | Profile-controlled placeholder; current profiles use `not_evaluated` | All                                                   |
+| `syntax_test`              | Profile-controlled placeholder; current profiles use `not_evaluated` | All                                                   |
 | `location_test`            | Compares lon/lat to expected station coordinates                | All                                                      |
 | `gross_range_test`         | Uses `ioos_qc.qartod.gross_range_test` with sensor-aware limits | All                                                      |
 | `decreasing_radiance_test` | Checks that values decrease with increasing depth               | PAR, in_water_radiance_irradiance                        |
@@ -106,53 +111,58 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 
 ### Running via CLI
 
-The top-level command requires a **subcommand**: `convert-cnv`, `qc`, `erddap-xml`, or `viz`.
+The top-level command requires a **subcommand**: `inspect-cnv`, `convert-cnv`, `qc`, `erddap-xml`, or `viz`.
 
 ```bash
 python main.py --help
+python main.py inspect-cnv --help
 python main.py convert-cnv --help
 python main.py qc --help
 python main.py erddap-xml --help
 ```
 
-#### `convert-cnv` — create workflow-compatible netCDF from Sea-Bird CNV
+#### CNV inspection and conversion
 
 ```bash
+python main.py inspect-cnv /path/to/cnv/input \
+  --output config/YOUR_DATASET/cnv_mapping.json
+
+# Review cnv_mapping.json, then:
 python main.py convert-cnv \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --input-dir cnv_data/2026_07_Hogarth_NOAA_CTD \
-  --output-dir output/SFER_CNV
+  /path/to/cnv/input \
+  --mapping config/YOUR_DATASET/cnv_mapping.json \
+  --output output/SFER_CNV
 ```
 
-The command preserves the CNV files and mapped science values/units, writes one
-`(profile, z)` netCDF per cast, and records inventory, mapping provenance,
-structural source/transform choices, QC-mapping coverage, companion checks,
-missing metadata, duplicate station resolution, and failures in
-`output/SFER_CNV/conversion_report.json`. It refuses to overwrite an existing
-netCDF unless `--overwrite` is supplied.
+Both commands accept one CNV file, one cruise folder, or a root containing
+cruise folders. Inspection reads headers only and auto-maps comments that have
+one stable meaning and unit; ambiguous entries remain `review`. Conversion requires exact `timeS`, `longitude`, and `latitude` columns,
+uses the mapped vertical field, preserves source values/units, and writes all
+four structural variables as `(profile, z)` arrays.
 
-For Hogarth, `timeQ` is the one required numerical interpretation: the
-configured epoch offset is applied to every scan and written as
-`time(profile, z)`. Latitude and longitude are reduced to representative
-profile medians while their original per-scan arrays are retained. Science
-variables—including oxygen—are not numerically converted.
+Identity comes from the actual basename `<cruiseID>_Stn.<station>.cnv`, never
+the embedded `FileName`. Numeric leading zeroes are removed, so station `054b`
+becomes `54b` and remains distinct from station `54`. Repeated identical
+cruise/station identities receive `-2`, `-3`, and later filename suffixes.
+
+Science mappings provide a base destination. If a mapped source occurs more
+than once, suffixing happens after mapping: `t090C -> temperature` produces
+`temperature`, `temperature_2`, and so on. Existing NetCDF targets are not
+replaced unless `--overwrite` is supplied.
 
 Conversion does not create QARTOD flags. Pass the resulting cruise tree to the
 existing QC command, then use the QC output for visualization or publication:
 
 ```bash
 python main.py qc \
-  --profile config/hogarth_cnv/dataset_profile.json \
-  --base-dir output/SFER_CNV \
-  --no-sync-erddap-xml
-python main.py viz --data-root output/SFER_QC
-python main.py erddap-xml --data-root output/SFER_QC
+  --profile config/hogarth_cnv/dataset_profile.json
+python main.py viz --profile config/hogarth_cnv/dataset_profile.json
+python main.py erddap-xml --profile config/hogarth_cnv/dataset_profile.json
 ```
 
 `cnv_mapping.json` maps CNV source names to the QC-facing NetCDF contract;
-`qc_variable_mapping.json` selects which resulting NetCDF variables enter each
-QC category. A different CNV dataset must explicitly select its own complete
-mapping through `paths.cnv_mapping`; there is no Hogarth mapping fallback.
+`qc_variable_mapping.json` independently selects which resulting NetCDF
+variables enter each QC category.
 See the step-by-step
 [`docs/cnv-conversion-process.md`](docs/cnv-conversion-process.md) guide for how
 each configuration and CNV section is processed, how NetCDF is constructed,
@@ -162,14 +172,8 @@ and where the existing QC pipeline takes over.
 
 ```
 --profile                   Dataset profile JSON (default: config/walton_smith/dataset_profile.json)
---base-dir                  Base directory containing cruise directories
 --verbose, -v               Debug logging
 --log-file                  Optional log file path
---sync-erddap-xml / --no-sync-erddap-xml
-                            After QC, write synced XML to output/erddap/ (default: on)
---erddap-input-xml          Input ERDDAP XML for post-QC sync (optional override)
---erddap-output-xml         Output ERDDAP XML path (optional override)
---erddap-filedir-prefix     fileDir prefix for synced blocks (default: /data/erddap/<dataset_name>)
 ```
 
 Run with defaults:
@@ -178,29 +182,17 @@ Run with defaults:
 python main.py qc
 ```
 
-Run with a different input tree while keeping the selected profile/config files:
+The command reads its input root, output mode, test modes, and every QC path
+from the profile. It writes `qc_run_manifest.json` under the effective output
+root and does not run ERDDAP generation implicitly.
 
-```bash
-python main.py qc --base-dir /path/to/datasets
+#### `erddap-xml` — generate ERDDAP `datasets.xml` from NetCDF files
+
+After QC adds `*_qc_*` variables, this explicit step builds a new standalone
+`<erddapDatasets>` document. One `<dataset>` is generated per NetCDF file.
+
 ```
-
-#### `erddap-xml` — sync ERDDAP `datasets.xml` from NetCDF files
-
-After QC adds `*_qc_*` variables, this step refreshes each matching `<dataset>` block’s `<dataVariable>` list and can point `fileDir` at your ERDDAP server layout via `--filedir-prefix`.
-
-```
---input-xml                 Input ERDDAP datasets XML (default: datasets/mod_CTD_datasets.xml)
---output-xml                Output path when not using --in-place (default: output/erddap/mod_CTD_datasets_qc.xml)
---data-root                 Root with cruise subdirs containing *.nc (default: profile output.directory when output.mode is duplicate, otherwise profile data_root)
 --profile                   Dataset profile JSON (default: config/walton_smith/dataset_profile.json)
---no-preserve-erddap-ui     Do not keep ERDDAP color-bar attributes from the input XML
---filedir-prefix            Value written into each <fileDir> prefix (default: /data/erddap/<dataset_name> from --data-root)
---dataset-template-xml      Template <dataset> XML for missing datasets (default: datasets/GenerateDatasetsXml.xml)
---dataset-type              ERDDAP dataset type attribute to match (default: EDDTableFromNcCFFiles)
---no-create-missing-datasets
-                            Do not append new <dataset> blocks for .nc files not already in the XML
---keep-orphan-datasets      Keep XML blocks whose cruise/filename is missing from --data-root (default: remove)
---in-place                  Overwrite --input-xml instead of writing --output-xml
 --verbose, -v               Debug logging
 ```
 
@@ -208,22 +200,21 @@ Examples:
 
 ```bash
 python main.py erddap-xml
-python main.py erddap-xml --output-xml output/erddap/mod_CTD_datasets_qc.xml
-python main.py erddap-xml --data-root output/SFER_QC
-python main.py erddap-xml --data-root datasets/SFER_CTD_SOAK_REMOVED_NO_LEGACY_QC
+python main.py erddap-xml --profile config/hogarth_cnv/dataset_profile.json
 ```
 
-Standalone (same behavior as `main.py erddap-xml`):
+The profile's `erddap` object supplies `output_xml`, the server `filedir_prefix`,
+an optional `dataset_id_prefix`, `required_global_attributes`, and
+`global_add_attributes`. The NetCDF tree is the profile's QC output when
+duplicate mode is selected. Universal ERDDAP structure is generated in code;
+there is no input XML or dataset template.
 
-```bash
-python erddap_xml_sync.py --help
-```
-
-**Note:** Matching uses the cruise folder name (last segment of the existing `<fileDir>` in the XML) plus `<fileNameRegex>` as the NetCDF filename. Your `--data-root` tree should follow `data-root/<cruise>/<file>.nc`. For each variable, `<addAttributes>` are rebuilt from NetCDF (including `standard_name`, `ancillary_variables`, and QC flag metadata). Missing NetCDF-backed datasets are created by default from `datasets/GenerateDatasetsXml.xml`. Non-dataset ERDDAP XML content from `datasets/mod_CTD_datasets.xml` is preserved, and the original file is not modified unless you pass `--in-place`. Requires `lxml` (see `requirements.txt`).
-
-After `python main.py qc`, ERDDAP XML sync runs by default (`--sync-erddap-xml`) using the QC output tree when the profile uses duplicate output mode. Skip with `--no-sync-erddap-xml`.
-
-XML paths default from the ERDDAP sync module and can be overridden on the command line.
+NetCDF global attributes remain source metadata. The generator validates them
+together with configured global additions, but writes only deliberate
+additions/overrides/removals to the dataset-level `<addAttributes>`. Variable
+attributes come from NetCDF; QC variables receive `ioos_category=Quality` when
+needed, and the sole published time receives the XML-only `time_precision`.
+Requires `lxml` (see `requirements.txt`).
 
 #### `viz` — inspect saved QC results in Dash
 
@@ -233,10 +224,9 @@ Launch a local read-only dashboard over the QC NetCDF output tree:
 python main.py viz
 ```
 
-By default, `viz` reads `profile.output.directory` when the profile uses duplicate output mode, otherwise it reads `profile.data_root`. Override the tree or server address as needed:
+By default, `viz` reads `profile.output.directory` when the profile uses duplicate output mode, otherwise it reads `profile.data_root`. Override only the server address as needed:
 
 ```bash
-python main.py viz --data-root output/SFER_QC
 python main.py viz --host 0.0.0.0 --port 8051
 ```
 
@@ -265,12 +255,12 @@ from qc_runner import run_qc_for_all
 run_qc_for_all()  # Uses config/walton_smith/dataset_profile.json by default
 ```
 
-Sync ERDDAP XML programmatically (same as `main.py erddap-xml`):
+Generate ERDDAP XML programmatically (same as `main.py erddap-xml`):
 
 ```python
-from erddap_xml_sync import run_erddap_xml_sync_for_profile
+from xml_generator.generate import generate_erddap_xml_for_profile
 
-run_erddap_xml_sync_for_profile()  # reads profile; writes output/erddap/mod_CTD_datasets_qc.xml
+generate_erddap_xml_for_profile()  # reads profile; writes output/erddap/datasets.xml
 ```
 
 ### Individual Test Execution and Visualization
@@ -317,7 +307,7 @@ Individual tests return `QCTestResult` objects with:
 - **Location tolerance**: edit `config/walton_smith/location_test/location_config.json`
 - **Test-to-category mapping**: edit `TEST_CATEGORIES` in `qc_config.py`
 - **Climatology limits**: edit `config/walton_smith/climatology_test/station_climatology_config.json`. **Station deep vs shallow**: edit `config/walton_smith/climatology_test/station_depth_classification.json`. Programmatic runners can still pass `climatology_overrides`.
-- **ERDDAP XML sync paths**: pass flags to `main.py erddap-xml` / `run_erddap_xml_sync(...)`.
+- **Gap/syntax mode and ERDDAP generation**: edit `qc_test_modes` and `erddap` in the selected dataset profile. Selecting `run` for a placeholder currently fails preflight until a real implementation is added, preventing false evaluation.
 
 ### Station resolution logic
 
@@ -337,7 +327,7 @@ Individual tests return `QCTestResult` objects with:
 
 Pipeline-generated QC variables use CF/QARTOD-style names and attributes. Each mapped data variable receives an aggregate flag plus per-test flags, and its `ancillary_variables` attribute is overwritten to point to those pipeline-generated flags. Legacy source variables such as `{variable}_qc` are left in the file unchanged, but processed science variables no longer point to them via `ancillary_variables`.
 
-All new QC variables include `flag_values = 1, 2, 3, 4, 9`, `flag_meanings = "PASS NOT_EVALUATED SUSPECT FAIL MISSING"`, `units = "1"`, and a test-specific `standard_name`.
+All new QC variables include `flag_values = 1, 2, 3, 4, 9`, `flag_meanings = "PASS NOT_EVALUATED SUSPECT FAIL MISSING"`, `units = "1"`, a test-specific `standard_name`, and attributes naming the test module, target, applied JSON configuration, and configuration source. QC appends global `history`; the batch manifest records configuration hashes and runtime provenance.
 
 ### QC variable names
 
