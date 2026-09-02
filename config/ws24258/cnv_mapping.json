@@ -1,8 +1,66 @@
 {
   "inspection": {
     "cnv_file_count": 90,
-    "failed_files": [],
-    "inspected_file_count": 90
+    "failed_files": [
+      {
+        "reason": "ws24258_stn.053.cnv: nquan does not match column declarations",
+        "source": "cnv_data/WS24258/ws24258_stn.053.cnv"
+      },
+      {
+        "reason": "ws24258_stn.056.cnv: nquan does not match column declarations",
+        "source": "cnv_data/WS24258/ws24258_stn.056.cnv"
+      }
+    ],
+    "inspected_file_count": 88,
+    "sensor_parse_status": {
+      "parsed": 88
+    },
+    "sensor_tags": {
+      "AltimeterSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "ConductivitySensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 2
+      },
+      "FluoroSeapointSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "FluoroWetlabCDOM_Sensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "FluoroWetlabECO_AFL_FL_Sensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "OxygenSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "PAR_BiosphericalLicorChelseaSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "PressureSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "SPAR_Sensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      },
+      "TemperatureSensor": {
+        "file_count": 88,
+        "max_occurrences_per_file": 2
+      },
+      "WET_LabsCStar": {
+        "file_count": 88,
+        "max_occurrences_per_file": 1
+      }
+    }
   },
   "required_fields": {
     "latitude": {
@@ -18,116 +76,116 @@
       "target_name": "time"
     }
   },
-  "schema_version": 3,
+  "schema_version": 4,
   "science_variables": {
     "CStarAt0": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Optical Properties",
         "long_name": "Beam Attenuation, WET Labs C-Star",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water",
+        "units": "m-1"
       },
       "observed": {
         "descriptions": [
           "Beam Attenuation, WET Labs C-Star [1/m]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "1/m"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "WET_LabsCStar",
       "target_name": "beam_attenuation_wet_labs_c_star"
     },
     "CStarTr0": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Optical Properties",
         "long_name": "Beam Transmission, WET Labs C-Star",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "%"
       },
       "observed": {
         "descriptions": [
           "Beam Transmission, WET Labs C-Star [%]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "%"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "WET_LabsCStar",
       "target_name": "beam_transmission_wet_labs_c_star"
     },
     "altM": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Location",
         "long_name": "Altimeter",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "altimeter_range",
+        "units": "m"
       },
       "observed": {
         "descriptions": [
           "Altimeter [m]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "m"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "AltimeterSensor",
       "target_name": "altimeter"
     },
     "c0S/m": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Conductivity",
-        "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Electrical Conductivity",
+        "ncei_name": "CONDUCTIVITY",
+        "standard_name": "sea_water_electrical_conductivity",
+        "units": "S m-1"
       },
       "observed": {
         "descriptions": [
           "Conductivity [S/m]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "S/m"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "ConductivitySensor",
       "target_name": "conductivity"
     },
     "c1S/m": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Conductivity",
-        "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Electrical Conductivity",
+        "ncei_name": "CONDUCTIVITY",
+        "standard_name": "sea_water_electrical_conductivity",
+        "units": "S m-1"
       },
       "observed": {
         "descriptions": [
           "Conductivity, 2 [S/m]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "S/m"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "ConductivitySensor",
       "target_name": "conductivity"
     },
     "dz/dtM": {
@@ -137,149 +195,147 @@
         "long_name": "Descent Rate",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "m s-1"
       },
       "observed": {
         "descriptions": [
           "Descent Rate [m/s], WS = 2"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "m/s"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "descent_rate"
     },
     "flECO-AFL": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Fluorescence, WET Labs ECO-AFL/FL",
+        "ioos_category": "Ocean Color",
+        "long_name": "Mass Concentration of Chlorophyll-a in Sea Water",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water",
+        "units": "mg m-3"
       },
       "observed": {
         "descriptions": [
           "Fluorescence, WET Labs ECO-AFL/FL [mg/m^3]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "mg/m^3"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "FluoroWetlabECO_AFL_FL_Sensor",
       "target_name": "fluorescence_wet_labs_eco_afl_fl"
     },
     "flSP": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Ocean Color",
         "long_name": "Fluorescence, Seapoint",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null,
         "units": null
       },
       "observed": {
         "descriptions": [
           "Fluorescence, Seapoint"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": null,
+      "sensor_tag": "FluoroSeapointSensor",
       "target_name": "fluorescence_seapoint"
     },
     "flag": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Quality",
         "long_name": "flag",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null,
         "units": null
       },
       "observed": {
         "descriptions": [
           "flag"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "flag"
     },
     "oxsatML/L": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Dissolved O2",
         "long_name": "Oxygen Saturation, Weiss",
-        "ncei_name": null,
+        "ncei_name": "OXYGEN SATURATION",
         "standard_name": null,
-        "standard_name_url": null
+        "units": "ml/l"
       },
       "observed": {
         "descriptions": [
           "Oxygen Saturation, Weiss [ml/l]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "ml/l"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "OxygenSensor",
       "target_name": "oxygen_saturation_weiss"
     },
     "par": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Optical Properties",
         "long_name": "PAR/Irradiance, Biospherical/Licor",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "W m-2"
       },
       "observed": {
         "descriptions": [
           "PAR/Irradiance, Biospherical/Licor [Watts/m^2]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "Watts/m^2"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "PAR_BiosphericalLicorChelseaSensor",
       "target_name": "par_irradiance_biospherical_licor"
     },
     "prDM": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Pressure, Digiquartz",
-        "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "ioos_category": "Pressure",
+        "long_name": "Sea Water Pressure",
+        "ncei_name": "WATER PRESSURE",
+        "standard_name": "sea_water_pressure",
+        "units": "dbar"
       },
       "observed": {
         "descriptions": [
           "Pressure, Digiquartz [db]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "db"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "PressureSensor",
       "target_name": "pressure_digiquartz"
     },
     "pumps": {
@@ -289,261 +345,259 @@
         "long_name": "Pump Status",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null,
         "units": null
       },
       "observed": {
         "descriptions": [
           "Pump Status"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "pump_status"
     },
     "sal00": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Salinity, Practical",
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Practical Salinity",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "sea_water_practical_salinity",
+        "units": "1"
       },
       "observed": {
         "descriptions": [
           "Salinity, Practical [PSU]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "PSU"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "salinity_practical"
     },
     "sal11": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Salinity, Practical",
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Practical Salinity",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "sea_water_practical_salinity",
+        "units": "1"
       },
       "observed": {
         "descriptions": [
           "Salinity, Practical, 2 [PSU]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "PSU"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "salinity_practical"
     },
     "sbeox0ML/L": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Oxygen, SBE 43",
-        "ncei_name": null,
+        "ioos_category": "Dissolved O2",
+        "long_name": "Dissolved Oxygen, SBE 43",
+        "ncei_name": "DISSOLVED OXYGEN",
         "standard_name": null,
-        "standard_name_url": null
+        "units": "ml/l"
       },
       "observed": {
         "descriptions": [
-          "Oxygen, SBE 43 [ml/l], WS = 0.5",
           "Oxygen, SBE 43 [ml/l], WS = 2"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "ml/l"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "OxygenSensor",
       "target_name": "oxygen_sbe_43"
     },
     "sbeox0V": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Dissolved O2",
         "long_name": "Oxygen raw, SBE 43",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "V"
       },
       "observed": {
         "descriptions": [
           "Oxygen raw, SBE 43 [V]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "V"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "OxygenSensor",
       "target_name": "oxygen_raw_sbe_43"
     },
     "sigma-t00": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Density",
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Sigma-T",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "sea_water_sigma_t",
+        "units": "kg m-3"
       },
       "observed": {
         "descriptions": [
           "Density [sigma-t, kg/m^3 ]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "kg/m^3"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "density"
     },
     "sigma-t11": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Density",
+        "ioos_category": "Salinity",
+        "long_name": "Sea Water Sigma-T",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "sea_water_sigma_t",
+        "units": "kg m-3"
       },
       "observed": {
         "descriptions": [
           "Density, 2 [sigma-t, kg/m^3 ]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "kg/m^3"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "density"
     },
     "spar": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Optical Properties",
         "long_name": "SPAR, Biospherical/Licor",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "umol m-2 s-1"
       },
       "observed": {
         "descriptions": [
           "SPAR, Biospherical/Licor [umol photons/m^2/sec]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "umol photons/m^2/sec"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "SPAR_Sensor",
       "target_name": "spar_biospherical_licor"
     },
     "svCM": {
       "action": "map",
       "attributes": {
         "ioos_category": null,
-        "long_name": "Sound Velocity",
+        "long_name": "Speed of Sound in Sea Water",
         "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "standard_name": "speed_of_sound_in_sea_water",
+        "units": "m s-1"
       },
       "observed": {
         "descriptions": [
           "Sound Velocity [Chen-Millero, m/s]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "m/s"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "derived",
       "target_name": "sound_velocity"
     },
     "t090C": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Temperature",
-        "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "ioos_category": "Temperature",
+        "long_name": "Sea Water Temperature",
+        "ncei_name": "TEMPERATURE",
+        "standard_name": "sea_water_temperature",
+        "units": "degree_Celsius"
       },
       "observed": {
         "descriptions": [
           "Temperature [ITS-90, deg C]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "deg C"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "TemperatureSensor",
       "target_name": "temperature"
     },
     "t190C": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
-        "long_name": "Temperature",
-        "ncei_name": null,
-        "standard_name": null,
-        "standard_name_url": null
+        "ioos_category": "Temperature",
+        "long_name": "Sea Water Temperature",
+        "ncei_name": "TEMPERATURE",
+        "standard_name": "sea_water_temperature",
+        "units": "degree_Celsius"
       },
       "observed": {
         "descriptions": [
           "Temperature, 2 [ITS-90, deg C]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "deg C"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "TemperatureSensor",
       "target_name": "temperature"
     },
     "wetCDOM": {
       "action": "map",
       "attributes": {
-        "ioos_category": null,
+        "ioos_category": "Optical Properties",
         "long_name": "Fluorescence, WET Labs CDOM",
         "ncei_name": null,
         "standard_name": null,
-        "standard_name_url": null
+        "units": "mg m-3"
       },
       "observed": {
         "descriptions": [
           "Fluorescence, WET Labs CDOM [mg/m^3]"
         ],
-        "file_count": 90,
+        "file_count": 88,
         "max_occurrences_per_file": 1,
         "units": [
           "mg/m^3"
         ]
       },
-      "sensor_tag": null,
+      "sensor_tag": "FluoroWetlabCDOM_Sensor",
       "target_name": "fluorescence_wet_labs_cdom"
     }
   },

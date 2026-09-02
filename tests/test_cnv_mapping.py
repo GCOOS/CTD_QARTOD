@@ -47,6 +47,9 @@ def _cnv(
                 "# interval = seconds: 1",
                 "# start_time = Sep 18 2024 12:21:12 [System UTC, header]",
                 "# bad_flag = -9.990e-29",
+                '# <Sensors count="1" >',
+                '#   <sensor Channel="1"><TemperatureSensor><SerialNumber>T1</SerialNumber></TemperatureSensor></sensor>',
+                "# </Sensors>",
                 "*END*",
                 " ".join(str(index) for index in range(len(columns))),
             ]
@@ -71,7 +74,14 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
 
     mapping = inspect_cnv(root, output)
 
-    assert mapping["schema_version"] == 3
+    assert mapping["schema_version"] == 4
+    assert mapping["inspection"]["sensor_parse_status"] == {"parsed": 2}
+    assert mapping["inspection"]["sensor_tags"] == {
+        "TemperatureSensor": {
+            "file_count": 2,
+            "max_occurrences_per_file": 1,
+        }
+    }
     assert mapping["required_fields"] == {
         "time": {"source_name": "timeS", "target_name": "time"},
         "longitude": {"source_name": "longitude", "target_name": "longitude"},
@@ -94,8 +104,8 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
         "target_name": "temperature",
         "attributes": {
             "long_name": "Temperature",
+            "units": "deg C",
             "standard_name": None,
-            "standard_name_url": None,
             "ioos_category": None,
             "ncei_name": None,
         },
@@ -114,7 +124,8 @@ def test_inspect_cnv_accepts_one_file(tmp_path: Path):
     assert mapping["science_variables"]["t090C"]["observed"]["file_count"] == 1
     assert mapping["science_variables"]["flag"]["attributes"]["units"] is None
     assert loaded.science_variables["t090C"].attributes == {
-        "long_name": "Temperature"
+        "long_name": "Temperature",
+        "units": "deg C",
     }
     assert loaded.science_variables["t090C"].sensor_tag is None
 
@@ -162,13 +173,38 @@ def test_mapping_ignores_processing_suffix_differences(tmp_path: Path):
         "target_name": "temperature",
         "attributes": {
             "long_name": "Temperature",
+            "units": "deg C",
             "standard_name": None,
-            "standard_name_url": None,
             "ioos_category": None,
             "ncei_name": None,
         },
         "sensor_tag": None,
     }
+
+
+def test_inspection_reports_header_only_cnv_as_failed(tmp_path: Path):
+    root = tmp_path / "input"
+    _cnv(root / "WS24258_Stn.001.cnv")
+    incomplete = _cnv(root / "WS24258_Stn.002.cnv")
+    text = incomplete.read_text(encoding="utf-8")
+    text = "\n".join(
+        line
+        for line in text.splitlines()
+        if not line.startswith(("# nquan = ", "# nvalues = "))
+    )
+    incomplete.write_text(text + "\n", encoding="utf-8")
+
+    data = inspect_cnv(root, tmp_path / "mapping.json")
+
+    assert data["inspection"]["inspected_file_count"] == 1
+    assert data["inspection"]["failed_files"] == [
+        {
+            "source": str(incomplete),
+            "reason": (
+                "WS24258_Stn.002.cnv: nquan does not match column declarations"
+            ),
+        }
+    ]
 
 
 def test_mapping_loads_mapped_and_ignored_sources(tmp_path: Path):

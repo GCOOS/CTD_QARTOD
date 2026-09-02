@@ -10,7 +10,9 @@ import pytest
 import xarray as xr
 
 from cnv_converter import convert_cnv
-from cnv_mapping import inspect_cnv
+from cnv_mapping import DERIVED_SENSOR_TAG, inspect_cnv
+from cnv_sensor_config import generate_sensor_configs
+from dataset_profile import DatasetProfile, PathsConfig
 
 
 def _cnv(
@@ -66,6 +68,7 @@ def _ready_mapping(source: Path, path: Path) -> Path:
             "target_name": "temperature",
             "attributes": {
                 "long_name": "Sea Water Temperature",
+                "units": "degree_Celsius",
                 "standard_name": "sea_water_temperature",
             },
             "sensor_tag": "TemperatureSensor",
@@ -97,11 +100,20 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
         np.testing.assert_array_equal(dataset["temperature"].values[0], [10, 12])
         np.testing.assert_array_equal(dataset["temperature_2"].values[0], [11, 13])
         assert dataset["temperature"].attrs["source_name"] == "t090C"
+        assert dataset["temperature"].attrs["units"] == "degree_Celsius"
+        assert dataset["temperature"].attrs["source_units"] == "deg C"
+        assert dataset["temperature"].attrs["standard_name_url"] == (
+            "https://cfconventions.org/Data/cf-standard-names/94/build/"
+            "cf-standard-name-table.html#sea_water_temperature"
+        )
         assert dataset["temperature_2"].attrs["source_occurrence"] == 2
         assert dataset["temperature"].attrs["instrument"] == "instrument1"
         assert dataset["temperature_2"].attrs["instrument"] == "instrument2"
         assert set(dataset["station"].values.ravel()) == {"54b"}
         assert set(dataset["cruiseID"].values.ravel()) == {"WS24258"}
+        assert dataset.attrs["standard_name_vocabulary"] == (
+            "CF Standard Name Table v94"
+        )
 
 
 def test_recursive_conversion_numbers_only_identical_station_ids(tmp_path: Path):
@@ -134,3 +146,59 @@ def test_conversion_rejects_mapping_that_still_needs_review(tmp_path: Path):
 
     with pytest.raises(ValueError, match="still requires review"):
         convert_cnv(source, tmp_path / "output", mapping)
+
+
+def test_sensor_config_is_derived_from_converted_variables(tmp_path: Path):
+    source = _cnv(tmp_path / "input" / "WS24258_Stn.054b.cnv")
+    mapping = _ready_mapping(source, tmp_path / "mapping.json")
+    data = json.loads(mapping.read_text(encoding="utf-8"))
+    data["science_variables"]["flag"].update(
+        {
+            "action": "map",
+            "target_name": "flag",
+            "sensor_tag": DERIVED_SENSOR_TAG,
+        }
+    )
+    mapping.write_text(json.dumps(data), encoding="utf-8")
+    output = tmp_path / "output"
+    assert convert_cnv(source, output, mapping)["counts"]["failed"] == 0
+
+    variable_mapping = tmp_path / "qc_variable_mapping.json"
+    variable_mapping.write_text(
+        json.dumps(
+            {
+                "temperature": ["temperature", "temperature_2"],
+                "pressure": ["flag"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    sensor_specs = tmp_path / "sensor_specs.json"
+    sensor_specs.write_text('{"sensors": {}}', encoding="utf-8")
+    variable_sensor_map = tmp_path / "variable_sensor_map.json"
+    variable_sensor_map.write_text("{}", encoding="utf-8")
+    profile = DatasetProfile(
+        data_root=output,
+        paths=PathsConfig(
+            cnv_mapping=mapping,
+            variable_mapping=variable_mapping,
+            sensor_specs=sensor_specs,
+            variable_sensor_map=variable_sensor_map,
+        ),
+    )
+
+    report = generate_sensor_configs(profile)
+
+    specs = json.loads(sensor_specs.read_text(encoding="utf-8"))["sensors"]
+    links = json.loads(variable_sensor_map.read_text(encoding="utf-8"))
+    assert specs["TemperatureSensor"]["ranges"] == {
+        "degree_Celsius": {"min": None, "max": None}
+    }
+    assert specs["derived:flag"]["requires_instrument"] is False
+    assert specs["derived:flag"]["ranges"] == {}
+    assert links == {
+        "flag": "derived:flag",
+        "temperature": "TemperatureSensor",
+        "temperature_2": "TemperatureSensor",
+    }
+    assert report["variables_without_units"] == ["flag"]

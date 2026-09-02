@@ -32,6 +32,15 @@ def test_convert_cnv_cli_has_no_identity_manifest_stage():
     assert not hasattr(args, "manifest")
 
 
+def test_generate_sensor_config_uses_dataset_profile():
+    args = _parse_args(
+        ["generate-sensor-config", "--profile", "config/example/profile.json"]
+    )
+
+    assert args.profile == "config/example/profile.json"
+    assert args.overwrite is False
+
+
 def test_qc_help_hides_removed_config_override_flags(capsys):
     with pytest.raises(SystemExit) as exc:
         _parse_args(["qc", "--help"])

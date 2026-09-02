@@ -83,6 +83,28 @@ def test_validation_rejects_unknown_sensor_reference(tmp_path: Path):
         validate_qc_profile(profile)
 
 
+def test_validation_accepts_multiple_sensor_references(tmp_path: Path):
+    profile = _replace_json(
+        load_dataset_profile(DEFAULT_PROFILE_PATH),
+        tmp_path,
+        "sensor_specs",
+        {
+            "sensors": {
+                "sensor_a": {"ranges": {}},
+                "sensor_b": {"ranges": {}},
+            }
+        },
+    )
+    profile = _replace_json(
+        profile,
+        tmp_path,
+        "variable_sensor_map",
+        {"sea_water_temperature": ["sensor_a", "sensor_b"]},
+    )
+
+    validate_qc_profile(profile)
+
+
 @pytest.mark.parametrize(
     ("key", "payload", "message"),
     [

@@ -196,11 +196,26 @@ def _validate_sensor_specs(root: Mapping[str, Any]) -> set[str]:
 def _validate_variable_sensor_map(
     root: Mapping[str, Any], variables: set[str], sensors: set[str]
 ) -> None:
-    for variable, sensor in root.items():
+    for variable, configured_sensors in root.items():
         if variable not in variables:
             raise ValueError(f"variable_sensor_map references unmapped variable {variable!r}")
-        if not isinstance(sensor, str) or sensor not in sensors:
-            raise ValueError(f"variable_sensor_map references unknown sensor {sensor!r}")
+        sensor_names = (
+            configured_sensors
+            if isinstance(configured_sensors, list)
+            else [configured_sensors]
+        )
+        if (
+            not sensor_names
+            or not all(isinstance(sensor, str) and sensor for sensor in sensor_names)
+        ):
+            raise ValueError(
+                f"variable_sensor_map.{variable} must name one or more sensors"
+            )
+        unknown = [sensor for sensor in sensor_names if sensor not in sensors]
+        if unknown:
+            raise ValueError(
+                f"variable_sensor_map references unknown sensor {unknown[0]!r}"
+            )
 
 
 def _validate_spike_thresholds(root: Mapping[str, Any], variables: set[str]) -> None:

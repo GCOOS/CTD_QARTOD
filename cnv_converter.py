@@ -11,17 +11,21 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import tempfile
-import xml.etree.ElementTree as ET
 
 import numpy as np
 import xarray as xr
 
 from cnv_mapping import (
+    CF_STANDARD_NAME_VOCABULARY,
     CnvHeaderColumn,
     CnvMapping,
+    CnvSensor,
+    DERIVED_SENSOR_TAG,
     SourceCandidate,
+    cf_standard_name_url,
     discover_cnv_files,
     load_cnv_mapping,
+    parse_cnv_sensors,
     read_cnv_header,
 )
 
@@ -38,16 +42,6 @@ _PROCESSING_STAGES = {
     "loopedit",
     "derive",
 }
-
-
-@dataclass(frozen=True)
-class CnvSensor:
-    """One embedded Sea-Bird sensor record."""
-
-    channel: int
-    sensor_type: str
-    serial_number: str | None
-    calibration_date: str | None
 
 
 @dataclass(frozen=True)
@@ -110,53 +104,6 @@ def filename_identity(path: Path | str) -> tuple[str, str]:
 
 def _embedded_stem(value: str) -> str:
     return PurePosixPath(value.replace("\\", "/")).stem
-
-
-def _parse_sensors(
-    header_lines: Sequence[str],
-) -> tuple[tuple[CnvSensor, ...], str, tuple[str, ...]]:
-    xml_lines: list[str] = []
-    in_sensors = False
-    for line in header_lines:
-        if line.startswith("# <Sensors"):
-            in_sensors = True
-        if in_sensors:
-            xml_lines.append(line[2:] if line.startswith("# ") else line[1:])
-        if line.startswith("# </Sensors>"):
-            break
-    if not xml_lines:
-        return (), "absent", ()
-    if not xml_lines[-1].strip().endswith("</Sensors>"):
-        return (), "malformed", ("embedded Sensors XML is malformed",)
-    try:
-        root = ET.fromstring("\n".join(xml_lines))
-    except ET.ParseError:
-        return (), "malformed", ("embedded Sensors XML is malformed",)
-
-    sensors: list[CnvSensor] = []
-    warnings: list[str] = []
-    for fallback_channel, wrapper in enumerate(root.findall("sensor"), start=1):
-        element = next(iter(wrapper), None)
-        if element is None or element.tag == "NotInUse":
-            continue
-        try:
-            channel = int(wrapper.attrib.get("Channel", fallback_channel))
-        except ValueError:
-            channel = fallback_channel
-            warnings.append(f"invalid sensor channel for {element.tag}")
-        sensors.append(
-            CnvSensor(
-                channel=channel,
-                sensor_type=element.tag,
-                serial_number=(element.findtext("SerialNumber") or "").strip()
-                or None,
-                calibration_date=(
-                    element.findtext("CalibrationDate") or ""
-                ).strip()
-                or None,
-            )
-        )
-    return tuple(sensors), "parsed", tuple(warnings)
 
 
 def _header_fields(header_lines: Sequence[str]) -> tuple[dict[str, str], tuple[str, ...]]:
@@ -304,7 +251,7 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
     ):
         raise _format_error(source, "latitude or longitude samples are invalid")
 
-    sensors, sensor_status, sensor_warnings = _parse_sensors(header_lines)
+    sensors, sensor_status, sensor_warnings = parse_cnv_sensors(header_lines)
     warnings = list(sensor_warnings)
     embedded_filename = fields.get("FileName")
     if (
@@ -382,13 +329,19 @@ def _instrument_reference(
     specification = mapping.science_variables[candidate.name]
     if specification.sensor_tag is None:
         return None
+    if specification.sensor_tag == DERIVED_SENSOR_TAG:
+        return None
     matching = [
         index
         for index, sensor in enumerate(cast.sensors, start=1)
         if sensor.sensor_type == specification.sensor_tag
     ]
     if not matching:
-        return None
+        raise _format_error(
+            cast.source_path,
+            f"mapped sensor_tag {specification.sensor_tag!r} for "
+            f"{candidate.name!r} is absent from the embedded Sensors XML",
+        )
     target_number = 0
     for current_destination, current_candidate in cast.destination_sources.items():
         current = mapping.science_variables[current_candidate.name]
@@ -549,7 +502,12 @@ def _build_dataset(
             "coverage_content_type": "physicalMeasurement",
             **_range_attributes(values),
         }
-        if source_column.units is not None:
+        mapped_units = specification.attributes.get("units")
+        if mapped_units is not None:
+            attributes["units"] = mapped_units
+            if source_column.units is not None and mapped_units != source_column.units:
+                attributes["source_units"] = source_column.units
+        elif source_column.units is not None:
             attributes["units"] = source_column.units
         instrument = _instrument_reference(
             cast, mapping, destination, candidate
@@ -559,6 +517,12 @@ def _build_dataset(
         data[destination] = (("profile", "z"), values[None, :], attributes)
 
     dataset = xr.Dataset(data_vars=data)
+    for variable in dataset.variables.values():
+        standard_name = variable.attrs.get("standard_name")
+        if standard_name is not None:
+            variable.attrs["standard_name_url"] = cf_standard_name_url(
+                str(standard_name)
+            )
     profile_variables = [
         "profile",
         "depth",
@@ -603,6 +567,7 @@ def _build_dataset(
         "geospatial_vertical_units": depth_units,
         "geospatial_vertical_positive": "down",
         "geospatial_bounds_crs": "EPSG:4326",
+        "standard_name_vocabulary": CF_STANDARD_NAME_VOCABULARY,
     }
     comment = _processing_comment(cast.processing)
     if comment is not None:

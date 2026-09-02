@@ -4,6 +4,7 @@ Main entry point for CNV conversion, QC, visualization, and ERDDAP XML generatio
 Usage:
     python main.py inspect-cnv INPUT --output cnv_mapping.json
     python main.py convert-cnv INPUT --mapping cnv_mapping.json --output DIR
+    python main.py generate-sensor-config --profile PROFILE
     python main.py qc --profile PROFILE
     python main.py erddap-xml --profile PROFILE
     python main.py viz --profile PROFILE
@@ -136,6 +137,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 Examples:
     python main.py inspect-cnv cnv_data/WS24258 --output config/walton_smith/cnv_mapping.json
     python main.py convert-cnv cnv_data/WS24258 --mapping config/walton_smith/cnv_mapping.json --output output/SFER_CNV
+    python main.py generate-sensor-config --profile config/walton_smith/dataset_profile.json
     python main.py qc
     python main.py qc --profile config/walton_smith/dataset_profile.json
     python main.py erddap-xml --profile config/hogarth_cnv/dataset_profile.json
@@ -162,6 +164,29 @@ Examples:
     )
     inspect_parser.add_argument("--output", type=Path, required=True)
     inspect_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose (debug) logging",
+    )
+
+    sensor_parser = sub.add_parser(
+        "generate-sensor-config",
+        help="Generate null-limit sensor specs and variable links from converted NetCDF",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sensor_parser.add_argument(
+        "--profile",
+        type=str,
+        required=True,
+        help="Path to the dataset profile JSON",
+    )
+    sensor_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace existing reviewed sensor configuration",
+    )
+    sensor_parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -258,6 +283,31 @@ def _run_inspect_cnv(args: argparse.Namespace) -> None:
     logger.info("Comment-derived mapping: %s", args.output)
 
 
+def _run_generate_sensor_config(args: argparse.Namespace) -> None:
+    from cnv_sensor_config import generate_sensor_configs
+
+    setup_logging(verbose=args.verbose)
+    profile = load_dataset_profile(args.profile)
+    try:
+        report = generate_sensor_configs(profile, overwrite=args.overwrite)
+    except Exception as exc:
+        logger.exception("Sensor configuration generation failed: %s", exc)
+        raise SystemExit(1)
+    logger.info(
+        "Sensor configuration complete: files=%s variables=%s sensors=%s",
+        report["netcdf_file_count"],
+        report["qc_variable_count"],
+        report["sensor_count"],
+    )
+    logger.info("Sensor specs:        %s", report["sensor_specs"])
+    logger.info("Variable sensor map: %s", report["variable_sensor_map"])
+    if report["variables_without_units"]:
+        logger.warning(
+            "Variables without units have empty range tables: %s",
+            ", ".join(report["variables_without_units"]),
+        )
+
+
 def _run_qc(args: argparse.Namespace) -> None:
     setup_logging(verbose=args.verbose, log_file=args.log_file)
 
@@ -340,6 +390,8 @@ def main(argv: list[str] | None = None) -> None:
         _run_convert_cnv(args)
     elif args.command == "inspect-cnv":
         _run_inspect_cnv(args)
+    elif args.command == "generate-sensor-config":
+        _run_generate_sensor_config(args)
     elif args.command == "qc":
         _run_qc(args)
     elif args.command == "erddap-xml":

@@ -1,3 +1,152 @@
 {
-  "sensors": {}
+  "sensors": {
+    "ConductivitySensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "ConductivitySensor"
+        ]
+      },
+      "ranges": {
+        "S m-1": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "FluoroSeapointSensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "FluoroSeapointSensor"
+        ]
+      },
+      "ranges": {}
+    },
+    "FluoroWetlabCDOM_Sensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "FluoroWetlabCDOM_Sensor"
+        ]
+      },
+      "ranges": {
+        "mg m-3": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "FluoroWetlabECO_AFL_FL_Sensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "FluoroWetlabECO_AFL_FL_Sensor"
+        ]
+      },
+      "ranges": {
+        "mg m-3": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "OxygenSensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "OxygenSensor"
+        ]
+      },
+      "ranges": {
+        "ml/l": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "PAR_BiosphericalLicorChelseaSensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "PAR_BiosphericalLicorChelseaSensor"
+        ]
+      },
+      "ranges": {
+        "W m-2": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "PressureSensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "PressureSensor"
+        ]
+      },
+      "ranges": {
+        "dbar": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "SPAR_Sensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "SPAR_Sensor"
+        ]
+      },
+      "ranges": {
+        "umol m-2 s-1": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "TemperatureSensor": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "TemperatureSensor"
+        ]
+      },
+      "ranges": {
+        "degree_Celsius": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "WET_LabsCStar": {
+      "description": "Detected from converted CNV instrument metadata",
+      "identifiers": {
+        "long_names": [
+          "WET_LabsCStar"
+        ]
+      },
+      "ranges": {
+        "m-1": {
+          "max": null,
+          "min": null
+        }
+      }
+    },
+    "derived:salinity_practical": {
+      "description": "Derived variable with no dedicated instrument",
+      "identifiers": {
+        "long_names": []
+      },
+      "ranges": {
+        "1": {
+          "max": null,
+          "min": null
+        }
+      },
+      "requires_instrument": false
+    }
+  }
 }

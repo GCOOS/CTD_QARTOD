@@ -60,8 +60,12 @@ def test_template_loaders_accept_templates():
     assert profile.output.mode == "duplicate"
     mapping = load_mapping(TEMPLATE_ROOT / "qc_variable_mapping.json")
     assert "temperature" in mapping
-    assert load_sensor_specs(TEMPLATE_ROOT / "gross_range_test" / "sensor_specs.json")
-    assert load_variable_sensor_map(TEMPLATE_ROOT / "gross_range_test" / "variable_sensor_map.json")
+    assert load_sensor_specs(
+        TEMPLATE_ROOT / "gross_range_test" / "sensor_specs.json"
+    ) == {}
+    assert load_variable_sensor_map(
+        TEMPLATE_ROOT / "gross_range_test" / "variable_sensor_map.json"
+    ) == {}
     clim = load_station_climatology_config(
         TEMPLATE_ROOT / "climatology_test" / "station_climatology_config.json"
     )

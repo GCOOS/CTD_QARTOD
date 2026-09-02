@@ -1,5 +1,1 @@
-{
-  "sea_water_temperature": "example_temperature_sensor",
-  "sea_water_electrical_conductivity": "example_conductivity_sensor",
-  "sea_water_salinity": "example_derived_salinity"
-}
+{}

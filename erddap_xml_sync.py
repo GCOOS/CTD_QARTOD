@@ -920,27 +920,3 @@ def run_erddap_xml_sync(
         preserve_erddap_ui=preserve_erddap_ui,
     )
     return resolved_output
-
-
-def run_erddap_xml_sync_for_profile(
-    profile: DatasetProfile | None = None,
-    *,
-    verbose: bool = False,
-) -> Path:
-    """Sync ERDDAP XML using only the selected dataset profile."""
-    prof = profile or default_profile()
-    config = prof.erddap
-    return run_erddap_xml_sync(
-        input_xml=config.input_xml,
-        output_xml=config.output_xml,
-        data_root=resolve_erddap_data_root(prof),
-        profile=prof,
-        filedir_prefix=config.filedir_prefix,
-        dataset_template_xml=config.dataset_template_xml,
-        dataset_id_prefix=config.dataset_id_prefix,
-        create_missing_datasets=config.create_missing_datasets,
-        remove_orphan_datasets=config.remove_orphan_datasets,
-        in_place=False,
-        preserve_erddap_ui=config.preserve_erddap_ui,
-        verbose=verbose,
-    )

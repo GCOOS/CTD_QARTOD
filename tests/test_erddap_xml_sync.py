@@ -4,8 +4,7 @@ import numpy as np
 import xarray as xr
 from lxml import etree
 
-from dataset_profile import DatasetProfile, ErddapConfig, OutputConfig
-import erddap_xml_sync
+from dataset_profile import DatasetProfile
 from erddap_xml_sync import sync_xml
 
 
@@ -315,7 +314,6 @@ def test_sync_xml_can_skip_missing_dataset_creation(tmp_path):
     root = etree.parse(str(output_xml)).getroot()
     assert [dataset.get("datasetID") for dataset in root.findall("dataset")] == ["cast001"]
 
-
 def test_sync_xml_removes_orphan_datasets_by_default(tmp_path):
     data_root = tmp_path / "SFER_QC"
     _write_basic_nc(data_root / "CRUISE_A" / "cast001.nc")
@@ -347,44 +345,3 @@ def test_sync_xml_removes_orphan_datasets_by_default(tmp_path):
 
     root = etree.parse(str(output_xml)).getroot()
     assert [dataset.get("datasetID") for dataset in root.findall("dataset")] == ["cast001"]
-
-
-def test_profile_sync_forwards_all_profile_policy(tmp_path, monkeypatch):
-    profile_root = tmp_path / "profile_output"
-    profile_root.mkdir()
-    input_xml = tmp_path / "datasets.xml"
-    output_xml = tmp_path / "out.xml"
-    template_xml = tmp_path / "template.xml"
-    input_xml.write_text("<erddapDatasets />", encoding="utf-8")
-    captured = {}
-
-    def fake_run_erddap_xml_sync(**kwargs):
-        captured.update(kwargs)
-        return kwargs["output_xml"]
-
-    monkeypatch.setattr(erddap_xml_sync, "run_erddap_xml_sync", fake_run_erddap_xml_sync)
-
-    profile = DatasetProfile(
-        output=OutputConfig(mode="duplicate", directory=profile_root),
-        erddap=ErddapConfig(
-            input_xml=input_xml,
-            output_xml=output_xml,
-            filedir_prefix="/data/erddap/profile",
-            dataset_template_xml=template_xml,
-            dataset_id_prefix="profile_",
-            create_missing_datasets=False,
-            remove_orphan_datasets=False,
-            preserve_erddap_ui=False,
-        ),
-    )
-    erddap_xml_sync.run_erddap_xml_sync_for_profile(profile)
-
-    assert captured["data_root"] == profile_root
-    assert captured["input_xml"] == input_xml
-    assert captured["output_xml"] == output_xml
-    assert captured["filedir_prefix"] == "/data/erddap/profile"
-    assert captured["dataset_template_xml"] == template_xml
-    assert captured["dataset_id_prefix"] == "profile_"
-    assert captured["create_missing_datasets"] is False
-    assert captured["remove_orphan_datasets"] is False
-    assert captured["preserve_erddap_ui"] is False

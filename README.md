@@ -4,7 +4,8 @@
 
 - `cnv_mapping.py`: Recursively inventories CNV headers and derives source-keyed mappings from stable comments and units.
 - `cnv_converter.py`: Derives cruise/station identity from actual filenames, writes QC-compatible NetCDF profiles atomically, and emits `conversion_report.json`.
-- `main.py`: CLI entry point with subcommands `inspect-cnv`, `convert-cnv`, `qc`, `erddap-xml`, and `viz`.
+- `cnv_sensor_config.py`: Builds null-limit `sensor_specs.json` and `variable_sensor_map.json` drafts from converted NetCDF instrument links and units.
+- `main.py`: CLI entry point with subcommands `inspect-cnv`, `convert-cnv`, `generate-sensor-config`, `qc`, `erddap-xml`, and `viz`.
 - `xml_generator/`: Builds a complete `EDDTableFromNcCFFiles` `datasets.xml` from NetCDF metadata and the selected dataset profile. It does not read or modify an existing XML/template.
 - `qc_config.py`: Centralized configuration including:
   - `QC_FLAGS`: QARTOD quality flag definitions
@@ -111,12 +112,13 @@ All tests are configured via `TEST_CATEGORIES` in `qc_config.py`. Each test maps
 
 ### Running via CLI
 
-The top-level command requires a **subcommand**: `inspect-cnv`, `convert-cnv`, `qc`, `erddap-xml`, or `viz`.
+The top-level command requires a **subcommand**: `inspect-cnv`, `convert-cnv`, `generate-sensor-config`, `qc`, `erddap-xml`, or `viz`.
 
 ```bash
 python main.py --help
 python main.py inspect-cnv --help
 python main.py convert-cnv --help
+python main.py generate-sensor-config --help
 python main.py qc --help
 python main.py erddap-xml --help
 ```
@@ -132,13 +134,30 @@ python main.py convert-cnv \
   /path/to/cnv/input \
   --mapping config/YOUR_DATASET/cnv_mapping.json \
   --output output/SFER_CNV
+
+# After qc_variable_mapping.json selects the output variables to test:
+python main.py generate-sensor-config \
+  --profile config/YOUR_DATASET/dataset_profile.json
+
+# Review the generated min/max limits and remaining test configs, then run QC:
+python main.py qc --profile config/YOUR_DATASET/dataset_profile.json
 ```
 
-Both commands accept one CNV file, one cruise folder, or a root containing
+Inspection and conversion accept one CNV file, one cruise folder, or a root containing
 cruise folders. Inspection reads headers only and auto-maps comments that have
-one stable meaning and unit; ambiguous entries remain `review`. Conversion requires exact `timeS`, `longitude`, and `latitude` columns,
-uses the mapped vertical field, preserves source values/units, and writes all
+one stable meaning and unit; ambiguous entries remain `review`. It also lists
+the exact embedded XML sensor tags and places every stable source unit directly
+in `attributes.units`. Conversion requires exact `timeS`, `longitude`, and `latitude` columns,
+uses the mapped vertical field, preserves source values, and writes all
 four structural variables as `(profile, z)` arrays.
+
+Humans may normalize only an equivalent unit spelling in `attributes.units`
+(for example `deg C` to `degree_Celsius`); conversion never scales data and
+records the original spelling as `source_units` when it changes. Fill a valid
+CF `standard_name` when one exists; `standard_name_url` is generated from the
+pinned CF Standard Name Table instead of being typed independently. Use an
+exact inspected XML tag for `sensor_tag`, or the reserved value `derived` for a
+calculated variable with no instrument.
 
 Identity comes from the actual basename `<cruiseID>_Stn.<station>.cnv`, never
 the embedded `FileName`. Numeric leading zeroes are removed, so station `054b`
@@ -162,7 +181,10 @@ python main.py erddap-xml --profile config/hogarth_cnv/dataset_profile.json
 
 `cnv_mapping.json` maps CNV source names to the QC-facing NetCDF contract;
 `qc_variable_mapping.json` independently selects which resulting NetCDF
-variables enter each QC category.
+variables enter each QC category. `generate-sensor-config` then reads those
+selected converted variables, follows their NetCDF `instrument` links, and
+writes all detected sensor/unit combinations with `min: null` and `max: null`.
+Those scientific limits remain mandatory human decisions.
 See the step-by-step
 [`docs/cnv-conversion-process.md`](docs/cnv-conversion-process.md) guide for how
 each configuration and CNV section is processed, how NetCDF is constructed,

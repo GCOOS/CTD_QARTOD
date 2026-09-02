@@ -1,1 +1,17 @@
-{}
+{
+  "beam_attenuation_wet_labs_c_star": "WET_LabsCStar",
+  "conductivity": "ConductivitySensor",
+  "conductivity_2": "ConductivitySensor",
+  "fluorescence_seapoint": "FluoroSeapointSensor",
+  "fluorescence_wet_labs_cdom": "FluoroWetlabCDOM_Sensor",
+  "fluorescence_wet_labs_eco_afl_fl": "FluoroWetlabECO_AFL_FL_Sensor",
+  "oxygen_saturation_weiss": "OxygenSensor",
+  "oxygen_sbe_43": "OxygenSensor",
+  "par_irradiance_biospherical_licor": "PAR_BiosphericalLicorChelseaSensor",
+  "pressure_digiquartz": "PressureSensor",
+  "salinity_practical": "derived:salinity_practical",
+  "salinity_practical_2": "derived:salinity_practical",
+  "spar_biospherical_licor": "SPAR_Sensor",
+  "temperature": "TemperatureSensor",
+  "temperature_2": "TemperatureSensor"
+}
