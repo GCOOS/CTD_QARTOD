@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -40,6 +41,36 @@ def _resolve_path(value: object, base_dir: Path = REPO_ROOT) -> Path | None:
     if not path.is_absolute():
         path = base_dir / path
     return path
+
+
+def _load_netcdf_global_attributes(data: object) -> dict[str, object]:
+    if data is None:
+        return {}
+    if not isinstance(data, Mapping):
+        raise ValueError(
+            "dataset profile netcdf_global_attributes must be a JSON object"
+        )
+    attributes: dict[str, object] = {}
+    for name, value in data.items():
+        if not isinstance(name, str) or not name.strip() or name != name.strip():
+            raise ValueError(
+                "netcdf_global_attributes keys must be non-empty trimmed strings"
+            )
+        if value is None:
+            attributes[name] = None
+            continue
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (str, int, float))
+            or (isinstance(value, str) and not value.strip())
+            or (isinstance(value, float) and not math.isfinite(value))
+        ):
+            raise ValueError(
+                f"netcdf_global_attributes.{name} must be a non-empty string, "
+                "a finite number, or null"
+            )
+        attributes[name] = value
+    return attributes
 
 
 @dataclass(frozen=True)
@@ -160,6 +191,7 @@ class DatasetProfile:
     """Dataset-level configuration for file layout, metadata names, and output."""
 
     data_root: Path = REPO_ROOT / "datasets" / "SFER_CTD_SOAK_REMOVED"
+    netcdf_global_attributes: Mapping[str, object] = field(default_factory=dict)
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
@@ -188,6 +220,9 @@ class DatasetProfile:
         data_root = _resolve_path(data.get("data_root"), base_dir) or defaults.data_root
         return cls(
             data_root=data_root,
+            netcdf_global_attributes=_load_netcdf_global_attributes(
+                data.get("netcdf_global_attributes")
+            ),
             metadata=MetadataConfig.from_mapping(data.get("metadata") if isinstance(data.get("metadata"), Mapping) else None),
             output=OutputConfig.from_mapping(data.get("output") if isinstance(data.get("output"), Mapping) else None, base_dir),
             paths=PathsConfig.from_mapping(data.get("paths") if isinstance(data.get("paths"), Mapping) else None, base_dir),

@@ -3,7 +3,7 @@ Main entry point for CNV conversion, QC, visualization, and ERDDAP XML generatio
 
 Usage:
     python main.py inspect-cnv INPUT --output cnv_mapping.json
-    python main.py convert-cnv INPUT --mapping cnv_mapping.json --output DIR
+    python main.py convert-cnv INPUT --profile PROFILE
     python main.py generate-sensor-config --profile PROFILE
     python main.py qc --profile PROFILE
     python main.py erddap-xml --profile PROFILE
@@ -20,6 +20,7 @@ from pathlib import Path
 from dataset_profile import (
     DEFAULT_PROFILE_PATH,
     load_dataset_profile,
+    resolve_config_path,
 )
 from qc_runner import run_qc_for_all
 from xml_generator.generate import generate_erddap_xml_for_profile
@@ -98,8 +99,12 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
         type=Path,
         help="One CNV file, one cruise folder, or a root containing cruise folders",
     )
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--mapping", type=Path, required=True)
+    parser.add_argument(
+        "--profile",
+        type=str,
+        required=True,
+        help="Dataset profile containing the mapping, output root, and global metadata",
+    )
     parser.add_argument("--report", type=Path, default=None)
     parser.add_argument(
         "--overwrite",
@@ -136,7 +141,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog="""
 Examples:
     python main.py inspect-cnv cnv_data/WS24258 --output config/walton_smith/cnv_mapping.json
-    python main.py convert-cnv cnv_data/WS24258 --mapping config/walton_smith/cnv_mapping.json --output output/SFER_CNV
+    python main.py convert-cnv cnv_data/WS24258 --profile config/ws24258/dataset_profile.json
     python main.py generate-sensor-config --profile config/walton_smith/dataset_profile.json
     python main.py qc
     python main.py qc --profile config/walton_smith/dataset_profile.json
@@ -224,20 +229,24 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
     if not args.input.exists():
         logger.error("CNV input does not exist: %s", args.input)
         raise SystemExit(1)
-    if not args.mapping.is_file():
-        logger.error("CNV mapping does not exist: %s", args.mapping)
+    profile = load_dataset_profile(args.profile)
+    mapping_path = resolve_config_path("cnv_mapping", profile)
+    if not mapping_path.is_file():
+        logger.error("CNV mapping does not exist: %s", mapping_path)
         raise SystemExit(1)
 
     logger.info("Converting Sea-Bird CNV casts...")
+    logger.info("  Dataset profile:   %s", Path(args.profile).absolute())
     logger.info("  Input:             %s", args.input.absolute())
-    logger.info("  Output directory:  %s", args.output.absolute())
+    logger.info("  Output directory:  %s", profile.data_root.absolute())
     try:
         report = convert_cnv(
             args.input,
-            args.output,
-            args.mapping,
+            profile.data_root,
+            mapping_path,
             args.report,
             args.overwrite,
+            netcdf_global_attributes=profile.netcdf_global_attributes,
         )
     except KeyboardInterrupt:
         logger.warning("CNV conversion interrupted by user.")
@@ -255,7 +264,7 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
     )
     logger.info(
         "Conversion report: %s",
-        args.report or args.output / "conversion_report.json",
+        args.report or profile.data_root / "conversion_report.json",
     )
     if counts["failed"]:
         raise SystemExit(1)

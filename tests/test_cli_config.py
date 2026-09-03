@@ -14,21 +14,20 @@ def test_inspect_cnv_cli_uses_one_input_and_one_mapping_output():
     assert args.output.name == "cnv_mapping.json"
 
 
-def test_convert_cnv_cli_has_no_identity_manifest_stage():
+def test_convert_cnv_cli_uses_dataset_profile():
     args = _parse_args(
         [
             "convert-cnv",
             "input",
-            "--mapping",
-            "cnv_mapping.json",
-            "--output",
-            "output",
+            "--profile",
+            "config/example/profile.json",
         ]
     )
 
     assert args.input.name == "input"
-    assert args.mapping.name == "cnv_mapping.json"
-    assert args.output.name == "output"
+    assert args.profile == "config/example/profile.json"
+    assert not hasattr(args, "mapping")
+    assert not hasattr(args, "output")
     assert not hasattr(args, "manifest")
 
 

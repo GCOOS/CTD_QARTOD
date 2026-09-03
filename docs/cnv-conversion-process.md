@@ -1,7 +1,6 @@
 # CNV inspection and conversion
 
-The active conversion path targets the confirmed final CNV format represented
-by WS24258. Input can be one `.cnv` file, one cruise folder, or a folder whose
+Input can be one `.cnv` file, one cruise folder, or a folder whose
 subfolders contain multiple cruises.
 
 ```text
@@ -108,9 +107,12 @@ Conversion refuses mappings that still contain `review`.
 ```bash
 PYTHONPATH=. uv run python main.py convert-cnv \
   /path/to/cnv/input \
-  --mapping config/YOUR_DATASET/cnv_mapping.json \
-  --output output/SFER_CNV
+  --profile config/YOUR_DATASET/dataset_profile.json
 ```
+
+The profile supplies `paths.cnv_mapping`, writes source NetCDF beneath
+`data_root`, and supplies confirmed dataset-level metadata through
+`netcdf_global_attributes`.
 
 Each actual basename must match:
 
@@ -140,7 +142,7 @@ never converted. The reviewed `attributes.units` spelling is written as
 The output tree is:
 
 ```text
-output/SFER_CNV/
+<profile data_root>/
 |-- conversion_report.json
 `-- WS24258/
     |-- WS24258_54.nc
@@ -164,6 +166,13 @@ The NetCDF global `standard_name_vocabulary` is written as
 and XML tag are copied into scalar `instrumentN` variables. A mapped science
 variable points to its matching instrument through its `instrument` attribute;
 an exact configured tag that is absent in a cast is a conversion error.
+
+The converter also merges the profile's human-owned
+`netcdf_global_attributes` into each file. Null values are review placeholders
+and are omitted. Human values cannot replace derived fields such as `title`,
+`history`, or coverage bounds. See
+[CNV-generated NetCDF versus the supplied NetCDF](cnv-vs-supplied-netcdf.md)
+for the complete ownership rules and concrete reference examples.
 
 ## 3. Generate the sensor configuration
 
@@ -208,7 +217,7 @@ it cannot choose scientifically defensible thresholds. Humans must fill:
 | `spike_test/spike_thresholds.json` | Suspect and fail spike thresholds |
 | `rate_of_change_test/rate_of_change_thresholds.json` | Maximum adjacent-sample change |
 | `flat_line_test/flat_line_config.json` | Repeat counts and epsilon appropriate for sampling resolution |
-| `dataset_profile.json` | Input/output roots, test modes, and publication/global metadata |
+| `dataset_profile.json` | Input/output roots, test modes, and confirmed values for null `netcdf_global_attributes` placeholders |
 
 Run the strict preflight and QC together with:
 
@@ -240,7 +249,9 @@ configuration and run outcome in `qc_run_manifest.json`.
 | Variable-to-instrument decision | Exact `sensor_tag` or `derived` in `cnv_mapping.json` | Human once |
 | Sensor spec skeleton and variable links | Converted variable units and instrument references | Yes |
 | Gross range and all other scientific thresholds | Sensor documentation and scientific review | Human |
-| ERDDAP global additions | Publication profile, not inferred from CNV | Human |
+| NetCDF publication globals | `netcdf_global_attributes`; shared by all converted files and not inferred from CNV | Human |
+| ERDDAP-only global additions | `erddap.global_add_attributes` | Human |
 
-Conversion stops at source NetCDF. QARTOD configuration and ERDDAP publication
-metadata remain separate downstream responsibilities.
+Conversion stops at source NetCDF. QARTOD configuration remains a separate
+downstream responsibility; ERDDAP inherits NetCDF globals and adds only its
+explicit XML-only values.

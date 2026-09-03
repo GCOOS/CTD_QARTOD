@@ -370,6 +370,7 @@ def _build_dataset(
     stem: str,
     source: str,
     target: str,
+    netcdf_global_attributes: Mapping[str, object],
 ) -> xr.Dataset:
     time_candidate = mapping.required_fields["time"]
     latitude_candidate = mapping.required_fields["latitude"]
@@ -528,9 +529,9 @@ def _build_dataset(
         "depth",
         *cast.destination_sources,
     ]
-    dataset.attrs = {
+    generated_attributes: dict[str, object] = {
         "title": (
-            f"CTD data from SFER cruise {cast.cruise_id}, "
+            f"CTD data from cruise {cast.cruise_id}, "
             f"station {cast.station_id}, {cast.start_time.date().isoformat()}"
         ),
         "id": cast.cruise_id,
@@ -571,7 +572,20 @@ def _build_dataset(
     }
     comment = _processing_comment(cast.processing)
     if comment is not None:
-        dataset.attrs["comment"] = comment
+        generated_attributes["comment"] = comment
+    configured_attributes = {
+        name: value
+        for name, value in netcdf_global_attributes.items()
+        if value is not None
+    }
+    converter_owned = generated_attributes.keys() | {"comment"}
+    conflicts = sorted(configured_attributes.keys() & converter_owned)
+    if conflicts:
+        raise ValueError(
+            "netcdf_global_attributes cannot override generated attributes: "
+            + ", ".join(conflicts)
+        )
+    dataset.attrs = {**configured_attributes, **generated_attributes}
     return dataset
 
 
@@ -607,6 +621,7 @@ def _write_cast(
     source: str,
     output_root: Path,
     overwrite: bool,
+    netcdf_global_attributes: Mapping[str, object],
 ) -> None:
     if target.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite existing {target}")
@@ -622,7 +637,14 @@ def _write_cast(
         ) as handle:
             temporary = Path(handle.name)
         relative_target = target.relative_to(output_root).as_posix()
-        dataset = _build_dataset(cast, mapping, stem, source, relative_target)
+        dataset = _build_dataset(
+            cast,
+            mapping,
+            stem,
+            source,
+            relative_target,
+            netcdf_global_attributes,
+        )
         dataset.to_netcdf(
             temporary, mode="w", format="NETCDF4", engine="netcdf4"
         )
@@ -667,6 +689,8 @@ def convert_cnv(
     mapping_path: Path | str,
     report_path: Path | str | None = None,
     overwrite: bool = False,
+    *,
+    netcdf_global_attributes: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Convert one CNV file or every CNV recursively found under a folder."""
 
@@ -684,6 +708,7 @@ def convert_cnv(
     else:
         source_base = source_input.parent
     mapping = load_cnv_mapping(mapping_path)
+    global_attributes = netcdf_global_attributes or {}
 
     records: dict[Path, dict[str, object]] = {}
     parsed: list[CnvCast] = []
@@ -761,6 +786,7 @@ def convert_cnv(
                     str(record["source"]),
                     output,
                     overwrite,
+                    global_attributes,
                 )
             except Exception as exc:
                 record.update(

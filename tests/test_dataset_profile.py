@@ -22,6 +22,10 @@ from dataset_profile import (
 def _profile_payload() -> dict[str, object]:
     return {
         "data_root": "datasets/example",
+        "netcdf_global_attributes": {
+            "institution": "Example Ocean Institute",
+            "license": None,
+        },
         "qc_test_modes": {
             "gap_test": "not_evaluated",
             "syntax_test": "not_evaluated",
@@ -37,6 +41,30 @@ def _profile_payload() -> dict[str, object]:
             },
         },
     }
+
+
+def test_profile_loads_human_netcdf_global_attributes(tmp_path: Path):
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(json.dumps(_profile_payload()), encoding="utf-8")
+
+    profile = load_dataset_profile(profile_path)
+
+    assert profile.netcdf_global_attributes == {
+        "institution": "Example Ocean Institute",
+        "license": None,
+    }
+
+
+def test_profile_rejects_nested_netcdf_global_attribute(tmp_path: Path):
+    payload = _profile_payload()
+    payload["netcdf_global_attributes"] = {
+        "institution": {"name": "Example Ocean Institute"}
+    }
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="netcdf_global_attributes.institution"):
+        load_dataset_profile(profile_path)
 
 
 def test_default_profile_loads_sfer_layout():

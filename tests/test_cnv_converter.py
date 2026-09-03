@@ -114,6 +114,57 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
         assert dataset.attrs["standard_name_vocabulary"] == (
             "CF Standard Name Table v94"
         )
+        assert dataset.attrs["title"] == (
+            "CTD data from cruise WS24258, station 54b, 2024-09-18"
+        )
+
+
+def test_conversion_writes_human_global_attributes_and_omits_nulls(tmp_path: Path):
+    source = _cnv(tmp_path / "input" / "WS24258_Stn.002.cnv")
+    mapping = _ready_mapping(source, tmp_path / "mapping.json")
+    output = tmp_path / "output"
+
+    report = convert_cnv(
+        source,
+        output,
+        mapping,
+        netcdf_global_attributes={
+            "institution": "Example Ocean Institute",
+            "summary": "Example cruise hydrographic measurements",
+            "license": None,
+        },
+    )
+
+    assert report["counts"]["failed"] == 0
+    with xr.open_dataset(
+        output / "WS24258" / "WS24258_2.nc", decode_cf=False
+    ) as dataset:
+        assert dataset.attrs["institution"] == "Example Ocean Institute"
+        assert dataset.attrs["summary"] == (
+            "Example cruise hydrographic measurements"
+        )
+        assert "license" not in dataset.attrs
+
+
+@pytest.mark.parametrize("attribute", ["history", "comment"])
+def test_conversion_rejects_human_override_of_converter_owned_global_attribute(
+    tmp_path: Path,
+    attribute: str,
+):
+    source = _cnv(tmp_path / "input" / "WS24258_Stn.002.cnv")
+    mapping = _ready_mapping(source, tmp_path / "mapping.json")
+    output = tmp_path / "output"
+
+    report = convert_cnv(
+        source,
+        output,
+        mapping,
+        netcdf_global_attributes={attribute: "manually replaced"},
+    )
+
+    assert report["counts"]["failed"] == 1
+    assert attribute in report["records"][0]["failure_reason"]
+    assert not (output / "WS24258" / "WS24258_2.nc").exists()
 
 
 def test_recursive_conversion_numbers_only_identical_station_ids(tmp_path: Path):

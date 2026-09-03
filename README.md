@@ -132,8 +132,7 @@ python main.py inspect-cnv /path/to/cnv/input \
 # Review cnv_mapping.json, then:
 python main.py convert-cnv \
   /path/to/cnv/input \
-  --mapping config/YOUR_DATASET/cnv_mapping.json \
-  --output output/SFER_CNV
+  --profile config/YOUR_DATASET/dataset_profile.json
 
 # After qc_variable_mapping.json selects the output variables to test:
 python main.py generate-sensor-config \
@@ -150,6 +149,11 @@ the exact embedded XML sensor tags and places every stable source unit directly
 in `attributes.units`. Conversion requires exact `timeS`, `longitude`, and `latitude` columns,
 uses the mapped vertical field, preserves source values, and writes all
 four structural variables as `(profile, z)` arrays.
+
+The selected profile supplies the reviewed `cnv_mapping.json` path, the source
+NetCDF output root in `data_root`, and human-owned publication metadata in
+`netcdf_global_attributes`. Null metadata placeholders are omitted from
+NetCDF; fill them only with confirmed dataset-level values.
 
 Humans may normalize only an equivalent unit spelling in `attributes.units`
 (for example `deg C` to `degree_Celsius`); conversion never scales data and
@@ -189,6 +193,10 @@ See the step-by-step
 [`docs/cnv-conversion-process.md`](docs/cnv-conversion-process.md) guide for how
 each configuration and CNV section is processed, how NetCDF is constructed,
 and where the existing QC pipeline takes over.
+See
+[`docs/cnv-vs-supplied-netcdf.md`](docs/cnv-vs-supplied-netcdf.md) for the
+field-by-field structural and metadata comparison with the supplied reference
+NetCDF.
 
 #### `qc` — run QC on NetCDF trees
 
@@ -231,12 +239,14 @@ an optional `dataset_id_prefix`, `required_global_attributes`, and
 duplicate mode is selected. Universal ERDDAP structure is generated in code;
 there is no input XML or dataset template.
 
-NetCDF global attributes remain source metadata. The generator validates them
-together with configured global additions, but writes only deliberate
-additions/overrides/removals to the dataset-level `<addAttributes>`. Variable
-attributes come from NetCDF; QC variables receive `ioos_category=Quality` when
-needed, and the sole published time receives the XML-only `time_precision`.
-Requires `lxml` (see `requirements.txt`).
+NetCDF global attributes come from converter-derived cast facts plus the
+profile's human-owned `netcdf_global_attributes`. The XML generator validates
+those source attributes together with `erddap.global_add_attributes`, but
+writes only deliberate ERDDAP-only additions/overrides/removals to the
+dataset-level `<addAttributes>`. Variable attributes come from NetCDF; QC
+variables receive `ioos_category=Quality` when needed, and the sole published
+time receives the XML-only `time_precision`. Requires `lxml` (see
+`requirements.txt`).
 
 #### `viz` — inspect saved QC results in Dash
 

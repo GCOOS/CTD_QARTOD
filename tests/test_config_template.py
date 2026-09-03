@@ -58,6 +58,8 @@ def test_template_loaders_accept_templates():
     profile = load_dataset_profile(TEMPLATE_ROOT / "dataset_profile.json")
     assert profile.metadata.sample_dimension == "z"
     assert profile.output.mode == "duplicate"
+    assert profile.netcdf_global_attributes["institution"] is None
+    assert profile.netcdf_global_attributes["publisher_email"] is None
     mapping = load_mapping(TEMPLATE_ROOT / "qc_variable_mapping.json")
     assert "temperature" in mapping
     assert load_sensor_specs(
