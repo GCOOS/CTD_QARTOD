@@ -1,24 +1,6 @@
 {
   "data_root": "output/WS24258_CNV",
   "netcdf_global_attributes": {
-    "Conventions": "CF-1.6, ACDD-1.3, IOOS-1.2",
-    "ncei_template_version": "NCEI_NetCDF_Profile_Template_v2.0",
-    "summary": "Hydrographic Measurements in the Gulf of Mexico",
-    "institution": "NOAA's Atlantic Oceanographic and Meteorological Laboratory/Ocean Chemistry and Ecosystems Division ",
-    "license": "These data may be redistributed and used without restriction.",
-    "platform": "RV_FG_Walton_Smith",
-    "platform_name": "RV_FG_Walton_Smith",
-    "platform_id": "unknown",
-    "platform_vocabulary": "https://mmisw.org/ont/ioos/platform",
-    "instrument_vocabulary": "GCMD Science Keywords Version 9.1.5",
-    "sea_name": "Gulf of Mexico",
-    "Country": "USA",
-    "program": "Florida Keys Monitoring program",
-    "project": "Marine Biodiversity Observation Network",
-    "keywords": "EARTH SCIENCE>OCEANS>OCEAN PRESSURE>WATER PRESSURE, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>CONDUCTIVITY, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>DENSITY, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>SALINITY, EARTH SCIENCE>OCEANS>OCEAN TEMPERATURE>WATER TEMPERATURE, EARTH SCIENCE>OCEANS>OCEAN OPTICS>ATTENUATION/TRANSMISSION,  EARTH SCIENCE>OCEANS>OCEAN OPTICS>FLUORESCENCE, EARTH SCIENCE>OCEANS>OCEAN CHEMISTRY>OXYGEN, EARTH SCIENCE>OCEANS>OCEAN OPTICS>RADIANCE",
-    "keywords_vocabulary": "GCMD Science Keywords Version 9.1.5, CF Standard Names v77",
-    "naming_authority": "aoml.noaa.gov",
-
     "creator_name": "Christopher R. Kelble",
     "creator_role": "Investigator",
     "creator_email": "chris.kelble@noaa.gov",
@@ -40,8 +22,12 @@
     "contributor_url": "unknown",
     "contributor_phone": "unknown",
     "contributor_country": "USA",
-    "contributor_role_vocabulary": "https://vocab.nerc.ac.uk/collection/G04/current/",
-
+    
+    "acknowledgment": "unknown",
+    "product_version": "v1.0",
+    "geospatial_bounds": "POLYGON ((24.00 -83.00, 26.00, -83.00, 26.00, -80.00, 24.00 -80.00,  24.00 -83.00))",
+  },
+  "netcdf_fixed_global_attributes": {
     "publisher_name": "Gulf of Mexico Coastal Ocean Observing System (GCOOS)",
     "publisher_institution": "Gulf of Mexico Coastal Ocean Observing System (GCOOS)",
     "publisher_email": "data@gcoos.org",
@@ -53,20 +39,21 @@
     "publisher_state": "Texas",
     "publisher_postalcode": "77843",
     "publisher_country": "USA",
-
+    "infoUrl": "https://www.aoml.noaa.gov/phod/sfp/index.php",
     "references": "https://ocean.floridamarine.org/FKNMS_WQPP/",
-    "acknowledgment": "unknown",
-    "date_created": "2023-03-06T14:21:59Z",
-    "date_issued": "2023-03-06T14:21:59Z",
-    "date_modified": "2023-03-06T14:21:59Z",
-    "date_metadata_modified": "2023-03-06T14:21:59Z",
-    "product_version": "v1.0",
-    "geospatial_bounds": "POLYGON ((24.00 -83.00, 26.00, -83.00, 26.00, -80.00, 24.00 -80.00,  24.00 -83.00))",
-    "geospatial_bounds_vertical_crs": "EPSG:5831",
-    "infoUrl": "https://www.aoml.noaa.gov/phod/sfp/index.php"
-
-  },
-  "netcdf_fixed_global_attributes": {
+    "contributor_role_vocabulary": "https://vocab.nerc.ac.uk/collection/G04/current/",
+    "institution": "NOAA's Atlantic Oceanographic and Meteorological Laboratory/Ocean Chemistry and Ecosystems Division ",
+    "platform_vocabulary": "https://mmisw.org/ont/ioos/platform",
+    "instrument_vocabulary": "GCMD Science Keywords Version 9.1.5",
+    "license": "These data may be redistributed and used without restriction.",
+    "Conventions": "CF-1.10, ACDD-1.3, IOOS-1.2",
+    "ncei_template_version": "NCEI_NetCDF_Profile_Template_v2.0",
+    "sea_name": "Gulf of America",
+    "Country": "USA",
+    "program": "Florida Keys Monitoring program",
+    "project": "Marine Biodiversity Observation Network",
+    "keywords_vocabulary": "GCMD Science Keywords Version 9.1.5, CF Standard Names v77",
+    "naming_authority": "aoml.noaa.gov",
     "source": "Sea-Bird CNV processed ASCII",
     "source_format": "Sea-Bird CNV",
     "processing_level": "Geophysical units from processed CNV data",
@@ -77,11 +64,17 @@
     "geospatial_lon_units": "degrees_east",
     "geospatial_vertical_positive": "down",
     "geospatial_bounds_crs": "EPSG:4326",
-    "standard_name_vocabulary": "CF Standard Name Table v94"
+    "geospatial_bounds_vertical_crs": "EPSG:5831"
+    "standard_name_vocabulary": "CF Standard Name Table v94",
+    "keywords": "EARTH SCIENCE>OCEANS>OCEAN PRESSURE>WATER PRESSURE, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>CONDUCTIVITY, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>DENSITY, EARTH SCIENCE>OCEANS>SALINITY/DENSITY>SALINITY, EARTH SCIENCE>OCEANS>OCEAN TEMPERATURE>WATER TEMPERATURE, EARTH SCIENCE>OCEANS>OCEAN OPTICS>ATTENUATION/TRANSMISSION,  EARTH SCIENCE>OCEANS>OCEAN OPTICS>FLUORESCENCE, EARTH SCIENCE>OCEANS>OCEAN CHEMISTRY>OXYGEN, EARTH SCIENCE>OCEANS>OCEAN OPTICS>RADIANCE"
   },
   "netcdf_derived_global_attributes": {
-    "title": "cruise ID and station from the actual filename plus the CNV start date",
-    "id": "cruise ID from the actual filename",
+    "summary": "SFER CTD data, SFER_CTD_WS24139_41, 2024-05-23, 25.7323N 81.5745W. Hydrographic Measurements in the Gulf of America.",
+    "title": "SFER CTD, SFER_CTD_WS24139_41, 2024-05-23, 25.7323N 81.5745W",
+    "id": "SFER_CTD_WS24139_41[-2]",
+    "platform": "RV_FG_Walton_Smith",
+    "platform_name": "RV_FG_Walton_Smith",
+    "platform_id": "RV_FG_Walton_Smith",
     "station_name": "complete output filename stem, including any repeat suffix",
     "instrument": "instrument model from the first Sea-Bird CNV header line",
     "source_file": "actual CNV basename",
@@ -98,7 +91,11 @@
     "geospatial_vertical_min": "minimum finite mapped depth value",
     "geospatial_vertical_max": "maximum finite mapped depth value",
     "geospatial_vertical_units": "units of the mapped depth field, with m as the fallback",
-    "comment": "filtered CNV processing settings; omitted when the CNV contains none"
+    "comment": "filtered CNV processing settings; omitted when the CNV contains none",
+    "date_created": "2023-03-06T14:21:59Z",
+    "date_issued": "2023-03-06T14:21:59Z",
+    "date_modified": "2023-03-06T14:21:59Z",
+    "date_metadata_modified": "2023-03-06T14:21:59Z"
   },
   "output": {
     "mode": "duplicate",
