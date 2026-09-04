@@ -237,6 +237,14 @@ per-variable archival/product term such as `TEMPERATURE` or
 file and belongs in `netcdf_global_attributes` only when that conformance is
 confirmed.
 
+| Attributes | Result |
+|---|---|
+| `platform`, `platform_name` | 8 files: `RV_FG_Walton_Smith`; 12 files: `RV_Weatherbird_II` |
+| `platform_id` | 11 files: `unknown`; 9 files: `other` |
+| Six `contributor_*` identity/contact fields | Same `unknown` versus `other` split |
+| `acknowledgment` | 11 files: `unknown`; 9 files: `other` |
+| Four `date_*` fields | Every sampled file had a different timestamp |
+
 ## Reference-only attributes that should not be copied automatically
 
 Some fields appear in the supplied file but are workflow artifacts, obsolete
