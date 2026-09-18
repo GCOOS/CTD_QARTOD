@@ -38,7 +38,7 @@
   "paths": {
     "cnv_mapping": "config/hogarth_cnv/cnv_mapping.json",
     "variable_mapping": "config/hogarth_cnv/qc_variable_mapping.json",
-    "station_coords": "config/walton_smith/location_test/Station_Mean_Coords.csv",
+    "station_coords": "config/hogarth_cnv/location_test/Station_Mean_Coords.csv",
     "location_config": "config/hogarth_cnv/location_test/location_config.json",
     "station_climatology": "config/hogarth_cnv/climatology_test/station_climatology_config.json",
     "station_depth_classification": "config/hogarth_cnv/climatology_test/station_depth_classification.json",

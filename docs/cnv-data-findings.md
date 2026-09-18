@@ -1,5 +1,7 @@
 # NOAA AOML Sea-Bird CNV Data Findings
 
+> Historical source/design record, not the current conversion contract. Source observations below are retained, but old mappings, timeQ/coordinate reduction rules, metadata ownership and CLI examples are superseded. Use the [current conversion process](cnv-conversion-process.md), [automatic workflow](automatic-cnv-workflow.md), and [shared template guide](../config_template/README.md). The current converter requires schema 5 and uses timeS, source-specific coordinate dimensions, and catalog-owned attributes.
+
 This record describes the supplied cruise directory
 `cnv_data/2026_07_Hogarth_NOAA_CTD`, audited on 2026-08-09. Conversion and QC
 configuration status was updated on 2026-08-18 to match the implemented

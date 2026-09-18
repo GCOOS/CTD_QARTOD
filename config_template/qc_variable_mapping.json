@@ -1,17 +1,46 @@
 {
   "in_water_radiance_irradiance": [],
-  "above_water_radiance_irradiance": [],
-  "beam_attenuation": [],
-  "turbidity": [],
-  "PAR": [],
-  "chlorophyll": [],
-  "CDOM": [],
+  "above_water_radiance_irradiance": [
+    "surface_photosynthetically_available_radiation"
+  ],
+  "beam_attenuation": [
+    "beam_attenuation"
+  ],
+  "turbidity": [
+    "sea_water_turbidity"
+  ],
+  "PAR": [
+    "photosynthetically_available_radiation"
+  ],
+  "chlorophyll": [
+    "chlorophyll_concentration",
+    "chlorophyll_fluorescence"
+  ],
+  "CDOM": [
+    "CDOM"
+  ],
   "FDOM": [],
   "backscattering_volume_scattering": [],
-  "temperature": ["YOUR_NETCDF_VARIABLE"],
-  "practical_salinity": [],
-  "conductivity": [],
-  "pressure": [],
-  "oxygen_dissolved_oxygen": [],
-  "oxygen_saturation": []
+  "temperature": [
+    "sea_water_temperature",
+    "sea_water_temperature_2"
+  ],
+  "practical_salinity": [
+    "sea_water_salinity",
+    "sea_water_salinity_2"
+  ],
+  "conductivity": [
+    "sea_water_electrical_conductivity",
+    "sea_water_electrical_conductivity_2"
+  ],
+  "pressure": [
+    "sea_water_pressure"
+  ],
+  "oxygen_dissolved_oxygen": [
+    "dissolved_oxygen"
+  ],
+  "oxygen_saturation": [
+    "oxygen_saturation",
+    "oxygen_saturation_2"
+  ]
 }

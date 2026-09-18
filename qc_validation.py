@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
-from dataset_profile import DatasetProfile
+from dataset_profile import DatasetProfile, resolve_config_path
 from qc_config import ALL_CATEGORIES
 from station_resolver import normalize_station_coord
 
@@ -271,7 +271,7 @@ def validate_qc_profile(profile: DatasetProfile) -> dict[str, Path]:
     """Validate every configured QC input before any NetCDF file is processed."""
     paths: dict[str, Path] = {}
     for key in REQUIRED_QC_PATHS:
-        path = profile.paths.get(key)
+        path = resolve_config_path(key, profile)
         if path is None or not path.is_file():
             raise ValueError(f"dataset profile {key} is missing or not a file: {path}")
         paths[key] = path

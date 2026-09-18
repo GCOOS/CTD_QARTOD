@@ -102,8 +102,8 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--profile",
         type=str,
-        required=True,
-        help="Dataset profile containing the mapping, output root, and global metadata",
+        default=None,
+        help="Dataset profile (default: discover/create config/<dataset>/dataset_profile.json)",
     )
     parser.add_argument("--report", type=Path, default=None)
     parser.add_argument(
@@ -167,7 +167,7 @@ Examples:
         type=Path,
         help="One CNV file, one cruise folder, or a root containing cruise folders",
     )
-    inspect_parser.add_argument("--output", type=Path, required=True)
+    inspect_parser.add_argument("--output", type=Path, default=None)
     inspect_parser.add_argument(
         "--verbose",
         "-v",
@@ -205,6 +205,10 @@ Examples:
     )
     _add_qc_arguments(qc_parser)
 
+    limits_parser = sub.add_parser("generate-limits", help="Initialize dataset-owned settings from the Walton Smith template")
+    limits_parser.add_argument("--profile", required=True)
+    limits_parser.add_argument("--output", type=Path, default=None, help="Optional new dataset folder; defaults beside the profile; existing settings are preserved")
+
     erddap_parser = sub.add_parser(
         "erddap-xml",
         help="Generate ERDDAP datasets.xml from NetCDF files",
@@ -229,6 +233,9 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
     if not args.input.exists():
         logger.error("CNV input does not exist: %s", args.input)
         raise SystemExit(1)
+    if args.profile is None:
+        from cnv_workflow import prepare_profile
+        args.profile = str(prepare_profile(args.input))
     profile = load_dataset_profile(args.profile)
     mapping_path = resolve_config_path("cnv_mapping", profile)
     if not mapping_path.is_file():
@@ -247,6 +254,8 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
             args.report,
             args.overwrite,
             netcdf_global_attributes=profile.netcdf_global_attributes,
+            netcdf_fixed_global_attributes=profile.netcdf_fixed_global_attributes,
+            netcdf_derived_global_attributes=profile.netcdf_derived_global_attributes,
         )
     except KeyboardInterrupt:
         logger.warning("CNV conversion interrupted by user.")
@@ -266,6 +275,10 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         "Conversion report: %s",
         args.report or profile.data_root / "conversion_report.json",
     )
+    if counts["converted"]:
+        from qc_limit_generation import prepare_dataset_qc
+        prepared = prepare_dataset_qc(profile)
+        logger.info("Dataset-owned QC settings: %s", prepared.paths.sensor_specs)
     if counts["failed"]:
         raise SystemExit(1)
 
@@ -274,6 +287,9 @@ def _run_inspect_cnv(args: argparse.Namespace) -> None:
     from cnv_mapping import inspect_cnv
 
     setup_logging(verbose=args.verbose)
+    if args.output is None:
+        from cnv_workflow import default_mapping_path
+        args.output = default_mapping_path(args.input)
     try:
         mapping = inspect_cnv(args.input, args.output)
     except KeyboardInterrupt:
@@ -289,7 +305,11 @@ def _run_inspect_cnv(args: argparse.Namespace) -> None:
         inspection["inspected_file_count"],
         len(inspection["failed_files"]),
     )
-    logger.info("Comment-derived mapping: %s", args.output)
+    logger.info("Catalog-assisted mapping: %s", args.output)
+    logger.info("Mapping entries requiring review: %s", sum(item["mapped_to"] is None for item in mapping["science_variables"].values()))
+    logger.info("Files needing coordinate preparation before conversion: %s", sum("source" in issue for issue in inspection["conversion_issues"]))
+    if inspection["failed_files"]:
+        raise SystemExit(1)
 
 
 def _run_generate_sensor_config(args: argparse.Namespace) -> None:
@@ -401,6 +421,10 @@ def main(argv: list[str] | None = None) -> None:
         _run_inspect_cnv(args)
     elif args.command == "generate-sensor-config":
         _run_generate_sensor_config(args)
+    elif args.command == "generate-limits":
+        from qc_limit_generation import generate_limits
+        report = generate_limits(load_dataset_profile(args.profile), args.output)
+        print(f"QC profile: {report['profile']} (use qc --profile with this path)")
     elif args.command == "qc":
         _run_qc(args)
     elif args.command == "erddap-xml":

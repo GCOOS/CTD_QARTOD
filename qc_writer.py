@@ -263,6 +263,8 @@ def append_qc_history(
     entry = f"{timestamp}: QARTOD QC applied by CTD_QARTOD"
     existing = str(ds.attrs.get("history") or "").strip()
     ds.attrs["history"] = f"{existing}\n{entry}" if existing else entry
+    ds.attrs["date_modified"] = timestamp
+    ds.attrs["date_metadata_modified"] = timestamp
     return ds
 
 

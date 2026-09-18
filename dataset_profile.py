@@ -12,8 +12,11 @@ from typing import Any, Iterable, Mapping
 import numpy as np
 
 from xml_generator.config import ErddapConfig
+from cnv_metadata import validate_ownership
 
 REPO_ROOT = Path(__file__).resolve().parent
+CONFIG_TEMPLATE_DIR = REPO_ROOT / "config_template"
+TEMPLATE_PROFILE_PATH = CONFIG_TEMPLATE_DIR / "dataset_profile.json"
 WALTON_SMITH_CONFIG_DIR = REPO_ROOT / "config" / "walton_smith"
 DEFAULT_PROFILE_PATH = WALTON_SMITH_CONFIG_DIR / "dataset_profile.json"
 DEFAULT_CNV_PROFILE_PATH = (
@@ -125,6 +128,7 @@ class PathsConfig:
     """Optional dataset-specific conversion and QC configuration paths."""
 
     cnv_mapping: Path | None = None
+    source_variable_mapping: Path | None = None
     variable_mapping: Path | None = None
     station_coords: Path | None = None
     location_config: Path | None = None
@@ -142,6 +146,7 @@ class PathsConfig:
             return cls()
         return cls(
             cnv_mapping=_resolve_path(data.get("cnv_mapping"), base_dir),
+            source_variable_mapping=_resolve_path(data.get("source_variable_mapping"), base_dir),
             variable_mapping=_resolve_path(data.get("variable_mapping"), base_dir),
             station_coords=_resolve_path(data.get("station_coords"), base_dir),
             location_config=_resolve_path(data.get("location_config"), base_dir),
@@ -192,6 +197,8 @@ class DatasetProfile:
 
     data_root: Path = REPO_ROOT / "datasets" / "SFER_CTD_SOAK_REMOVED"
     netcdf_global_attributes: Mapping[str, object] = field(default_factory=dict)
+    netcdf_fixed_global_attributes: Mapping[str, object] = field(default_factory=dict)
+    netcdf_derived_global_attributes: Mapping[str, object] = field(default_factory=dict)
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
@@ -218,11 +225,15 @@ class DatasetProfile:
     ) -> "DatasetProfile":
         defaults = cls()
         data_root = _resolve_path(data.get("data_root"), base_dir) or defaults.data_root
+        human = _load_netcdf_global_attributes(data.get("netcdf_global_attributes"))
+        fixed = _load_netcdf_global_attributes(data.get("netcdf_fixed_global_attributes"))
+        derived = _load_netcdf_global_attributes(data.get("netcdf_derived_global_attributes"))
+        validate_ownership(human, fixed, derived)
         return cls(
             data_root=data_root,
-            netcdf_global_attributes=_load_netcdf_global_attributes(
-                data.get("netcdf_global_attributes")
-            ),
+            netcdf_global_attributes=human,
+            netcdf_fixed_global_attributes=fixed,
+            netcdf_derived_global_attributes=derived,
             metadata=MetadataConfig.from_mapping(data.get("metadata") if isinstance(data.get("metadata"), Mapping) else None),
             output=OutputConfig.from_mapping(data.get("output") if isinstance(data.get("output"), Mapping) else None, base_dir),
             paths=PathsConfig.from_mapping(data.get("paths") if isinstance(data.get("paths"), Mapping) else None, base_dir),

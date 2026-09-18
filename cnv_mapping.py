@@ -12,19 +12,15 @@ import re
 import tempfile
 import xml.etree.ElementTree as ET
 
+from cnv_catalog import catalog, match_entry, source_entry
+from cnv_coordinates import resolve_header_coordinates
+
 
 _NAME_RE = re.compile(
     r"^# name (?P<index>\d+) = (?P<name>[^:]+):\s*(?P<description>.*)$"
 )
 _UNIT_RE = re.compile(r"\[([^][]+)\]")
-_PROCESSING_SUFFIX_RE = re.compile(
-    r"(?:,\s*)?WS\s*=\s*[-+]?\d+(?:\.\d+)?\s*$", re.IGNORECASE
-)
-_CHANNEL_SUFFIX_RE = re.compile(r",\s*\d+\s*$")
-_NON_NAME_RE = re.compile(r"[^A-Za-z0-9]+")
-_NETCDF_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_RESERVED_TARGETS = {"time", "longitude", "latitude", "depth"}
-CNV_MAPPING_SCHEMA_VERSION = 4
+CNV_MAPPING_SCHEMA_VERSION = 5
 DERIVED_SENSOR_TAG = "derived"
 CF_STANDARD_NAME_TABLE_VERSION = 94
 CF_STANDARD_NAME_VOCABULARY = (
@@ -69,7 +65,7 @@ class CnvSensor:
 
 @dataclass(frozen=True)
 class ScienceVariableMapping:
-    """Human-reviewed handling for every occurrence of one source name."""
+    """Catalog-resolved handling for every occurrence of one source name."""
 
     action: str
     target_name: str | None
@@ -79,7 +75,7 @@ class ScienceVariableMapping:
 
 @dataclass(frozen=True)
 class CnvMapping:
-    """Ready-to-convert schema-4 mapping."""
+    """Ready-to-convert schema-5 mapping."""
 
     source_path: Path
     required_fields: Mapping[str, SourceCandidate]
@@ -122,32 +118,6 @@ def _column_units(description: str) -> str | None:
     return matches[-1].rsplit(",", maxsplit=1)[-1].strip() or None
 
 
-def _description_mapping(
-    descriptions: Sequence[str], units: Sequence[str]
-) -> tuple[str, str] | None:
-    """Return one safe destination and long name derived from CNV comments."""
-
-    if not descriptions or len(set(units)) > 1:
-        return None
-    labels: set[str] = set()
-    targets: set[str] = set()
-    for description in descriptions:
-        label = _UNIT_RE.sub("", description)
-        label = _PROCESSING_SUFFIX_RE.sub("", label).strip(" ,")
-        label = _CHANNEL_SUFFIX_RE.sub("", label).strip(" ,")
-        target = _NON_NAME_RE.sub("_", label).strip("_").lower()
-        if not target:
-            return None
-        if target[0].isdigit():
-            target = f"variable_{target}"
-        labels.add(label)
-        targets.add(target)
-    if len(targets) != 1 or next(iter(targets)) in _RESERVED_TARGETS:
-        return None
-    long_name = min(labels, key=lambda value: (len(value), value.casefold()))
-    return next(iter(targets)), long_name
-
-
 def discover_cnv_files(input_path: Path | str) -> tuple[Path, ...]:
     """Return one CNV file or every recursively discovered CNV file."""
 
@@ -158,12 +128,25 @@ def discover_cnv_files(input_path: Path | str) -> tuple[Path, ...]:
         return (source,)
     if not source.is_dir():
         raise FileNotFoundError(f"CNV input does not exist: {source}")
+    stage_groups: dict[Path, set[str]] = defaultdict(set)
+    for directory in source.rglob("*"):
+        if directory.is_dir() and re.fullmatch(r"\d{2}-(?:cnv|flt|aln|cel|loop.*|drv)", directory.name):
+            stage_groups[directory.parent].add(directory.name)
+    for parent, stages in stage_groups.items():
+        if len(stages) > 1 and "06-drv" not in stages:
+            raise ValueError(f"multiple processing stages without 06-drv under {parent}; select one final input folder explicitly")
     discovered = tuple(
         sorted(
             (
                 path
                 for path in source.rglob("*")
                 if path.is_file() and path.suffix.casefold() == ".cnv"
+                and not path.name.startswith("._")
+                and not any(
+                    part.name != "06-drv" and (part.parent / "06-drv").is_dir()
+                    and re.fullmatch(r"\d{2}-.*", part.name)
+                    for part in path.parents if part != source and source in part.parents
+                )
             ),
             key=lambda path: path.as_posix().casefold(),
         )
@@ -173,13 +156,14 @@ def discover_cnv_files(input_path: Path | str) -> tuple[Path, ...]:
     return discovered
 
 
-def read_cnv_header(path: Path | str) -> tuple[CnvHeaderColumn, ...]:
-    """Read only the column declarations before the CNV data delimiter."""
+def read_cnv_header(path: Path | str, *, require_coordinates: bool = True) -> tuple[CnvHeaderColumn, ...]:
+    """Read column declarations and optionally validate their coordinate source."""
 
     source = Path(path)
     columns: list[CnvHeaderColumn] = []
     counts: Counter[str] = Counter()
     header_counts: dict[str, int] = {}
+    header_lines: list[str] = []
     found_delimiter = False
     with source.open("r", encoding="utf-8", errors="strict") as stream:
         for raw_line in stream:
@@ -187,6 +171,7 @@ def read_cnv_header(path: Path | str) -> tuple[CnvHeaderColumn, ...]:
             if line == "*END*":
                 found_delimiter = True
                 break
+            header_lines.append(line)
             for key in ("nquan", "nvalues"):
                 prefix = f"# {key} = "
                 if line.startswith(prefix):
@@ -220,11 +205,13 @@ def read_cnv_header(path: Path | str) -> tuple[CnvHeaderColumn, ...]:
         raise ValueError(f"{source.name}: nquan does not match column declarations")
     if header_counts.get("nvalues", 0) < 1:
         raise ValueError(f"{source.name}: CNV file has no declared data rows")
-    for required in ("timeS", "longitude", "latitude"):
-        if counts[required] != 1:
-            raise ValueError(
-                f"{source.name}: required source {required!r} must occur exactly once"
-            )
+    if counts["timeS"] != 1:
+        raise ValueError(f"{source.name}: required source 'timeS' must occur exactly once")
+    if require_coordinates:
+        try:
+            resolve_header_coordinates([column.source_name for column in ordered], header_lines)
+        except ValueError as exc:
+            raise ValueError(f"{source.name}: {exc}") from exc
     return ordered
 
 
@@ -329,7 +316,7 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
 
 
 def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, object]:
-    """Inventory all source columns and write one human-review mapping file."""
+    """Inventory all source columns and write one observed-source mapping file."""
 
     paths = discover_cnv_files(input_path)
     observed: dict[str, dict[str, object]] = defaultdict(
@@ -338,6 +325,7 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             "max_occurrences_per_file": 0,
             "units": set(),
             "descriptions": set(),
+            "missing_units": False,
         }
     )
     failures: list[dict[str, str]] = []
@@ -346,10 +334,12 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
     sensor_max_occurrences: Counter[str] = Counter()
     vertical_files = 0
     inspected_files = 0
+    conversion_issues = []
+    coordinate_sources: Counter[str] = Counter()
     fixed_sources = {"timeS", "longitude", "latitude"}
     for path in paths:
         try:
-            columns = read_cnv_header(path)
+            columns = read_cnv_header(path, require_coordinates=False)
         except Exception as exc:
             failures.append({"source": str(path), "reason": str(exc)})
             continue
@@ -363,6 +353,12 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
                 sensor_max_occurrences[sensor_type], count
             )
         per_file = Counter(column.source_name for column in columns)
+        try:
+            read_cnv_header(path)
+        except ValueError as exc:
+            conversion_issues.append({"source": str(path), "reason": str(exc)})
+        else:
+            coordinate_sources["data_columns" if per_file["latitude"] else "nmea_header"] += 1
         if per_file["depSM"] == 1:
             vertical_files += 1
         for column in columns:
@@ -376,6 +372,8 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             )
             if column.units is not None:
                 item["units"].add(column.units)
+            else:
+                item["missing_units"] = True
             if column.description:
                 item["descriptions"].add(column.description)
     if not inspected_files:
@@ -389,26 +387,23 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
         item = observed[source_name]
         descriptions = sorted(item["descriptions"])
         units = sorted(item["units"])
-        resolved = _description_mapping(descriptions, units)
-        attributes = {
-            "long_name": resolved[1] if resolved else None,
-            "units": units[0] if len(units) == 1 else None,
-            "standard_name": None,
-            "ioos_category": None,
-            "ncei_name": None,
-        }
+        entry = match_entry(source_name, descriptions, units)
         science_variables[source_name] = {
             "observed": {
                 "file_count": len(item["files"]),
                 "max_occurrences_per_file": item["max_occurrences_per_file"],
                 "units": units,
+                "missing_units": item["missing_units"],
                 "descriptions": descriptions,
             },
-            "action": "map" if resolved else "review",
-            "target_name": resolved[0] if resolved else None,
-            "attributes": attributes,
-            "sensor_tag": None,
+            "mapped_to": entry["target"] if entry else None,
         }
+        if entry is None:
+            conversion_issues.append({
+                "source_name": source_name,
+                "reason": ("catalog conflict: description or units"
+                           if source_entry(source_name) else "unrecognized source; update the shared catalog"),
+            })
 
     payload: dict[str, object] = {
         "schema_version": CNV_MAPPING_SCHEMA_VERSION,
@@ -416,6 +411,8 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             "cnv_file_count": len(paths),
             "inspected_file_count": inspected_files,
             "failed_files": failures,
+            "conversion_issues": conversion_issues,
+            "coordinate_sources": dict(sorted(coordinate_sources.items())),
             "sensor_parse_status": dict(sorted(sensor_parse_status.items())),
             "sensor_tags": {
                 sensor_type: {
@@ -438,7 +435,7 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
 
 
 def load_cnv_mapping(path: Path | str) -> CnvMapping:
-    """Load a complete, human-reviewed schema-4 mapping."""
+    """Load a complete, human-reviewed schema-5 mapping."""
 
     source_path = Path(path)
     data = _object(
@@ -491,74 +488,34 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
                 f"science_variables.{source_name} reuses a structural source"
             )
         item = _object(raw_value, f"science_variables.{source_name}")
-        action = _nonempty_string(
-            item.get("action"), f"science_variables.{source_name}.action"
-        )
-        if action == "review":
-            raise ValueError(
-                f"science_variables.{source_name} still requires review"
-            )
-        if action not in {"map", "ignore"}:
-            raise ValueError(
-                f"science_variables.{source_name}.action must be map, ignore, or review"
-            )
-        target_value = item.get("target_name")
-        target_name: str | None
-        if action == "map":
-            target_name = _nonempty_string(
-                target_value, f"science_variables.{source_name}.target_name"
-            )
-            if not _NETCDF_NAME_RE.fullmatch(target_name):
-                raise ValueError(
-                    f"science_variables.{source_name}.target_name is not a valid NetCDF name"
-                )
-            if target_name in {"time", "longitude", "latitude", "depth"}:
-                raise ValueError(
-                    f"science_variables.{source_name}.target_name conflicts with a structural target"
-                )
+        unexpected = set(item) - {"observed", "mapped_to", "ignore"}
+        if unexpected:
+            raise ValueError(f"science_variables.{source_name}: definitions belong in cnv_catalog.json, not {sorted(unexpected)}")
+        ignored = item.get("ignore", False)
+        if not isinstance(ignored, bool):
+            raise ValueError(f"science_variables.{source_name}.ignore must be boolean")
+        target_name = item.get("mapped_to")
+        attributes = {}
+        sensor_tag = None
+        action = "ignore" if ignored else "map"
+        if ignored:
+            if target_name is not None:
+                raise ValueError(f"science_variables.{source_name}.mapped_to must be null when ignored")
         else:
-            if target_value is not None:
-                raise ValueError(
-                    f"science_variables.{source_name}.target_name must be null when ignored"
-                )
-            target_name = None
-        raw_attributes = _object(
-            item.get("attributes", {}),
-            f"science_variables.{source_name}.attributes",
-        )
-        if raw_attributes.get("standard_name_url") is not None:
-            raise ValueError(
-                f"science_variables.{source_name}.attributes.standard_name_url "
-                "is generated from standard_name and must be omitted"
-            )
-        attributes = {
-            _nonempty_string(key, f"science_variables.{source_name}.attribute key"):
-            _nonempty_string(
-                value, f"science_variables.{source_name}.attributes.{key}"
-            )
-            for key, value in raw_attributes.items()
-            if value is not None
-        }
-        standard_name = attributes.get("standard_name")
-        if standard_name is not None:
-            cf_standard_name_url(standard_name)
-        sensor_value = item.get("sensor_tag")
-        sensor_tag = (
-            _nonempty_string(
-                sensor_value, f"science_variables.{source_name}.sensor_tag"
-            )
-            if sensor_value is not None
-            else None
-        )
-        if (
-            sensor_tag is not None
-            and sensor_tag != DERIVED_SENSOR_TAG
-            and sensor_tag not in available_sensor_tags
-        ):
-            raise ValueError(
-                f"science_variables.{source_name}.sensor_tag {sensor_tag!r} "
-                "was not found during inspection"
-            )
+            if target_name is None:
+                raise ValueError(f"science_variables.{source_name} still requires review in the shared catalog")
+            target_name = _nonempty_string(target_name, f"science_variables.{source_name}.mapped_to")
+            definition = catalog()["variables"].get(target_name)
+            if definition is None:
+                raise ValueError(f"science_variables.{source_name}: unknown catalog target {target_name!r}")
+            attributes = {key: value for key in
+                          ("long_name", "standard_name", "ioos_category", "ncei_name")
+                          if (value := definition.get(key)) is not None}
+            if attributes.get("standard_name"):
+                cf_standard_name_url(attributes["standard_name"])
+            sensor_tag = definition.get("sensor_by_source", {}).get(source_name, definition.get("sensor_tag"))
+            if sensor_tag != DERIVED_SENSOR_TAG and sensor_tag not in available_sensor_tags:
+                sensor_tag = None
         science_variables[source_name] = ScienceVariableMapping(
             action=action,
             target_name=target_name,

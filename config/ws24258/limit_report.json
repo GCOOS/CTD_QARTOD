@@ -1,0 +1,10 @@
+{
+  "issues": [
+    "chlorophyll_fluorescence: no template gross range for units None"
+  ],
+  "netcdf_file_count": 88,
+  "preserved_previous_settings": "/Volumes/Crucial X9/CTD_QARTOD/output/ws24258_before_catalog_layout_MzpLy4/config_ws24258",
+  "profile": "/Volumes/Crucial X9/CTD_QARTOD/config/ws24258/dataset_profile.json",
+  "rate_of_change_basis": "unchanged Walton Smith per-adjacent-sample thresholds; not per-second",
+  "reference": "/Volumes/Crucial X9/CTD_QARTOD/config/walton_smith/dataset_profile.json"
+}

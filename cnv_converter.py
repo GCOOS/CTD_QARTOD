@@ -15,8 +15,11 @@ import tempfile
 import numpy as np
 import xarray as xr
 
+from cnv_catalog import catalog, normalize_unit
+from cnv_coordinates import resolve_header_coordinates
+from cnv_metadata import FIXED_DEFAULTS, publication_metadata, validate_ownership
+
 from cnv_mapping import (
-    CF_STANDARD_NAME_VOCABULARY,
     CnvHeaderColumn,
     CnvMapping,
     CnvSensor,
@@ -31,7 +34,7 @@ from cnv_mapping import (
 
 
 _FILENAME_RE = re.compile(
-    r"^(?P<cruise>[^_]+)_Stn\.(?P<station>.+)\.cnv$", re.IGNORECASE
+    r"^(?P<cruise>(?:WS|WB|SV|SAV|HG)\d{4,5}[A-Za-z]?)(?:[_. -]?(?:Stn|Sta)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)\.cnv$", re.IGNORECASE
 )
 _NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
 _PROCESSING_STAGES = {
@@ -54,6 +57,7 @@ class CnvCast:
     embedded_filename: str | None
     columns: tuple[CnvHeaderColumn, ...]
     values: np.ndarray
+    header_coordinates: Mapping[str, float] | None
     destination_sources: Mapping[str, SourceCandidate]
     instrument_model: str
     sensors: tuple[CnvSensor, ...]
@@ -97,8 +101,15 @@ def filename_identity(path: Path | str) -> tuple[str, str]:
     if match is None:
         raise _format_error(
             source,
-            "filename must match <cruiseID>_Stn.<station>.cnv",
+            "filename must match <cruiseID>_Stn.<station>.cnv or a reviewed cruise/station delimiter pattern",
         )
+    if re.search(r"(?i)(deck|dunk|wettest|test|tst|recast|surface|do_up)", match.group("station")):
+        raise _format_error(source, "test/recast filename needs explicit identity review")
+    if not re.fullmatch(r"(?:\d+(?:[._-]\d+)?[A-Za-z]*|[A-Za-z]+\d*(?:[._]\d+)?[A-Za-z]?)", match.group("station")):
+        raise _format_error(source, "ambiguous station token; identity review required")
+    parent_cruise = re.fullmatch(r"((?:WS|WB|SV|SAV|HG)\d{4,5}[A-Za-z]?)_cnv", source.parent.name, re.I)
+    if parent_cruise and parent_cruise[1].upper() != match.group("cruise").upper():
+        raise _format_error(source, "filename cruise differs from cruise folder; identity review required")
     return match.group("cruise").upper(), _station_id(match.group("station"))
 
 
@@ -176,7 +187,11 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
     ):
         raise _format_error(source, "missing Sea-Bird model line")
     instrument_model = header_lines[0][2:-11]
-    columns = read_cnv_header(source)
+    columns = read_cnv_header(source, require_coordinates=False)
+    try:
+        header_coordinates = resolve_header_coordinates([column.source_name for column in columns], header_lines)
+    except ValueError as exc:
+        raise _format_error(source, str(exc)) from exc
     fields, processing = _header_fields(header_lines)
     try:
         nquan = int(fields["nquan"])
@@ -220,6 +235,8 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
         for column in columns
     }
     required = {*mapping.required_fields.values(), mapping.vertical_field}
+    if header_coordinates is not None:
+        required -= {mapping.required_fields["latitude"], mapping.required_fields["longitude"]}
     missing = required - declared
     if missing:
         names = ", ".join(
@@ -241,8 +258,10 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
     ]
     if not np.all(np.isfinite(elapsed)) or np.any(np.diff(elapsed) < 0):
         raise _format_error(source, "timeS values must be finite and monotonic")
-    latitude = values[:, next(column.index for column in columns if column.source_name == "latitude")]
-    longitude = values[:, next(column.index for column in columns if column.source_name == "longitude")]
+    latitude = (np.array([header_coordinates["latitude"]]) if header_coordinates is not None
+                else values[:, next(column.index for column in columns if column.source_name == "latitude")])
+    longitude = (np.array([header_coordinates["longitude"]]) if header_coordinates is not None
+                 else values[:, next(column.index for column in columns if column.source_name == "longitude")])
     if (
         not np.all(np.isfinite(latitude))
         or np.any((latitude < -90) | (latitude > 90))
@@ -276,6 +295,7 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
         embedded_filename=embedded_filename,
         columns=columns,
         values=values,
+        header_coordinates=header_coordinates,
         destination_sources=destinations,
         instrument_model=instrument_model,
         sensors=sensors,
@@ -371,14 +391,20 @@ def _build_dataset(
     source: str,
     target: str,
     netcdf_global_attributes: Mapping[str, object],
+    fixed_attributes: Mapping[str, object],
+    derived_attributes: Mapping[str, object],
 ) -> xr.Dataset:
     time_candidate = mapping.required_fields["time"]
     latitude_candidate = mapping.required_fields["latitude"]
     longitude_candidate = mapping.required_fields["longitude"]
     depth_candidate = mapping.vertical_field
     time = cast.column(time_candidate.name, time_candidate.occurrence)
-    latitude = cast.column(latitude_candidate.name, latitude_candidate.occurrence)
-    longitude = cast.column(longitude_candidate.name, longitude_candidate.occurrence)
+    header_coordinates = cast.header_coordinates
+    latitude = (np.array([header_coordinates["latitude"]]) if header_coordinates is not None
+                else cast.column(latitude_candidate.name, latitude_candidate.occurrence))
+    longitude = (np.array([header_coordinates["longitude"]]) if header_coordinates is not None
+                 else cast.column(longitude_candidate.name, longitude_candidate.occurrence))
+    coordinate_dims = ("profile",) if header_coordinates is not None else ("profile", "z")
     depth = cast.column(depth_candidate.name, depth_candidate.occurrence)
     time_min, time_max = _finite_range(time)
     latitude_min, latitude_max = _finite_range(latitude)
@@ -424,24 +450,26 @@ def _build_dataset(
             },
         ),
         "latitude": (
-            ("profile", "z"),
-            latitude[None, :],
+            coordinate_dims,
+            latitude if header_coordinates is not None else latitude[None, :],
             {
                 "standard_name": "latitude",
                 "long_name": "Latitude",
                 "units": "degrees_north",
                 "axis": "Y",
+                **({"source_header": "NMEA Latitude"} if header_coordinates is not None else {}),
                 **_range_attributes(latitude),
             },
         ),
         "longitude": (
-            ("profile", "z"),
-            longitude[None, :],
+            coordinate_dims,
+            longitude if header_coordinates is not None else longitude[None, :],
             {
                 "standard_name": "longitude",
                 "long_name": "Longitude",
                 "units": "degrees_east",
                 "axis": "X",
+                **({"source_header": "NMEA Longitude"} if header_coordinates is not None else {}),
                 **_range_attributes(longitude),
             },
         ),
@@ -503,13 +531,16 @@ def _build_dataset(
             "coverage_content_type": "physicalMeasurement",
             **_range_attributes(values),
         }
-        mapped_units = specification.attributes.get("units")
-        if mapped_units is not None:
-            attributes["units"] = mapped_units
-            if source_column.units is not None and mapped_units != source_column.units:
+        unit = normalize_unit(source_column.units)
+        definition = catalog()["variables"][specification.target_name]
+        if not re.search(definition["description"], source_column.description):
+            raise _format_error(cast.source_path, f"{candidate.name}: source description conflicts with catalog target {specification.target_name!r}")
+        if unit is not None:
+            if unit not in definition["units"]:
+                raise _format_error(cast.source_path, f"{candidate.name}: source units {source_column.units!r} are incompatible with catalog target {specification.target_name!r}; unit conversion is required")
+            attributes["units"] = unit
+            if unit != source_column.units:
                 attributes["source_units"] = source_column.units
-        elif source_column.units is not None:
-            attributes["units"] = source_column.units
         instrument = _instrument_reference(
             cast, mapping, destination, candidate
         )
@@ -530,20 +561,9 @@ def _build_dataset(
         *cast.destination_sources,
     ]
     generated_attributes: dict[str, object] = {
-        "title": (
-            f"CTD data from cruise {cast.cruise_id}, "
-            f"station {cast.station_id}, {cast.start_time.date().isoformat()}"
-        ),
-        "id": cast.cruise_id,
         "station_name": stem,
         "instrument": f"CTD {cast.instrument_model}",
-        "source": "Sea-Bird CNV processed ASCII",
         "source_file": cast.source_path.name,
-        "source_format": "Sea-Bird CNV",
-        "processing_level": "Geophysical units from processed CNV data",
-        "featureType": "Profile",
-        "cdm_data_type": "Profile",
-        "cdm_altitude_proxy": "depth",
         "cdm_profile_variables": ", ".join(profile_variables),
         "history": (
             f"{_utc_iso(datetime.now(timezone.utc))}: converted {source} "
@@ -559,20 +579,21 @@ def _build_dataset(
         "time_coverage_resolution": _iso_duration(cast.interval_seconds),
         "geospatial_lat_min": latitude_min,
         "geospatial_lat_max": latitude_max,
-        "geospatial_lat_units": "degrees_north",
         "geospatial_lon_min": longitude_min,
         "geospatial_lon_max": longitude_max,
-        "geospatial_lon_units": "degrees_east",
         "geospatial_vertical_min": depth_min,
         "geospatial_vertical_max": depth_max,
         "geospatial_vertical_units": depth_units,
-        "geospatial_vertical_positive": "down",
-        "geospatial_bounds_crs": "EPSG:4326",
-        "standard_name_vocabulary": CF_STANDARD_NAME_VOCABULARY,
     }
     comment = _processing_comment(cast.processing)
     if comment is not None:
         generated_attributes["comment"] = comment
+    validate_ownership(netcdf_global_attributes, fixed_attributes, derived_attributes)
+    fixed = {**FIXED_DEFAULTS, **{key: value for key, value in fixed_attributes.items() if value is not None}}
+    generated_attributes.update(publication_metadata(
+        cast.cruise_id, stem, cast.start_time.date().isoformat(),
+        float(latitude[0]), float(longitude[0]), fixed, derived_attributes,
+    ))
     configured_attributes = {
         name: value
         for name, value in netcdf_global_attributes.items()
@@ -585,7 +606,7 @@ def _build_dataset(
             "netcdf_global_attributes cannot override generated attributes: "
             + ", ".join(conflicts)
         )
-    dataset.attrs = {**configured_attributes, **generated_attributes}
+    dataset.attrs = {**configured_attributes, **fixed, **generated_attributes}
     return dataset
 
 
@@ -597,12 +618,14 @@ def _validate_temporary(path: Path, cast: CnvCast, stem: str) -> None:
         ):
             raise ValueError("temporary NetCDF dimensions do not match the cast")
         for name in ("time", "longitude", "latitude", "depth"):
-            if name not in dataset or dataset[name].dims != ("profile", "z"):
+            expected_dims = (("profile",) if name in {"latitude", "longitude"}
+                             and cast.header_coordinates is not None else ("profile", "z"))
+            if name not in dataset or dataset[name].dims != expected_dims:
                 raise ValueError(
                     f"temporary NetCDF structural variable {name!r} is invalid"
                 )
         if (
-            dataset.attrs.get("id") != cast.cruise_id
+            dataset.attrs.get("id") != f"SFER_CTD_{stem}"
             or dataset.attrs.get("station_name") != stem
         ):
             raise ValueError("temporary NetCDF identity attributes are invalid")
@@ -622,6 +645,8 @@ def _write_cast(
     output_root: Path,
     overwrite: bool,
     netcdf_global_attributes: Mapping[str, object],
+    fixed_attributes: Mapping[str, object],
+    derived_attributes: Mapping[str, object],
 ) -> None:
     if target.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite existing {target}")
@@ -644,6 +669,8 @@ def _write_cast(
             source,
             relative_target,
             netcdf_global_attributes,
+            fixed_attributes,
+            derived_attributes,
         )
         dataset.to_netcdf(
             temporary, mode="w", format="NETCDF4", engine="netcdf4"
@@ -691,6 +718,8 @@ def convert_cnv(
     overwrite: bool = False,
     *,
     netcdf_global_attributes: Mapping[str, object] | None = None,
+    netcdf_fixed_global_attributes: Mapping[str, object] | None = None,
+    netcdf_derived_global_attributes: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Convert one CNV file or every CNV recursively found under a folder."""
 
@@ -709,6 +738,14 @@ def convert_cnv(
         source_base = source_input.parent
     mapping = load_cnv_mapping(mapping_path)
     global_attributes = netcdf_global_attributes or {}
+    fixed_attributes = netcdf_fixed_global_attributes or {}
+    derived_attributes = netcdf_derived_global_attributes or {}
+    validate_ownership(global_attributes, fixed_attributes, derived_attributes)
+    index_path = output / "conversion_index.json"
+    index = json.loads(index_path.read_text()) if index_path.exists() else {}
+    if not isinstance(index, dict) or not all(isinstance(k, str) and isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.nc", v) and ".." not in v for k, v in index.items()):
+        raise ValueError("invalid conversion_index.json")
+    reserved = set(index.values())
 
     records: dict[Path, dict[str, object]] = {}
     parsed: list[CnvCast] = []
@@ -736,6 +773,7 @@ def convert_cnv(
                 "warnings": list(cast.warnings),
                 "sensor_parse_status": cast.sensor_parse_status,
                 "instrument_count": len(cast.sensors),
+                "coordinate_source": "nmea_header" if cast.header_coordinates is not None else "data_columns",
                 "schema": [
                     {
                         "name": column.source_name,
@@ -769,6 +807,20 @@ def convert_cnv(
                 "" if repeat == 1 else f"-{repeat}"
             )
             target = output / cast.cruise_id / f"{stem}.nc"
+            source_key = str(cast.source_path.resolve())
+            if source_key in index:
+                target = output / index[source_key]
+                stem = target.stem
+                base = f"{cast.cruise_id}_{cast.station_id}"
+                if target.parent != output / cast.cruise_id or not re.fullmatch(re.escape(base) + r"(?:-\d+)?", stem):
+                    raise ValueError(f"conversion index identity differs from source {source_key}")
+                repeat = 1 if stem == base else int(stem[len(base) + 1:])
+            else:
+                while target.relative_to(output).as_posix() in reserved:
+                    repeat += 1
+                    stem = f"{cast.cruise_id}_{cast.station_id}-{repeat}"
+                    target = output / cast.cruise_id / f"{stem}.nc"
+                reserved.add(target.relative_to(output).as_posix())
             record = records[cast.source_path]
             record.update(
                 {
@@ -787,6 +839,8 @@ def convert_cnv(
                     output,
                     overwrite,
                     global_attributes,
+                    fixed_attributes,
+                    derived_attributes,
                 )
             except Exception as exc:
                 record.update(
@@ -798,6 +852,8 @@ def convert_cnv(
                 )
             else:
                 record.update({"status": "converted", "validation": "passed"})
+                index[source_key] = target.relative_to(output).as_posix()
+                _atomic_json(index_path, index)
 
     ordered_records = [records[path] for path in paths]
     statuses = Counter(str(record["status"]) for record in ordered_records)

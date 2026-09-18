@@ -74,7 +74,7 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
 
     mapping = inspect_cnv(root, output)
 
-    assert mapping["schema_version"] == 4
+    assert mapping["schema_version"] == 5
     assert mapping["inspection"]["sensor_parse_status"] == {"parsed": 2}
     assert mapping["inspection"]["sensor_tags"] == {
         "TemperatureSensor": {
@@ -98,18 +98,10 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
             "file_count": 2,
             "max_occurrences_per_file": 2,
             "units": ["deg C"],
+            "missing_units": False,
             "descriptions": ["Temperature [ITS-90, deg C]"],
         },
-        "action": "map",
-        "target_name": "temperature",
-        "attributes": {
-            "long_name": "Temperature",
-            "units": "deg C",
-            "standard_name": None,
-            "ioos_category": None,
-            "ncei_name": None,
-        },
-        "sensor_tag": None,
+        "mapped_to": "sea_water_temperature",
     }
     assert json.loads(output.read_text(encoding="utf-8")) == mapping
 
@@ -122,12 +114,14 @@ def test_inspect_cnv_accepts_one_file(tmp_path: Path):
     loaded = load_cnv_mapping(output)
 
     assert mapping["science_variables"]["t090C"]["observed"]["file_count"] == 1
-    assert mapping["science_variables"]["flag"]["attributes"]["units"] is None
+    assert mapping["science_variables"]["flag"]["observed"]["units"] == []
     assert loaded.science_variables["t090C"].attributes == {
-        "long_name": "Temperature",
-        "units": "deg C",
+        "long_name": "Sea Water Temperature",
+        "standard_name": "sea_water_temperature",
+        "ioos_category": "Temperature",
+        "ncei_name": "WATER TEMPERATURE",
     }
-    assert loaded.science_variables["t090C"].sensor_tag is None
+    assert loaded.science_variables["t090C"].sensor_tag == "TemperatureSensor"
 
 
 def test_mapping_requires_review_for_conflicting_descriptions(tmp_path: Path):
@@ -140,7 +134,7 @@ def test_mapping_requires_review_for_conflicting_descriptions(tmp_path: Path):
     path = tmp_path / "mapping.json"
     data = inspect_cnv(root, path)
 
-    assert data["science_variables"]["t090C"]["action"] == "review"
+    assert data["science_variables"]["t090C"]["mapped_to"] is None
 
     with pytest.raises(ValueError, match="still requires review"):
         load_cnv_mapping(path)
@@ -164,21 +158,13 @@ def test_mapping_ignores_processing_suffix_differences(tmp_path: Path):
             "file_count": 2,
             "max_occurrences_per_file": 1,
             "units": ["deg C"],
+            "missing_units": False,
             "descriptions": [
                 "Temperature [ITS-90, deg C], WS = 0.5",
                 "Temperature [ITS-90, deg C], WS = 2",
             ],
         },
-        "action": "map",
-        "target_name": "temperature",
-        "attributes": {
-            "long_name": "Temperature",
-            "units": "deg C",
-            "standard_name": None,
-            "ioos_category": None,
-            "ncei_name": None,
-        },
-        "sensor_tag": None,
+        "mapped_to": "sea_water_temperature",
     }
 
 
@@ -211,24 +197,55 @@ def test_mapping_loads_mapped_and_ignored_sources(tmp_path: Path):
     source = _cnv(tmp_path / "WS24258_Stn.054b.cnv")
     path = tmp_path / "mapping.json"
     data = inspect_cnv(source, path)
-    data["science_variables"]["t090C"].update(
-        {
-            "action": "map",
-            "target_name": "temperature",
-            "attributes": {"standard_name": "sea_water_temperature"},
-            "sensor_tag": "TemperatureSensor",
-        }
-    )
-    data["science_variables"]["flag"].update(
-        {"action": "ignore", "target_name": None}
-    )
+    data["science_variables"]["flag"].update({"ignore": True, "mapped_to": None})
     path.write_text(json.dumps(data), encoding="utf-8")
 
     mapping = load_cnv_mapping(path)
 
-    assert mapping.science_variables["t090C"].target_name == "temperature"
-    assert mapping.science_variables["t090C"].attributes == {
-        "standard_name": "sea_water_temperature"
-    }
+    assert mapping.science_variables["t090C"].target_name == "sea_water_temperature"
+    assert mapping.science_variables["t090C"].attributes["standard_name"] == "sea_water_temperature"
+    assert "units" not in mapping.science_variables["t090C"].attributes
     assert mapping.science_variables["t090C"].sensor_tag == "TemperatureSensor"
     assert mapping.science_variables["flag"].action == "ignore"
+
+
+@pytest.mark.parametrize("field,value", [("attributes", {"units": "K"}), ("sensor_tag", "TemperatureSensor"), ("action", "map")])
+def test_dataset_mapping_cannot_duplicate_catalog_definitions(tmp_path, field, value):
+    source = _cnv(tmp_path / "WS24258_Stn.001.cnv")
+    path = tmp_path / "mapping.json"
+    data = inspect_cnv(source, path)
+    data["science_variables"]["t090C"][field] = value
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="definitions belong in cnv_catalog"):
+        load_cnv_mapping(path)
+
+
+def test_conversion_resolves_current_catalog_without_reinspection(tmp_path, monkeypatch):
+    from copy import deepcopy
+    import cnv_catalog
+    from cnv_converter import convert_cnv
+    import xarray as xr
+
+    source = _cnv(tmp_path / "WS24258_Stn.001.cnv")
+    path = tmp_path / "mapping.json"
+    inspect_cnv(source, path)
+    original = path.read_bytes()
+    definition = deepcopy(cnv_catalog.catalog()["variables"]["sea_water_temperature"])
+    definition["long_name"] = "Catalog-owned updated label"
+    monkeypatch.setitem(cnv_catalog.catalog()["variables"], "sea_water_temperature", definition)
+    report = convert_cnv(source, tmp_path / "output", path)
+    assert report["counts"]["converted"] == 1
+    with xr.open_dataset(tmp_path / "output/WS24258/WS24258_1.nc", decode_cf=False) as ds:
+        assert ds.sea_water_temperature.attrs["long_name"] == "Catalog-owned updated label"
+        assert ds.sea_water_temperature.attrs["units"] == "degree_Celsius"
+    assert path.read_bytes() == original
+
+
+def test_mapping_rejects_unknown_catalog_target(tmp_path):
+    source = _cnv(tmp_path / "WS24258_Stn.001.cnv")
+    path = tmp_path / "mapping.json"
+    data = inspect_cnv(source, path)
+    data["science_variables"]["t090C"]["mapped_to"] = "not_a_measurement"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="unknown catalog target"):
+        load_cnv_mapping(path)

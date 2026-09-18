@@ -1,10 +1,22 @@
 {
   "sea_water_temperature": {
-    "suspect_threshold": 0.5,
-    "fail_threshold": 2.0
+    "suspect_threshold": 0.1,
+    "fail_threshold": 0.16
+  },
+  "sea_water_temperature_2": {
+    "suspect_threshold": 0.1,
+    "fail_threshold": 0.16
   },
   "sea_water_salinity": {
-    "suspect_threshold": 0.05,
-    "fail_threshold": 0.2
+    "suspect_threshold": 0.01,
+    "fail_threshold": 0.03
+  },
+  "sea_water_salinity_2": {
+    "suspect_threshold": 0.01,
+    "fail_threshold": 0.03
+  },
+  "dissolved_oxygen": {
+    "suspect_threshold": 0.024,
+    "fail_threshold": 0.06
   }
 }

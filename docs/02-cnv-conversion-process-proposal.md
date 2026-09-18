@@ -1,10 +1,12 @@
 # `02_CNV` to NetCDF and ERDDAP XML conversion specification
 
+> Historical source/design record, not the current conversion contract. Source observations below are retained, but old mappings, timeQ/coordinate reduction rules, metadata ownership and CLI examples are superseded. Use the [current conversion process](cnv-conversion-process.md), [automatic workflow](automatic-cnv-workflow.md), and [shared template guide](../config_template/README.md). The current converter requires schema 5 and uses timeS, source-specific coordinate dimensions, and catalog-owned attributes.
+
 ## Status
 
-This is the approved and implemented baseline for converting the historical
+This records the former baseline for converting the historical
 `cnv_data/02_CNV` archive. It records the decisions made during design review
-and remains the authoritative conversion contract.
+and is preserved for historical context only; it is not the active contract.
 
 The implementation is split across `cnv_identity.py`, `cnv_mapping.py`,
 `cnv_converter.py`, and `xml_generator/`. Operational commands and the

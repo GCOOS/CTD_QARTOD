@@ -1,0 +1,9 @@
+{
+  "issues": [
+    "photosynthetically_available_radiation: no template gross range for units None"
+  ],
+  "netcdf_file_count": 31,
+  "profile": "/Volumes/Crucial X9/CTD_QARTOD/config/sav1803/dataset_profile.json",
+  "rate_of_change_basis": "unchanged Walton Smith per-adjacent-sample thresholds; not per-second",
+  "reference": "/Volumes/Crucial X9/CTD_QARTOD/config/walton_smith/dataset_profile.json"
+}

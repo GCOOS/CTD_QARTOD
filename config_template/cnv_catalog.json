@@ -1,0 +1,374 @@
+{
+  "units": {
+    "deg C": "degree_Celsius",
+    "degree_Celsius": "degree_Celsius",
+    "degree_C": "degree_Celsius",
+    "Celsius": "degree_Celsius",
+    "S/m": "S m-1",
+    "S m-1": "S m-1",
+    "db": "dbar",
+    "dbar": "dbar",
+    "1/m": "m-1",
+    "m-1": "m-1",
+    "%": "%",
+    "m": "m",
+    "m/s": "m s-1",
+    "m s-1": "m s-1",
+    "ml/l": "ml l-1",
+    "ml l-1": "ml l-1",
+    "mg/l": "mg l-1",
+    "mg l-1": "mg l-1",
+    "kg/m^3": "kg m-3",
+    "kg m-3": "kg m-3",
+    "mg/m^3": "mg m-3",
+    "mg m-3": "mg m-3",
+    "ug l-1": "mg m-3",
+    "Watts/m^2": "W m-2",
+    "Watt m-2": "W m-2",
+    "W m-2": "W m-2",
+    "umol photons/m^2/sec": "umol m-2 s-1",
+    "umol photons m-2 s-1": "umol m-2 s-1",
+    "umol m-2 s-1": "umol m-2 s-1",
+    "PSU": "1",
+    "1": "1",
+    "NTU": "NTU",
+    "volts": "V",
+    "V": "V",
+    "seconds": "s",
+    "s": "s"
+  },
+  "variables": {
+    "sea_water_temperature": {
+      "sources": [
+        "t090C",
+        "t190C"
+      ],
+      "description": "^Temperature(?:,| \\[)",
+      "long_name": "Sea Water Temperature",
+      "units": [
+        "degree_Celsius"
+      ],
+      "standard_name": "sea_water_temperature",
+      "ioos_category": "Temperature",
+      "ncei_name": "WATER TEMPERATURE",
+      "sensor_tag": "TemperatureSensor",
+      "aliases": [
+        "temperature",
+        "seawater_temperature"
+      ]
+    },
+    "sea_water_electrical_conductivity": {
+      "sources": [
+        "c0S/m",
+        "c1S/m"
+      ],
+      "description": "^Conductivity",
+      "long_name": "Sea Water Electrical Conductivity",
+      "units": [
+        "S m-1"
+      ],
+      "standard_name": "sea_water_electrical_conductivity",
+      "ioos_category": "Salinity",
+      "ncei_name": "CONDUCTIVITY",
+      "sensor_tag": "ConductivitySensor",
+      "aliases": [
+        "conductivity"
+      ]
+    },
+    "sea_water_pressure": {
+      "sources": [
+        "prDM",
+        "prdM"
+      ],
+      "description": "^Pressure",
+      "long_name": "Sea Water Pressure",
+      "units": [
+        "dbar"
+      ],
+      "standard_name": "sea_water_pressure",
+      "ioos_category": "Pressure",
+      "sensor_tag": "PressureSensor",
+      "aliases": [
+        "pressure"
+      ]
+    },
+    "sea_water_salinity": {
+      "sources": [
+        "sal00",
+        "sal11"
+      ],
+      "description": "^Salinity, Practical",
+      "long_name": "Sea Water Practical Salinity",
+      "units": [
+        "1"
+      ],
+      "standard_name": "sea_water_practical_salinity",
+      "ioos_category": "Salinity",
+      "sensor_tag": "derived",
+      "aliases": [
+        "salinity_practical"
+      ]
+    },
+    "sea_water_sigma_t": {
+      "sources": [
+        "sigma-t00",
+        "sigma-t11"
+      ],
+      "description": "^Density.*sigma-t",
+      "long_name": "Sea Water Sigma-T",
+      "units": [
+        "kg m-3"
+      ],
+      "standard_name": "sea_water_sigma_t",
+      "ioos_category": "Salinity",
+      "sensor_tag": "derived",
+      "aliases": [
+        "sigma_t"
+      ]
+    },
+    "sea_water_density": {
+      "sources": [
+        "density00"
+      ],
+      "description": "^Density",
+      "long_name": "Sea Water Density",
+      "units": [
+        "kg m-3"
+      ],
+      "standard_name": "sea_water_density",
+      "ioos_category": "Salinity",
+      "sensor_tag": "derived",
+      "aliases": [
+        "density"
+      ]
+    },
+    "beam_transmission": {
+      "sources": [
+        "xmiss",
+        "CStarTr0"
+      ],
+      "description": "^Beam Transmission",
+      "long_name": "Beam Transmission",
+      "units": [
+        "%"
+      ],
+      "ioos_category": "Optical Properties",
+      "sensor_by_source": {
+        "xmiss": "TransChelseaSeatechWetlabCStarSensor",
+        "CStarTr0": "WET_LabsCStar"
+      }
+    },
+    "beam_attenuation": {
+      "sources": [
+        "bat",
+        "CStarAt0"
+      ],
+      "description": "^Beam Attenuation",
+      "long_name": "Beam Attenuation",
+      "units": [
+        "m-1"
+      ],
+      "ioos_category": "Optical Properties",
+      "sensor_by_source": {
+        "bat": "TransChelseaSeatechWetlabCStarSensor",
+        "CStarAt0": "WET_LabsCStar"
+      },
+      "standard_name": "volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water"
+    },
+    "dissolved_oxygen": {
+      "sources": [
+        "sbeox0ML/L",
+        "sbeox0Mg/L"
+      ],
+      "description": "^Oxygen, SBE",
+      "long_name": "Dissolved Oxygen",
+      "units": [
+        "ml l-1",
+        "mg l-1"
+      ],
+      "ioos_category": "Dissolved O2",
+      "sensor_tag": "OxygenSensor",
+      "qc_units": [
+        "ml l-1"
+      ],
+      "aliases": [
+        "dissolved_oxygen_mass"
+      ]
+    },
+    "oxygen_saturation": {
+      "sources": [
+        "oxsatML/L"
+      ],
+      "description": "^Oxygen Saturation, Weiss",
+      "long_name": "Oxygen Saturation Concentration, Weiss",
+      "units": [
+        "ml l-1"
+      ],
+      "ioos_category": "Dissolved O2",
+      "sensor_tag": "derived",
+      "aliases": [
+        "oxygen_saturation_weiss"
+      ]
+    },
+    "oxygen_solubility_mass": {
+      "sources": [
+        "oxsatMg/L",
+        "oxsolMg/L"
+      ],
+      "description": "^Oxygen",
+      "long_name": "Oxygen Solubility Mass Concentration",
+      "units": [
+        "mg l-1"
+      ],
+      "sensor_tag": "derived",
+      "ioos_category": "Dissolved O2"
+    },
+    "oxygen_voltage": {
+      "sources": [
+        "sbeox0V"
+      ],
+      "description": "^Oxygen",
+      "long_name": "Oxygen Sensor Voltage",
+      "units": [
+        "V"
+      ],
+      "sensor_tag": "OxygenSensor"
+    },
+    "photosynthetically_available_radiation": {
+      "sources": [
+        "par"
+      ],
+      "description": "^PAR/Irradiance",
+      "long_name": "Photosynthetically Available Radiation",
+      "units": [
+        "W m-2",
+        "umol m-2 s-1"
+      ],
+      "sensor_tag": "PAR_BiosphericalLicorChelseaSensor",
+      "aliases": [
+        "par"
+      ]
+    },
+    "surface_photosynthetically_available_radiation": {
+      "sources": [
+        "spar"
+      ],
+      "description": "^SPAR",
+      "long_name": "Surface Photosynthetically Available Radiation",
+      "units": [
+        "umol m-2 s-1"
+      ],
+      "sensor_tag": "SPAR_Sensor",
+      "aliases": [
+        "surface_par"
+      ]
+    },
+    "chlorophyll_fluorescence": {
+      "sources": [
+        "flSP"
+      ],
+      "description": "^Fluorescence, Seapoint",
+      "long_name": "Seapoint Fluorescence",
+      "units": [],
+      "sensor_tag": "FluoroSeapointSensor"
+    },
+    "chlorophyll_concentration": {
+      "sources": [
+        "wetStar",
+        "flECO-AFL"
+      ],
+      "description": "^Fluorescence, WET Labs",
+      "long_name": "Chlorophyll Concentration from Fluorescence",
+      "units": [
+        "mg m-3"
+      ],
+      "ioos_category": "Ocean Color",
+      "sensor_by_source": {
+        "wetStar": "FluoroWetlabWetstarSensor",
+        "flECO-AFL": "FluoroWetlabECO_AFL_FL_Sensor"
+      },
+      "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water"
+    },
+    "CDOM": {
+      "sources": [
+        "wetCDOM"
+      ],
+      "description": "^Fluorescence, WET Labs CDOM",
+      "long_name": "CDOM from Fluorescence",
+      "units": [
+        "mg m-3"
+      ],
+      "ioos_category": "Optical Properties",
+      "sensor_tag": "FluoroWetlabCDOM_Sensor",
+      "aliases": [
+        "cdom"
+      ]
+    },
+    "sea_water_turbidity": {
+      "sources": [
+        "turbWETntu0"
+      ],
+      "description": "^Turbidity",
+      "long_name": "Sea Water Turbidity",
+      "units": [
+        "NTU"
+      ],
+      "ioos_category": "Optical Properties",
+      "sensor_tag": "TurbidityMeter",
+      "aliases": [
+        "turbidity"
+      ]
+    },
+    "altimeter": {
+      "sources": [
+        "altM"
+      ],
+      "description": "^Altimeter",
+      "long_name": "Altimeter Range",
+      "units": [
+        "m"
+      ],
+      "sensor_tag": "AltimeterSensor"
+    },
+    "descent_rate": {
+      "sources": [
+        "dz/dtM"
+      ],
+      "description": "^Descent Rate",
+      "long_name": "Descent Rate",
+      "units": [
+        "m s-1"
+      ],
+      "sensor_tag": "derived"
+    },
+    "sound_velocity": {
+      "sources": [
+        "svCM"
+      ],
+      "description": "^Sound Velocity",
+      "long_name": "Sound Velocity",
+      "units": [
+        "m s-1"
+      ],
+      "sensor_tag": "derived"
+    },
+    "flag": {
+      "sources": [
+        "flag"
+      ],
+      "description": "(?i)flag",
+      "long_name": "Sea-Bird Source Flag (not QARTOD)",
+      "units": [],
+      "sensor_tag": "derived"
+    },
+    "pump_status": {
+      "sources": [
+        "pumps"
+      ],
+      "description": "(?i)pump",
+      "long_name": "Pump Status",
+      "units": [],
+      "sensor_tag": "derived"
+    }
+  }
+}

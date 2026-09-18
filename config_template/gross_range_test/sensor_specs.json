@@ -1,3 +1,111 @@
 {
-  "sensors": {}
+  "sensors": {
+    "sbe_3plus_temperature": {
+      "description": "SBE 3plus Premium CTD Temperature Sensor",
+      "identifiers": {
+        "long_names": ["Temperature Sensor 1", "Temperature Sensor 2"]
+      },
+      "ranges": {
+        "degree_C": { "min": 0, "max": 35 },
+        "degree_Celsius": { "min": 0, "max": 35 },
+        "Celsius": { "min": 0, "max": 35 }
+      }
+    },
+    "sbe_4c_conductivity": {
+      "description": "Seabird SBE 4C Conductivity Sensor",
+      "identifiers": {
+        "long_names": ["Conductivity Sensor 1", "Conductivity Sensor 2"]
+      },
+      "ranges": {
+        "S m-1": { "min": 0, "max": 7 }
+      }
+    },
+    "sbe_911plus_pressure": {
+      "description": "SBE 911plus CTD (Pressure Sensor)",
+      "identifiers": {
+        "long_names": ["Pressure Sensor"]
+      },
+      "ranges": {
+        "dbar": { "min": 0, "max": 6800 }
+      }
+    },
+    "sbe_43_oxygen": {
+      "description": "SBE 43 Dissolved Oxygen Sensor",
+      "identifiers": {
+        "long_names": ["Oxygen Sensor"]
+      },
+      "ranges": {
+        "ml l-1": { "min": 0, "max": 9.5 }
+      }
+    },
+    "par_sensor": {
+      "description": "Biospherical QSP2300 / Chelsea PAR Sensor",
+      "identifiers": {
+        "long_names": ["Par Sensor"]
+      },
+      "ranges": {
+        "umol m-2 s-1": { "min": 0, "max": 5000 },
+        "Watt m-2": { "min": 0, "max": 1100 }
+      }
+    },
+    "spar_sensor": {
+      "description": "SPAR Sensor (Surface PAR)",
+      "identifiers": {
+        "long_names": ["SPAR Sensor"]
+      },
+      "ranges": {
+        "umol m-2 s-1": { "min": 0, "max": 2500 },
+        "umol photons m-2 s-1": { "min": 0, "max": 2500 }
+      }
+    },
+    "chlorophyll_fluorometer": {
+      "description": "Chlorophyll Fluorometer (Seapoint / WET Labs ECO-AFL/Fl)",
+      "identifiers": {
+        "long_names": ["fluorometer"]
+      },
+      "ranges": {
+        "ug l-1": { "min": 0, "max": 125 },
+        "mg m-3": { "min": 0, "max": 125 }
+      }
+    },
+    "cdom_fluorometer": {
+      "description": "WET Labs ECO CDOM Fluorometer",
+      "identifiers": {
+        "long_names": ["fluorometer CDOM"]
+      },
+      "ranges": {
+        "mg m-3": { "min": 0, "max": 500 }
+      }
+    },
+    "turbidity_meter": {
+      "description": "WET Labs ECO-NTU / ECO FLNTU",
+      "identifiers": {
+        "long_names": ["turbidity meter"]
+      },
+      "ranges": {
+        "NTU": { "min": 0, "max": 25 }
+      }
+    },
+    "transmissometer": {
+      "description": "Transmissometer (WET Labs C-Star / Chelsea / Seatech)",
+      "identifiers": {
+        "long_names": ["Transmissometer"]
+      },
+      "ranges": {
+        "m-1": { "min": 0, "max": 5 }
+      }
+    },
+    "derived_salinity": {
+      "description": "Derived practical salinity",
+      "requires_instrument": false,
+      "identifiers": {
+        "long_names": []
+      },
+      "ranges": {
+        " ": { "min": 0, "max": 50 },
+        "": { "min": 0, "max": 50 },
+        "1": { "min": 0, "max": 50 }
+      }
+    }
+  }
 }

@@ -1,257 +1,114 @@
-# CNV inspection and conversion
+# Current CNV conversion process
 
-Input can be one `.cnv` file, one cruise folder, or a folder whose
-subfolders contain multiple cruises.
+This guide describes the schema-5 workflow. For commands and full examples, see
+[automatic CNV workflow](automatic-cnv-workflow.md) and
+[shared defaults](../config_template/README.md).
 
-```text
-CNV input
-  -> inspect-cnv
-  -> comment-derived cnv_mapping.json
-  -> convert-cnv
-  -> source NetCDF + conversion_report.json
-  -> generate-sensor-config
-  -> sensor_specs.json + variable_sensor_map.json
-  -> QC
-  -> generated ERDDAP XML
-```
+## 1. Input and inspection
 
-## 1. Inspect the complete input scope
+`python main.py convert-cnv /path/to/cnv` accepts a single CNV, a cruise folder,
+or a tree containing multiple cruises. The actual filename supplies cruise and
+station, not the embedded `FileName`. Numeric leading zeros are removed while
+station suffixes remain: `054b` becomes `54b`, not a repeat of station 54.
+Supported vessel prefixes include WS, WB, SV/SAV and HG. Unresolved identities
+fail instead of being guessed. A processing tree prefers a sibling `06-drv`;
+other ambiguous processing stages require an explicit input selection.
 
-```bash
-PYTHONPATH=. uv run python main.py inspect-cnv \
-  /path/to/cnv/input \
-  --output config/YOUR_DATASET/cnv_mapping.json
-```
+`inspect-cnv` can inventory the complete input first. It creates a source-keyed
+`cnv_mapping.json` with observed descriptions, units, occurrence/file counts,
+sensor inventory, coordinate sources and errors. Each scientific entry has
+`observed` and `mapped_to`, a key in `config_template/cnv_catalog.json`.
+Definitions are not duplicated into the dataset mapping. Unknown/conflicting
+sources have a null target and block conversion. Intentional exclusion uses
+`ignore: true` and `mapped_to: null`.
 
-Inspection reads CNV headers without loading the numerical table. It
-recursively inventories every exact source name, its maximum occurrence count
-within one file, descriptions, units, file count, and every embedded Sensors
-XML tag. It also verifies that `nquan` matches the declared columns and that
-`nvalues` declares at least one row. Invalid files appear under
-`inspection.failed_files` and do not influence the mapping.
+## 2. Shared definitions and dataset ownership
 
-Stable descriptions and units are mapped automatically; conflicting or unsafe
-entries remain in `review` state. `inspection.sensor_tags` gives humans the
-exact allowed spelling and reports how many valid files and occurrences contain
-each tag.
+`config_template/` contains the single profile template, CNV catalog, QC category
+mapping, and populated Walton Smith-based per-test defaults. Conversion without
+an explicit profile creates `config/<dataset>/dataset_profile.json` and the
+observed mapping. Existing profiles and mappings are preserved.
 
-The fixed source fields are:
+The catalog owns canonical measurement names, long/standard names, IOOS and NCEI
+metadata where defined, accepted units, spelling normalization and sensor tags.
+Conversion resolves those definitions at runtime. Standard-name URLs are derived
+from the pinned CF table. Actual per-file descriptions and units are validated.
+Missing source units remain absent; numerical values are not rescaled.
 
-- `timeS` -> `time`
-- `longitude` -> `longitude`
-- `latitude` -> `latitude`
+Different source names or repeated columns may map to the same measurement.
+Suffixes are added afterward: `sea_water_temperature`,
+`sea_water_temperature_2`, etc. Chlorophyll fluorescence and concentration remain
+different measurements even though both belong to QC category `chlorophyll`.
 
-If every inspected file contains one `depSM`, inspection selects it as the
-vertical source. Otherwise the human must set `vertical_field.source_name`.
+## 3. NetCDF construction
 
-Stable comments produce entries like:
+Every cast has one `profile` and a `z` sample dimension. Output paths are
+`<data_root>/<cruise>/<cruise>_<station>[-<repeat-number>].nc`.
+Repeated cruise/station identities use start time and source-path ordering;
+`conversion_index.json` retains naming across incremental runs.
 
-```json
-{
-  "action": "map",
-  "target_name": "temperature",
-  "attributes": {
-    "long_name": "Temperature",
-    "units": "deg C",
-    "standard_name": null,
-    "ioos_category": null,
-    "ncei_name": null
-  },
-  "sensor_tag": null
-}
-```
+| Field | Source | Dimensions |
+| --- | --- | --- |
+| time | Original `timeS`, with seconds-since origin from CNV `start_time` | `(profile, z)` |
+| depth | Selected vertical column, normally `depSM` | `(profile, z)` |
+| latitude/longitude | Complete CNV coordinate-column pair | `(profile, z)` |
+| latitude/longitude when both columns are absent | Valid NMEA headers | `(profile)` |
+| science | Original mapped columns | `(profile, z)` |
 
-`long_name`, a safe destination, and one stable source unit come directly from
-the CNV comment. A missing or conflicting source unit produces
-`"units": null`. The other values require review:
+Header degrees/minutes/hemispheres are converted to signed decimal degrees.
+A partial or invalid coordinate-column pair is rejected, not replaced by headers.
+The elapsed time's nonzero starting value is preserved. QC decodes CF time using
+its actual origin/calendar rather than treating elapsed numbers as Unix time.
 
-- `standard_name`: fill only with a real CF Standard Name Table v94 entry that
-  describes the quantity. Leave it null when no exact name exists.
-- `ioos_category`: fill with the appropriate discovery category if this output
-  will be published through an IOOS/ERDDAP service.
-- `ncei_name`: optional archive/product terminology. It is not a CF name and is
-  not used by this QC pipeline; leave it null unless an NCEI delivery contract
-  supplies the value.
-- `sensor_tag`: use an exact key listed in `inspection.sensor_tags` for a
-  physical measurement. Use the reserved string `derived` for a calculated
-  variable with no dedicated sensor. A null is allowed for variables not
-  selected for sensor-aware QC.
+The converter checks declared rows/columns, required fields, finite coordinates,
+interval and monotonic elapsed time. The source bad flag becomes NaN. Instrument
+variables preserve parsed sensor type/channel, serial and calibration date;
+science variables keep source name, occurrence, description and changed unit
+spelling. Not every calibration coefficient becomes an output attribute.
 
-There is no editable `standard_name_url` field. When `standard_name` is filled,
-conversion derives its version-pinned CF URL automatically. A human may change
-`attributes.units` only to an equivalent notation, such as `deg C` to
-`degree_Celsius`; the converter never scales or offsets numerical values.
+## 4. Global metadata
 
-If conflicting descriptions or units leave an entry in `review`, resolve it as
-`map` or explicitly exclude it as:
+All three sections are in each dataset profile:
 
-```json
-{
-  "action": "ignore",
-  "target_name": null,
-  "attributes": {
-    "long_name": null,
-    "units": null,
-    "standard_name": null,
-    "ioos_category": null,
-    "ncei_name": null
-  },
-  "sensor_tag": null
-}
-```
+- `netcdf_global_attributes`: editable creator/contributor, acknowledgment,
+  product version and polygon defaults, copied from the approved WS24258 profile.
+  These values are configured, not inferred from the CNV; null omits a field.
+- `netcdf_fixed_global_attributes`: configured publisher, institution,
+  conventions and other SFER defaults.
+- `netcdf_derived_global_attributes`: identifies computed fields such as identity,
+  platform, coverage, timestamps and processing history. Title/summary values
+  are format templates; other entries describe derivations, not expressions.
 
-Conversion refuses mappings that still contain `review`.
+Ownership conflicts are errors. Source processing comments are derived from CNV.
+No publication date is invented. Review copied creator and geographic defaults
+before publishing a different dataset.
 
-## 2. Convert
+## 5. QC and XML
+
+After conversion, new profiles without QC paths get independent settings copied
+and adapted from `config_template/` to their actual NetCDF names and units.
+Settings live directly under `config/<dataset>/`: no nested QC folder,
+`qc_limits` selector or per-cast override file. Existing local settings are not
+regenerated. Missing thresholds or station references yield NOT_EVALUATED;
+successful execution is not the same as every sample passing QC.
 
 ```bash
-PYTHONPATH=. uv run python main.py convert-cnv \
-  /path/to/cnv/input \
-  --profile config/YOUR_DATASET/dataset_profile.json
+python main.py qc --profile config/sav1803/dataset_profile.json
+python main.py erddap-xml --profile config/sav1803/dataset_profile.json
 ```
 
-The profile supplies `paths.cnv_mapping`, writes source NetCDF beneath
-`data_root`, and supplies confirmed dataset-level metadata through
-`netcdf_global_attributes`.
+QC preserves scientific arrays and adds flags/provenance. The XML generator reads
+NetCDF globals and variables, applies explicit ERDDAP overrides, and creates a
+complete XML file without reading an existing XML template. Deployment is separate.
 
-Each actual basename must match:
+## 6. Output safety and verification
 
-```text
-<cruiseID>_Stn.<station>.cnv
-```
+The converter writes a temporary NetCDF, reopens it for validation, then installs
+it atomically. Existing outputs require `--overwrite`; failures remain in
+`conversion_report.json` and cause a nonzero CLI exit. QC records terminal status
+and counts in `qc_run_manifest.json`. XML has one dataset entry per discovered
+NetCDF file; generation alone does not verify server acceptance.
 
-The embedded CNV `FileName` is provenance only. A mismatch is reported as a
-warning. Numeric leading zeroes are removed without interpreting suffixes:
-
-```text
-WS24258_Stn.054.cnv  -> WS24258_54.nc
-WS24258_Stn.054b.cnv -> WS24258_54b.nc
-```
-
-Only files with the same parsed cruise and station are repetitions. They are
-ordered by `start_time` and source path, then named with `-2`, `-3`, and later
-suffixes.
-
-Mapped destination suffixes are assigned after source mapping. For example,
-one mapping `t090C -> temperature` produces `temperature` and
-`temperature_2` when `t090C` occurs twice in one CNV file. Source values are
-never converted. The reviewed `attributes.units` spelling is written as
-`units`; if it differs from the CNV spelling, that original is retained as
-`source_units`.
-
-The output tree is:
-
-```text
-<profile data_root>/
-|-- conversion_report.json
-`-- WS24258/
-    |-- WS24258_54.nc
-    `-- WS24258_54b.nc
-```
-
-NetCDF `time`, `longitude`, `latitude`, `depth`, station, cruise, and mapped
-science variables use `(profile, z)`. `timeS` values are preserved under
-`time`, with `# start_time` used as the CF time origin. Each NetCDF is written
-to a sibling temporary file, reopened and validated, and then atomically
-installed. Existing outputs require `--overwrite`.
-
-Every mapped standard name receives a URL such as:
-
-```text
-https://cfconventions.org/Data/cf-standard-names/94/build/cf-standard-name-table.html#sea_water_temperature
-```
-
-The NetCDF global `standard_name_vocabulary` is written as
-`CF Standard Name Table v94`. Sensor serial number, calibration date, channel,
-and XML tag are copied into scalar `instrumentN` variables. A mapped science
-variable points to its matching instrument through its `instrument` attribute;
-an exact configured tag that is absent in a cast is a conversion error.
-
-The converter also merges the profile's human-owned
-`netcdf_global_attributes` into each file. Null values are review placeholders
-and are omitted. Human values cannot replace derived fields such as `title`,
-`history`, or coverage bounds. See
-[CNV-generated NetCDF versus the supplied NetCDF](cnv-vs-supplied-netcdf.md)
-for the complete ownership rules and concrete reference examples.
-
-## 3. Generate the sensor configuration
-
-First list every converted NetCDF variable that should be QCed under the right
-category in `qc_variable_mapping.json`. Then run:
-
-```bash
-PYTHONPATH=. uv run python main.py generate-sensor-config \
-  --profile config/YOUR_DATASET/dataset_profile.json
-```
-
-The command scans all `.nc` files under the profile's `data_root`. For each
-QC-selected variable, it reads `units`, follows `instrument` to the copied XML
-sensor tag, and writes the profile-selected files:
-
-- `gross_range_test/sensor_specs.json`: one physical or derived sensor group,
-  exact `identifiers.long_names`, every observed output unit, and
-  `{ "min": null, "max": null }` placeholders.
-- `gross_range_test/variable_sensor_map.json`: every QC variable, including
-  `_2` destinations, linked to its detected sensor group. If different casts
-  use different sensor types, the value is a list of valid groups.
-
-A QC-selected variable with neither an instrument link nor an explicit
-`sensor_tag: "derived"` stops generation and names the unresolved variable.
-Variables without a unit still receive a sensor link, but their sensor range
-table is empty until the mapping unit is reviewed and the files reconverted.
-The command replaces empty template files, but protects nonempty reviewed files
-unless `--overwrite` is explicitly supplied. `--overwrite` also replaces any
-limits already entered.
-
-## 4. Complete scientific QC configuration and run QC
-
-Automation can identify structure, provenance, sensor association, and units;
-it cannot choose scientifically defensible thresholds. Humans must fill:
-
-| File | Human decision |
-|---|---|
-| `gross_range_test/sensor_specs.json` | Minimum and maximum for every sensor/unit range |
-| `location_test/Station_Mean_Coords.csv` | Expected coordinate for each station |
-| `location_test/location_config.json` | Allowed coordinate tolerance |
-| `climatology_test/*.json` | Station class and defensible depth/time/value spans |
-| `spike_test/spike_thresholds.json` | Suspect and fail spike thresholds |
-| `rate_of_change_test/rate_of_change_thresholds.json` | Maximum adjacent-sample change |
-| `flat_line_test/flat_line_config.json` | Repeat counts and epsilon appropriate for sampling resolution |
-| `dataset_profile.json` | Input/output roots, test modes, and confirmed values for null `netcdf_global_attributes` placeholders |
-
-Run the strict preflight and QC together with:
-
-```bash
-PYTHONPATH=. uv run python main.py qc \
-  --profile config/YOUR_DATASET/dataset_profile.json
-```
-
-Null or absent scientific limits produce `NOT_EVALUATED`, not fabricated pass
-flags. Batch QC mirrors the cruise tree in duplicate mode and records the
-configuration and run outcome in `qc_run_manifest.json`.
-
-## Responsibility summary
-
-| Output information | Source | Automatic? |
-|---|---|---|
-| Cruise ID and station | Actual filename `<cruiseID>_Stn.<station>.cnv` | Yes |
-| Repeated-station suffix | Duplicate parsed cruise/station identities | Yes |
-| `time`, latitude, longitude | Fixed CNV columns; time origin from `start_time` | Yes |
-| Depth | Inspected `depSM` when present in every valid file | Yes, otherwise review |
-| Science source inventory and duplicate count | `# name` declarations across the full input scope | Yes |
-| Initial destination and `long_name` | Stable CNV description comment | Yes, then human review |
-| Initial `units` | Bracketed CNV comment unit | Yes, then human review |
-| `standard_name` | Scientific meaning checked against CF v94 | Human |
-| `standard_name_url` and global vocabulary | Reviewed `standard_name` plus the pinned table version | Yes |
-| `ioos_category` | Publication/discovery intent | Human |
-| `ncei_name` | Dataset-specific NCEI delivery vocabulary, if required | Human/optional |
-| Sensor XML tag, serial, calibration, channel | Embedded Sensors XML | Yes |
-| Variable-to-instrument decision | Exact `sensor_tag` or `derived` in `cnv_mapping.json` | Human once |
-| Sensor spec skeleton and variable links | Converted variable units and instrument references | Yes |
-| Gross range and all other scientific thresholds | Sensor documentation and scientific review | Human |
-| NetCDF publication globals | `netcdf_global_attributes`; shared by all converted files and not inferred from CNV | Human |
-| ERDDAP-only global additions | `erddap.global_add_attributes` | Human |
-
-Conversion stops at source NetCDF. QARTOD configuration remains a separate
-downstream responsibility; ERDDAP inherits NetCDF globals and adds only its
-explicit XML-only values.
+SAV1803 has been rerun through all stages: 31 inputs, 31 converted files, 31 QC
+files and 31 XML entries. PAR's missing units and seven missing station-reference
+identifiers remain documented limitations. See the automatic workflow for details.

@@ -39,6 +39,8 @@ from qc_manifest import (
     write_qc_run_manifest,
 )
 from instrument_resolver import resolve_gross_ranges
+from qc_limit_generation import prepare_dataset_qc
+from qc_time import decode_qc_time
 from qc_data_loader import (
     get_coord_for_var,
     get_lon_lat,
@@ -207,7 +209,7 @@ def _get_time_for_var(
     metadata = (profile or default_profile()).metadata
     time = get_coord_for_var(ds, var, metadata.time)
     if time is not None:
-        return _broadcast_like(var, time)
+        return _broadcast_like(var, decode_qc_time(time))
     return None
 
 
@@ -455,10 +457,10 @@ def _run_single_test_for_var(
 
     if test_name == "climatology_test":
         depth = _get_depth_for_var(ds, test_data_var, prof)
-        time = _get_time_for_var(ds, test_data_var, prof)
         config = None
         if climatology_config:
             config = climatology_config.get(var_name)
+        time = _get_time_for_var(ds, test_data_var, prof) if depth is not None and config is not None else None
         if depth is None or time is None or config is None:
             return _apply_missing_flags(np.full(data_var.shape, QC_FLAGS["NOT_EVALUATED"], dtype=int), missing_mask)
         return _apply_missing_flags(
@@ -523,7 +525,7 @@ def run_qc_for_file(
     variables inside the file.
     """
     nc_path = Path(nc_path)
-    prof = profile or default_profile()
+    prof = prepare_dataset_qc(profile or default_profile())
     root_for_output = Path(data_root) if data_root is not None else prof.data_root
     mapping_file = resolve_config_path("variable_mapping", prof)
     station_coords_file = resolve_config_path("station_coords", prof)
@@ -638,7 +640,7 @@ def run_qc_for_all(
     Each subdirectory of *base_dir* is expected to be a cruise folder (e.g.
     ``WS24139/``) containing ``.nc`` files named ``cruiseID_station.nc``.
     """
-    prof = profile or default_profile()
+    prof = prepare_dataset_qc(profile or default_profile())
     base_dir = Path(base_dir) if base_dir is not None else prof.data_root
     nc_files = sorted(base_dir.glob("*/*.nc"))
     configured_paths = {
@@ -726,7 +728,7 @@ def run_single_test(
         raise ValueError(f"Unsupported test_name {test_name}. Available: {_AVAILABLE_TESTS}")
 
     nc_path = Path(nc_path)
-    prof = profile or default_profile()
+    prof = prepare_dataset_qc(profile or default_profile())
     mapping = load_mapping(resolve_config_path("variable_mapping", prof))
     ds = load_nc_file(nc_path)
 

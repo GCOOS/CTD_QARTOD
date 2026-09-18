@@ -2,15 +2,701 @@
   "deep_cast_limits": {
     "sea_water_temperature": [
       {
-        "tspan": [1, 12],
-        "vspan": [10.0, 30.0],
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          11,
+          12
+        ],
+        "vspan": [
+          13.5,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          1,
+          4
+        ],
+        "vspan": [
+          13.5,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          5,
+          10
+        ],
+        "vspan": [
+          17.5,
+          33.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          2,
+          6
+        ],
+        "vspan": [
+          10.0,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          10.0,
+          31.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          1,
+          1
+        ],
+        "vspan": [
+          10.0,
+          31.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          9,
+          12
+        ],
+        "vspan": [
+          10.0,
+          22.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          10.0,
+          22.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          7,
+          8
+        ],
+        "vspan": [
+          10.0,
+          25.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          210.0,
+          340.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          8.0,
+          18.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          340.0,
+          590.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          5.0,
+          12.0
+        ],
+        "period": "month"
+      }
+    ],
+    "dissolved_oxygen": [
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          1.0,
+          5.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          1.0,
+          5.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          210.0,
+          380.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          1.0,
+          5.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          380.0,
+          590.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          1.0,
+          5.0
+        ],
         "period": "month"
       }
     ],
     "sea_water_salinity": [
       {
-        "tspan": [1, 12],
-        "vspan": [25.0, 40.0],
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          30.0,
+          37.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          30.0,
+          37.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          35.0,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          34.0,
+          38.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          210.0,
+          340.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          340.0,
+          590.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      }
+    ],
+    "sea_water_temperature_2": [
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          11,
+          12
+        ],
+        "vspan": [
+          13.5,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          1,
+          4
+        ],
+        "vspan": [
+          13.5,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          5,
+          10
+        ],
+        "vspan": [
+          17.5,
+          33.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          2,
+          6
+        ],
+        "vspan": [
+          10.0,
+          28.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          10.0,
+          31.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          1,
+          1
+        ],
+        "vspan": [
+          10.0,
+          31.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          9,
+          12
+        ],
+        "vspan": [
+          10.0,
+          22.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          10.0,
+          22.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          7,
+          8
+        ],
+        "vspan": [
+          10.0,
+          25.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          210.0,
+          340.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          8.0,
+          18.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          340.0,
+          590.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          5.0,
+          12.0
+        ],
+        "period": "month"
+      }
+    ],
+    "sea_water_salinity_2": [
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          30.0,
+          37.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          40.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          30.0,
+          37.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          35.0,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          40.0,
+          120.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          34.0,
+          38.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          1,
+          6
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          120.0,
+          210.0
+        ],
+        "tspan": [
+          7,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          210.0,
+          340.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          340.0,
+          590.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          34.5,
+          37.0
+        ],
         "period": "month"
       }
     ]
@@ -18,15 +704,176 @@
   "shallow_cast_limits": {
     "sea_water_temperature": [
       {
-        "tspan": [1, 12],
-        "vspan": [15.0, 32.0],
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          11,
+          12
+        ],
+        "vspan": [
+          13.0,
+          28.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          1,
+          4
+        ],
+        "vspan": [
+          13.0,
+          28.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          5,
+          10
+        ],
+        "vspan": [
+          22.0,
+          34.0
+        ],
+        "period": "month"
+      }
+    ],
+    "dissolved_oxygen": [
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          8,
+          10
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          11,
+          12
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          1,
+          7
+        ],
+        "vspan": [
+          1.0,
+          6.5
+        ],
         "period": "month"
       }
     ],
     "sea_water_salinity": [
       {
-        "tspan": [1, 12],
-        "vspan": [25.0, 40.0],
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          22.0,
+          41.0
+        ],
+        "period": "month"
+      }
+    ],
+    "sea_water_temperature_2": [
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          11,
+          12
+        ],
+        "vspan": [
+          13.0,
+          28.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          1,
+          4
+        ],
+        "vspan": [
+          13.0,
+          28.5
+        ],
+        "period": "month"
+      },
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          5,
+          10
+        ],
+        "vspan": [
+          22.0,
+          34.0
+        ],
+        "period": "month"
+      }
+    ],
+    "sea_water_salinity_2": [
+      {
+        "zspan": [
+          0.0,
+          30.0
+        ],
+        "tspan": [
+          1,
+          12
+        ],
+        "vspan": [
+          22.0,
+          41.0
+        ],
         "period": "month"
       }
     ]

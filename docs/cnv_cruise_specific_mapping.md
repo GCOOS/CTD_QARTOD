@@ -1,5 +1,7 @@
 # name N:
 
+> Historical source/design record, not the current conversion contract. Source observations below are retained, but old mappings, timeQ/coordinate reduction rules, metadata ownership and CLI examples are superseded. Use the [current conversion process](cnv-conversion-process.md), [automatic workflow](automatic-cnv-workflow.md), and [shared template guide](../config_template/README.md). The current converter requires schema 5 and uses timeS, source-specific coordinate dimensions, and catalog-owned attributes.
+
 | Index | CNV field | Header meaning and units |
 | --- | --- | --- |
 | 0 | `scan` | Scan count |

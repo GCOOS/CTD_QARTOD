@@ -27,6 +27,7 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "config_template"
     "rel_path",
     [
         "dataset_profile.json",
+        "cnv_catalog.json",
         "qc_variable_mapping.json",
         "gross_range_test/sensor_specs.json",
         "gross_range_test/variable_sensor_map.json",
@@ -58,16 +59,17 @@ def test_template_loaders_accept_templates():
     profile = load_dataset_profile(TEMPLATE_ROOT / "dataset_profile.json")
     assert profile.metadata.sample_dimension == "z"
     assert profile.output.mode == "duplicate"
-    assert profile.netcdf_global_attributes["institution"] is None
-    assert profile.netcdf_global_attributes["publisher_email"] is None
+    assert profile.netcdf_global_attributes["creator_name"] == "Christopher R. Kelble"
+    assert profile.netcdf_fixed_global_attributes["institution"].startswith("NOAA")
+    assert profile.netcdf_fixed_global_attributes["publisher_email"] == "data@gcoos.org"
     mapping = load_mapping(TEMPLATE_ROOT / "qc_variable_mapping.json")
     assert "temperature" in mapping
     assert load_sensor_specs(
         TEMPLATE_ROOT / "gross_range_test" / "sensor_specs.json"
-    ) == {}
+    )
     assert load_variable_sensor_map(
         TEMPLATE_ROOT / "gross_range_test" / "variable_sensor_map.json"
-    ) == {}
+    )
     clim = load_station_climatology_config(
         TEMPLATE_ROOT / "climatology_test" / "station_climatology_config.json"
     )

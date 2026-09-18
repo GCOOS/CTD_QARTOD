@@ -1,6 +1,7 @@
 {
   "inspection": {
     "cnv_file_count": 90,
+    "conversion_issues": [],
     "failed_files": [
       {
         "reason": "ws24258_stn.053.cnv: nquan does not match column declarations",
@@ -76,17 +77,9 @@
       "target_name": "time"
     }
   },
-  "schema_version": 4,
+  "schema_version": 5,
   "science_variables": {
     "CStarAt0": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Optical Properties",
-        "long_name": "Beam Attenuation, WET Labs C-Star",
-        "ncei_name": null,
-        "standard_name": "volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water",
-        "units": "m-1"
-      },
       "observed": {
         "descriptions": [
           "Beam Attenuation, WET Labs C-Star [1/m]"
@@ -97,18 +90,9 @@
           "1/m"
         ]
       },
-      "sensor_tag": "WET_LabsCStar",
-      "target_name": "beam_attenuation_wet_labs_c_star"
+      "mapped_to": "beam_attenuation"
     },
     "CStarTr0": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Optical Properties",
-        "long_name": "Beam Transmission, WET Labs C-Star",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "%"
-      },
       "observed": {
         "descriptions": [
           "Beam Transmission, WET Labs C-Star [%]"
@@ -119,18 +103,9 @@
           "%"
         ]
       },
-      "sensor_tag": "WET_LabsCStar",
-      "target_name": "beam_transmission_wet_labs_c_star"
+      "mapped_to": "beam_transmission"
     },
     "altM": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Location",
-        "long_name": "Altimeter",
-        "ncei_name": null,
-        "standard_name": "altimeter_range",
-        "units": "m"
-      },
       "observed": {
         "descriptions": [
           "Altimeter [m]"
@@ -141,18 +116,9 @@
           "m"
         ]
       },
-      "sensor_tag": "AltimeterSensor",
-      "target_name": "altimeter"
+      "mapped_to": "altimeter"
     },
     "c0S/m": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Electrical Conductivity",
-        "ncei_name": "CONDUCTIVITY",
-        "standard_name": "sea_water_electrical_conductivity",
-        "units": "S m-1"
-      },
       "observed": {
         "descriptions": [
           "Conductivity [S/m]"
@@ -163,18 +129,9 @@
           "S/m"
         ]
       },
-      "sensor_tag": "ConductivitySensor",
-      "target_name": "conductivity"
+      "mapped_to": "sea_water_electrical_conductivity"
     },
     "c1S/m": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Electrical Conductivity",
-        "ncei_name": "CONDUCTIVITY",
-        "standard_name": "sea_water_electrical_conductivity",
-        "units": "S m-1"
-      },
       "observed": {
         "descriptions": [
           "Conductivity, 2 [S/m]"
@@ -185,18 +142,9 @@
           "S/m"
         ]
       },
-      "sensor_tag": "ConductivitySensor",
-      "target_name": "conductivity"
+      "mapped_to": "sea_water_electrical_conductivity"
     },
     "dz/dtM": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": null,
-        "long_name": "Descent Rate",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "m s-1"
-      },
       "observed": {
         "descriptions": [
           "Descent Rate [m/s], WS = 2"
@@ -207,18 +155,9 @@
           "m/s"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "descent_rate"
+      "mapped_to": "descent_rate"
     },
     "flECO-AFL": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Ocean Color",
-        "long_name": "Mass Concentration of Chlorophyll-a in Sea Water",
-        "ncei_name": null,
-        "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water",
-        "units": "mg m-3"
-      },
       "observed": {
         "descriptions": [
           "Fluorescence, WET Labs ECO-AFL/FL [mg/m^3]"
@@ -229,18 +168,9 @@
           "mg/m^3"
         ]
       },
-      "sensor_tag": "FluoroWetlabECO_AFL_FL_Sensor",
-      "target_name": "fluorescence_wet_labs_eco_afl_fl"
+      "mapped_to": "chlorophyll_concentration"
     },
     "flSP": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Ocean Color",
-        "long_name": "Fluorescence, Seapoint",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": null
-      },
       "observed": {
         "descriptions": [
           "Fluorescence, Seapoint"
@@ -249,18 +179,9 @@
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": "FluoroSeapointSensor",
-      "target_name": "fluorescence_seapoint"
+      "mapped_to": "chlorophyll_fluorescence"
     },
     "flag": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Quality",
-        "long_name": "flag",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": null
-      },
       "observed": {
         "descriptions": [
           "flag"
@@ -269,18 +190,9 @@
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": "derived",
-      "target_name": "flag"
+      "mapped_to": "flag"
     },
     "oxsatML/L": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Dissolved O2",
-        "long_name": "Oxygen Saturation, Weiss",
-        "ncei_name": "OXYGEN SATURATION",
-        "standard_name": null,
-        "units": "ml/l"
-      },
       "observed": {
         "descriptions": [
           "Oxygen Saturation, Weiss [ml/l]"
@@ -291,18 +203,9 @@
           "ml/l"
         ]
       },
-      "sensor_tag": "OxygenSensor",
-      "target_name": "oxygen_saturation_weiss"
+      "mapped_to": "oxygen_saturation"
     },
     "par": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Optical Properties",
-        "long_name": "PAR/Irradiance, Biospherical/Licor",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "W m-2"
-      },
       "observed": {
         "descriptions": [
           "PAR/Irradiance, Biospherical/Licor [Watts/m^2]"
@@ -313,18 +216,9 @@
           "Watts/m^2"
         ]
       },
-      "sensor_tag": "PAR_BiosphericalLicorChelseaSensor",
-      "target_name": "par_irradiance_biospherical_licor"
+      "mapped_to": "photosynthetically_available_radiation"
     },
     "prDM": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Pressure",
-        "long_name": "Sea Water Pressure",
-        "ncei_name": "WATER PRESSURE",
-        "standard_name": "sea_water_pressure",
-        "units": "dbar"
-      },
       "observed": {
         "descriptions": [
           "Pressure, Digiquartz [db]"
@@ -335,18 +229,9 @@
           "db"
         ]
       },
-      "sensor_tag": "PressureSensor",
-      "target_name": "pressure_digiquartz"
+      "mapped_to": "sea_water_pressure"
     },
     "pumps": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": null,
-        "long_name": "Pump Status",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": null
-      },
       "observed": {
         "descriptions": [
           "Pump Status"
@@ -355,18 +240,9 @@
         "max_occurrences_per_file": 1,
         "units": []
       },
-      "sensor_tag": "derived",
-      "target_name": "pump_status"
+      "mapped_to": "pump_status"
     },
     "sal00": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Practical Salinity",
-        "ncei_name": null,
-        "standard_name": "sea_water_practical_salinity",
-        "units": "1"
-      },
       "observed": {
         "descriptions": [
           "Salinity, Practical [PSU]"
@@ -377,18 +253,9 @@
           "PSU"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "salinity_practical"
+      "mapped_to": "sea_water_salinity"
     },
     "sal11": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Practical Salinity",
-        "ncei_name": null,
-        "standard_name": "sea_water_practical_salinity",
-        "units": "1"
-      },
       "observed": {
         "descriptions": [
           "Salinity, Practical, 2 [PSU]"
@@ -399,18 +266,9 @@
           "PSU"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "salinity_practical"
+      "mapped_to": "sea_water_salinity"
     },
     "sbeox0ML/L": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Dissolved O2",
-        "long_name": "Dissolved Oxygen, SBE 43",
-        "ncei_name": "DISSOLVED OXYGEN",
-        "standard_name": null,
-        "units": "ml/l"
-      },
       "observed": {
         "descriptions": [
           "Oxygen, SBE 43 [ml/l], WS = 2"
@@ -421,18 +279,9 @@
           "ml/l"
         ]
       },
-      "sensor_tag": "OxygenSensor",
-      "target_name": "oxygen_sbe_43"
+      "mapped_to": "dissolved_oxygen"
     },
     "sbeox0V": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Dissolved O2",
-        "long_name": "Oxygen raw, SBE 43",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "V"
-      },
       "observed": {
         "descriptions": [
           "Oxygen raw, SBE 43 [V]"
@@ -443,18 +292,9 @@
           "V"
         ]
       },
-      "sensor_tag": "OxygenSensor",
-      "target_name": "oxygen_raw_sbe_43"
+      "mapped_to": "oxygen_voltage"
     },
     "sigma-t00": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Sigma-T",
-        "ncei_name": null,
-        "standard_name": "sea_water_sigma_t",
-        "units": "kg m-3"
-      },
       "observed": {
         "descriptions": [
           "Density [sigma-t, kg/m^3 ]"
@@ -465,18 +305,9 @@
           "kg/m^3"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "density"
+      "mapped_to": "sea_water_sigma_t"
     },
     "sigma-t11": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Salinity",
-        "long_name": "Sea Water Sigma-T",
-        "ncei_name": null,
-        "standard_name": "sea_water_sigma_t",
-        "units": "kg m-3"
-      },
       "observed": {
         "descriptions": [
           "Density, 2 [sigma-t, kg/m^3 ]"
@@ -487,18 +318,9 @@
           "kg/m^3"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "density"
+      "mapped_to": "sea_water_sigma_t"
     },
     "spar": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Optical Properties",
-        "long_name": "SPAR, Biospherical/Licor",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "umol m-2 s-1"
-      },
       "observed": {
         "descriptions": [
           "SPAR, Biospherical/Licor [umol photons/m^2/sec]"
@@ -509,18 +331,9 @@
           "umol photons/m^2/sec"
         ]
       },
-      "sensor_tag": "SPAR_Sensor",
-      "target_name": "spar_biospherical_licor"
+      "mapped_to": "surface_photosynthetically_available_radiation"
     },
     "svCM": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": null,
-        "long_name": "Speed of Sound in Sea Water",
-        "ncei_name": null,
-        "standard_name": "speed_of_sound_in_sea_water",
-        "units": "m s-1"
-      },
       "observed": {
         "descriptions": [
           "Sound Velocity [Chen-Millero, m/s]"
@@ -531,18 +344,9 @@
           "m/s"
         ]
       },
-      "sensor_tag": "derived",
-      "target_name": "sound_velocity"
+      "mapped_to": "sound_velocity"
     },
     "t090C": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Temperature",
-        "long_name": "Sea Water Temperature",
-        "ncei_name": "TEMPERATURE",
-        "standard_name": "sea_water_temperature",
-        "units": "degree_Celsius"
-      },
       "observed": {
         "descriptions": [
           "Temperature [ITS-90, deg C]"
@@ -553,18 +357,9 @@
           "deg C"
         ]
       },
-      "sensor_tag": "TemperatureSensor",
-      "target_name": "temperature"
+      "mapped_to": "sea_water_temperature"
     },
     "t190C": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Temperature",
-        "long_name": "Sea Water Temperature",
-        "ncei_name": "TEMPERATURE",
-        "standard_name": "sea_water_temperature",
-        "units": "degree_Celsius"
-      },
       "observed": {
         "descriptions": [
           "Temperature, 2 [ITS-90, deg C]"
@@ -575,18 +370,9 @@
           "deg C"
         ]
       },
-      "sensor_tag": "TemperatureSensor",
-      "target_name": "temperature"
+      "mapped_to": "sea_water_temperature"
     },
     "wetCDOM": {
-      "action": "map",
-      "attributes": {
-        "ioos_category": "Optical Properties",
-        "long_name": "Fluorescence, WET Labs CDOM",
-        "ncei_name": null,
-        "standard_name": null,
-        "units": "mg m-3"
-      },
       "observed": {
         "descriptions": [
           "Fluorescence, WET Labs CDOM [mg/m^3]"
@@ -597,8 +383,7 @@
           "mg/m^3"
         ]
       },
-      "sensor_tag": "FluoroWetlabCDOM_Sensor",
-      "target_name": "fluorescence_wet_labs_cdom"
+      "mapped_to": "CDOM"
     }
   },
   "vertical_field": {

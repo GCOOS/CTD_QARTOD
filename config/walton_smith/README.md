@@ -11,6 +11,8 @@ dataset family.
 - `qc_test_modes` and `erddap` in each profile are authoritative; the CLI does
   not override dataset paths or XML-generation policy.
 
-These settings are not global defaults for every CTD dataset. New datasets
-should copy `config_template/` into their own folder under `config/`
-and validate their own mappings and QC limits.
+These files configure this dataset, not a shared runtime limit service. Their QC
+values were copied into `config_template/` as the initial reusable defaults. New
+datasets initialize independent settings from that template; later edits here do
+not change those defaults or other datasets. Review copied thresholds and station
+references for each new dataset. See [the template guide](../../config_template/README.md).
