@@ -98,6 +98,31 @@ def _json_default(value: object) -> object:
     raise TypeError(f"Cannot encode {type(value).__name__} as QC configuration JSON")
 
 
+def _format_qc_config(config: Mapping[str, object]) -> str:
+    """Flatten configuration values for readable NetCDF header output."""
+    parts: list[str] = []
+
+    def value_text(value: object) -> str:
+        return value if isinstance(value, str) else json.dumps(value)
+
+    def add(path: str, value: object) -> None:
+        if isinstance(value, dict):
+            if not value:
+                parts.append(f"{path}={{}}")
+            for key, child in value.items():
+                add(f"{path}.{key}" if path else key, child)
+        elif isinstance(value, list) and any(isinstance(item, (dict, list)) for item in value):
+            for index, child in enumerate(value):
+                add(f"{path}[{index}]", child)
+        elif isinstance(value, list):
+            parts.append(f"{path}=[{', '.join(value_text(item) for item in value)}]")
+        else:
+            parts.append(f"{path}={value_text(value)}")
+
+    add("", dict(config))
+    return "; ".join(parts) if parts else "{}"
+
+
 def write_qc_results(
     ds: xr.Dataset,
     var_name: str,
@@ -123,18 +148,14 @@ def write_qc_results(
     summary_parts = [f"{flag_names.get(u, str(u))}={c}" for u, c in zip(unique, counts)]
     logger.debug("    %s: %s", qc_name, ", ".join(summary_parts))
 
+    config = json.loads(json.dumps(dict(applied_config or {}), default=_json_default))
     attrs = _qc_attrs(data_var, test_name)
     attrs.update(
         {
             "ioos_qc_test": test_name,
             "ioos_qc_target": var_name,
             "ioos_qc_module": f"qc_tests.{test_name}",
-            "ioos_qc_config": json.dumps(
-                dict(applied_config or {}),
-                default=_json_default,
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
+            "ioos_qc_config": _format_qc_config(config),
             "ioos_qc_config_source": config_source,
         }
     )

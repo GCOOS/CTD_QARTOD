@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import numpy as np
 import pytest
 import xarray as xr
@@ -39,10 +37,28 @@ def test_write_qc_results_adds_variable():
     assert qc_var.attrs["ioos_qc_test"] == "gap_test"
     assert qc_var.attrs["ioos_qc_target"] == "temperature"
     assert qc_var.attrs["ioos_qc_module"] == "qc_tests.gap_test"
-    assert json.loads(qc_var.attrs["ioos_qc_config"]) == {
-        "mode": "not_evaluated"
-    }
+    assert qc_var.attrs["ioos_qc_config"] == "mode=not_evaluated"
+    assert "ioos_qc_config_summary" not in qc_var.attrs
     assert qc_var.attrs["ioos_qc_config_source"] == "config/dataset_profile.json"
+
+
+def test_qc_config_is_readable_after_netcdf_round_trip(tmp_path):
+    ds = xr.Dataset({"temperature": xr.DataArray([1.0], dims=("z",))})
+    out = write_qc_results(
+        ds,
+        "temperature",
+        "gross_range_test",
+        [QC_FLAGS["PASS"]],
+        applied_config={"ranges": {"fail_span": (0.0, 6800.0)}},
+    )
+    path = tmp_path / "qc.nc"
+    out.to_netcdf(path)
+
+    with xr.open_dataset(path) as saved:
+        attrs = saved["temperature_qc_gross_range"].attrs
+        assert attrs["ioos_qc_config"] == "ranges.fail_span=[0.0, 6800.0]"
+        assert "\\" not in attrs["ioos_qc_config"]
+        assert "ioos_qc_config_summary" not in attrs
 
 
 def test_write_qc_results_raises_for_missing_data_var():
