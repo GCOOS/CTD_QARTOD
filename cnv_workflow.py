@@ -26,14 +26,14 @@ def dataset_scope(input_path):
 
 
 def default_mapping_path(input_path, root=REPO_ROOT):
-    return Path(root) / "config" / dataset_scope(input_path).lower() / "cnv_mapping.json"
+    return Path(root) / "config" / dataset_scope(input_path) / "cnv_mapping.json"
 
 
 def prepare_profile(input_path, *, root=REPO_ROOT):
     """Create missing files only. Existing review decisions are never overwritten."""
     root = Path(root)
     scope = dataset_scope(input_path)
-    config = root / "config" / scope.lower()
+    config = root / "config" / scope
     profile_path = config / "dataset_profile.json"
     if profile_path.exists():
         return profile_path

@@ -92,7 +92,7 @@ Additional archive-preparation and maintenance utilities exist, including `cnv_i
 
 ## 5. Configuration architecture
 
-`DatasetProfile` connects a dataset's storage layout, metadata naming, QC inputs, and ERDDAP policy. The default profile file belongs to `config/walton_smith/`; Hogarth and other dataset configurations have their own directories. `config_template/` is the single reusable source for populated metadata, the CNV catalog, QC categories and Walton Smith-based limits. New datasets automatically receive independent copied/adapted settings; those defaults still need scientific review. Existing profiles and edits are preserved. The historical Hogarth schema-1 mapping is not supported for fresh conversion.
+`DatasetProfile` connects a dataset's storage layout, metadata naming, QC inputs, and ERDDAP policy. The default profile comes from `config_template/`; generated dataset configurations live under `config/<dataset scope>/` with the scope's case preserved. `config_template/` is the single reusable source for populated metadata, the CNV catalog, QC categories and Walton Smith-based limits. New datasets automatically receive independent copied/adapted settings; those defaults still need scientific review. Existing profiles and edits are preserved. The historical Hogarth schema-1 mapping is not supported for fresh conversion.
 
 | Profile field | Meaning |
 |---|---|

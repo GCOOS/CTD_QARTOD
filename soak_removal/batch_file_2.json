@@ -1,0 +1,26 @@
+{
+  "WS20342": {
+    "WS20342_54.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-24T18:30:00.000000"
+    }
+  },
+  "WS22337": {
+    "WS22337_65.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-24T18:30:00.000000"
+    }
+  }
+}

@@ -10,7 +10,7 @@ from lxml import etree
 from cnv_catalog import catalog, match_entry, normalize_unit, qc_entry
 from cnv_converter import convert_cnv, filename_identity
 from cnv_mapping import discover_cnv_files, inspect_cnv
-from cnv_workflow import prepare_profile
+from cnv_workflow import default_mapping_path, prepare_profile
 from cnv_metadata import publication_metadata
 from dataset_profile import load_dataset_profile, resolve_config_path
 from qc_limit_generation import generate_limits, prepare_dataset_qc
@@ -352,7 +352,8 @@ def test_dataset_limits_apply_to_all_casts_and_preserve_time(tmp_path):
 def test_initialization_preserves_existing_setting_before_any_writes(tmp_path):
     source = _cnv(tmp_path / 'input' / 'WS2425A_Stn.1.cnv')
     profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
-    assert profile.profile_path.parent.name == 'ws2425a'
+    assert profile.profile_path.parent.name == 'WS2425A'
+    assert default_mapping_path(source, root=tmp_path) == profile.paths.cnv_mapping
     assert convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)['counts']['converted'] == 1
     with xr.open_dataset(profile.data_root / 'WS2425A/WS2425A_1.nc') as ds:
         assert ds.attrs['platform'] == 'RV_FG_Walton_Smith'

@@ -9,8 +9,8 @@ For a cruise in the archive, use:
 
 ```bash
 python main.py convert-cnv cnv_data/02_CNV/SAV1803_cnv
-python main.py qc --profile config/sav1803/dataset_profile.json
-python main.py erddap-xml --profile config/sav1803/dataset_profile.json
+python main.py qc --profile config/SAV1803/dataset_profile.json
+python main.py erddap-xml --profile config/SAV1803/dataset_profile.json
 ```
 
 New dataset settings come from `config_template/`, not this directory. Existing

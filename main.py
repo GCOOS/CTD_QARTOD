@@ -1,9 +1,11 @@
 """
-Main entry point for CNV conversion, QC, visualization, and ERDDAP XML generation.
+Main entry point for CNV conversion, soak removal, QC, visualization, and ERDDAP XML generation.
 
 Usage:
     python main.py inspect-cnv INPUT --output cnv_mapping.json
     python main.py convert-cnv INPUT --profile PROFILE
+    python main.py remove-soak --input-root INPUT --output-root OUTPUT
+    python main.py review-soak --input-root INPUT --output-root OUTPUT
     python main.py generate-sensor-config --profile PROFILE
     python main.py qc --profile PROFILE
     python main.py erddap-xml --profile PROFILE
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
@@ -119,6 +122,24 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_remove_soak_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--input-root", type=Path, required=True, help="Converted NetCDF root containing cruise folders")
+    parser.add_argument("--output-root", type=Path, required=True, help="Separate root for soak-removed NetCDF files")
+    parser.add_argument("--dry-run", action="store_true", help="Analyze casts without writing NetCDF files")
+    parser.add_argument("--overwrite", action="store_true", help="Replace existing soak-removed files")
+    parser.add_argument("--limit", type=int, default=0, help="Process only the first N files (0 = all)")
+    parser.add_argument("--verbose", action="store_true", help="Print detection details for each cast")
+    parser.add_argument("--report-jsonl", type=Path, help="Write one result per file (not written during dry runs)")
+
+
+def _add_review_soak_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--input-root", type=Path, required=True, help="Converted NetCDF root containing cruise folders")
+    parser.add_argument("--output-root", type=Path, required=True, help="Separate root for reviewed NetCDF files")
+    parser.add_argument("--progress-json", type=Path, help="Review state (default: OUTPUT_ROOT/review_progress.json)")
+    parser.add_argument("--host", default="127.0.0.1", help="Dashboard host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8050, help="Dashboard port (default: 8050)")
+
+
 def _add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--profile",
@@ -141,6 +162,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog="""
 Examples:
     python main.py convert-cnv /path/to/cnv/files
+    python main.py remove-soak --input-root output/your_dataset_CNV --output-root output/your_dataset_SOAK_REMOVED --dry-run
+    python main.py review-soak --input-root output/your_dataset_CNV --output-root output/your_dataset_SOAK_REMOVED
     python main.py qc --profile config/your_dataset/dataset_profile.json
     python main.py erddap-xml --profile config/your_dataset/dataset_profile.json
     python main.py viz
@@ -154,6 +177,16 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     _add_convert_cnv_arguments(convert_parser)
+    soak_parser = sub.add_parser(
+        "remove-soak",
+        help="Remove surface soak from converted NetCDF files into a separate folder",
+    )
+    _add_remove_soak_arguments(soak_parser)
+    review_parser = sub.add_parser(
+        "review-soak",
+        help="Open the interactive surface soak review dashboard",
+    )
+    _add_review_soak_arguments(review_parser)
     inspect_parser = sub.add_parser(
         "inspect-cnv",
         help="Inspect CNV headers and create one comment-derived mapping",
@@ -278,6 +311,52 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         logger.info("Dataset-owned QC settings: %s", prepared.paths.sensor_specs)
     if counts["failed"]:
         raise SystemExit(1)
+
+
+def _run_remove_soak(args: argparse.Namespace) -> None:
+    if args.output_root.resolve().is_relative_to(args.input_root.resolve()):
+        raise SystemExit("Soak output root must be outside the input root")
+    script = Path(__file__).resolve().parent / "soak_removal" / "sfer_ctd_remove_surface_soak.py"
+    command = [
+        sys.executable, str(script),
+        "--input-root", str(args.input_root),
+        "--output-root", str(args.output_root),
+    ]
+    if args.dry_run:
+        command.append("--dry-run")
+    if args.overwrite:
+        command.append("--overwrite")
+    if args.limit:
+        command.extend(("--limit", str(args.limit)))
+    if args.verbose:
+        command.append("--verbose")
+    if args.report_jsonl is not None:
+        command.extend(("--report-jsonl", str(args.report_jsonl)))
+    result = subprocess.run(command, check=False)
+    if result.returncode:
+        raise SystemExit(result.returncode)
+
+
+def _run_review_soak(args: argparse.Namespace) -> None:
+    if args.output_root.resolve().is_relative_to(args.input_root.resolve()):
+        raise SystemExit("Soak output root must be outside the input root")
+    script = Path(__file__).resolve().parent / "soak_removal" / "review_app.py"
+    progress_json = args.progress_json or args.output_root / "review_progress.json"
+    command = [
+        sys.executable, str(script),
+        "--input-root", str(args.input_root),
+        "--output-root", str(args.output_root),
+        "--progress-json", str(progress_json),
+        "--host", args.host,
+        "--port", str(args.port),
+        "--suspicious-export-jsonl", str(args.output_root / "suspicious_casts.jsonl"),
+    ]
+    try:
+        result = subprocess.run(command, check=False)
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
+    if result.returncode:
+        raise SystemExit(result.returncode)
 
 
 def _run_inspect_cnv(args: argparse.Namespace) -> None:
@@ -414,6 +493,10 @@ def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     if args.command == "convert-cnv":
         _run_convert_cnv(args)
+    elif args.command == "remove-soak":
+        _run_remove_soak(args)
+    elif args.command == "review-soak":
+        _run_review_soak(args)
     elif args.command == "inspect-cnv":
         _run_inspect_cnv(args)
     elif args.command == "generate-sensor-config":

@@ -1,0 +1,243 @@
+{
+  "WB22215": {
+    "WB22215_AMI7.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    },
+    "WB22215_TB10.nc": {
+      "status": "accepted",
+      "start_idx": 621,
+      "end_idx": 980,
+      "auto_start_idx": 644,
+      "auto_end_idx": 1015,
+      "method": "pretrim_2m_then_v4_departure",
+      "reviewed_at": "2026-04-17T20:18:37.131578"
+    },
+    "WB22215_V5.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    }
+  },
+  "WS0612": {
+    "WS0612_60.nc": {
+      "status": "accepted",
+      "start_idx": 1407,
+      "end_idx": 1620,
+      "auto_start_idx": 1384,
+      "auto_end_idx": 1620,
+      "method": "pretrim_2m_then_v4_departure",
+      "reviewed_at": "2026-04-17T19:41:41.692936"
+    },
+    "WS0612_63.nc": {
+      "status": "accepted",
+      "start_idx": 1662,
+      "end_idx": 1884,
+      "auto_start_idx": 1871,
+      "auto_end_idx": 1887,
+      "method": "pretrim_2m_then_fallback_keep_last_500",
+      "reviewed_at": "2026-04-17T19:44:55.431884"
+    },
+    "WS0612_65.nc": {
+      "status": "accepted",
+      "start_idx": 1325,
+      "end_idx": 1456,
+      "auto_start_idx": 1311,
+      "auto_end_idx": 1456,
+      "method": "pretrim_2m_then_fallback_keep_last_500",
+      "reviewed_at": "2026-04-17T19:46:54.270682"
+    }
+  },
+  "WS0618": {
+    "WS0618_58.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    }
+  },
+  "WS1004": {
+    "WS1004_CH2.nc": {
+      "status": "accepted",
+      "start_idx": 1000,
+      "end_idx": 1164,
+      "auto_start_idx": 623,
+      "auto_end_idx": 1164,
+      "method": "v4_departure",
+      "reviewed_at": "2026-04-17T20:26:57.721889"
+    }
+  },
+  "WS1015": {
+    "WS1015_CH3.nc": {
+      "status": "accepted",
+      "start_idx": 722,
+      "end_idx": 1847,
+      "auto_start_idx": 532,
+      "auto_end_idx": 1849,
+      "method": "v4_departure",
+      "reviewed_at": "2026-04-17T20:00:51.693832"
+    },
+    "WS1015_CH4.nc": {
+      "status": "accepted",
+      "start_idx": 650,
+      "end_idx": 2105,
+      "auto_start_idx": 417,
+      "auto_end_idx": 2109,
+      "method": "v4_departure",
+      "reviewed_at": "2026-04-17T20:02:59.155023"
+    }
+  },
+  "WS1202": {
+    "WS1202_34.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    }
+  },
+  "WS15264": {
+    "WS15264_2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    },
+    "WS15264_7.nc": {
+      "status": "accepted",
+      "start_idx": 1681,
+      "end_idx": 1835,
+      "auto_start_idx": 1616,
+      "auto_end_idx": 1835,
+      "method": "pretrim_2m_then_fallback_keep_last_500",
+      "reviewed_at": "2026-04-17T20:42:27.079542"
+    },
+    "WS15264_8.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 1,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1,
+      "method": "none",
+      "reviewed_at": "2026-04-19T04:16:05.775043"
+    }
+  },
+  "WS17086": {
+    "WS17086_64.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 25,
+      "auto_start_idx": 0,
+      "auto_end_idx": 25,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:25:23.230662"
+    }
+  },
+  "WS20231": {
+    "WS20231_WS.nc": {
+      "status": "accepted",
+      "start_idx": 1538,
+      "end_idx": 3406,
+      "auto_start_idx": 1538,
+      "auto_end_idx": 4301,
+      "method": "v4_departure",
+      "reviewed_at": "2026-04-17T21:08:10.383517"
+    }
+  },
+  "WS20342": {
+    "WS20342_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 20,
+      "auto_start_idx": 0,
+      "auto_end_idx": 20,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:45:59.099796"
+    },
+    "WS20342_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 47,
+      "auto_start_idx": 0,
+      "auto_end_idx": 47,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:46:08.833093"
+    },
+    "WS20342_55.nc": {
+      "status": "accepted",
+      "start_idx": 1063,
+      "end_idx": 1101,
+      "auto_start_idx": 936,
+      "auto_end_idx": 1186,
+      "method": "fallback_keep_last_500",
+      "reviewed_at": "2026-04-17T20:54:32.526874"
+    },
+    "WS20342_CAL1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:46:25.041029"
+    },
+    "WS20342_54.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-24T18:30:00.000000"
+    }
+  },
+  "WS21278": {
+    "WS21278_BG2.nc": {
+      "status": "accepted",
+      "start_idx": 1333,
+      "end_idx": 2484,
+      "auto_start_idx": 720,
+      "auto_end_idx": 2568,
+      "method": "v4_departure",
+      "reviewed_at": "2026-04-17T19:21:06.302057"
+    }
+  },
+  "WS22337": {
+    "WS22337_65.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-24T18:30:00.000000"
+    }
+  }
+
+}

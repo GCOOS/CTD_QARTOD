@@ -45,14 +45,48 @@ its key in the mapping before rerunning. Predefined attributes live only in
 `config_template/cnv_catalog.json`; the dataset mapping records observations and destinations.
 Confirm the dataset metadata and QC settings before continuing.
 
-The examples below use `config/ws24258/dataset_profile.json`. Replace it with
+The examples below use `config/WS24258/dataset_profile.json`. Replace it with
 your dataset's profile path. For a manually prepared profile, pass
 `--profile config/YOUR_DATASET/dataset_profile.json` to the conversion command.
+
+## Remove surface soak (optional)
+
+After conversion, run soak detection on the converted NetCDF folder. Preview
+the proposed cuts first; a dry run writes no files:
+
+```bash
+python main.py remove-soak --input-root output/WS24258_CNV --output-root output/WS24258_SOAK_REMOVED --dry-run
+```
+
+To write the trimmed files and a per-file report, run:
+
+```bash
+python main.py remove-soak --input-root output/WS24258_CNV --output-root output/WS24258_SOAK_REMOVED --report-jsonl output/WS24258_SOAK_REMOVED/soak_report.jsonl
+```
+
+The command preserves cruise subfolders and filenames under the separate output
+root. Existing output files are skipped unless you add `--overwrite`. Use
+`--limit N` to try the first N files.
+
+Open the review dashboard to inspect each proposed cut and save adjustments:
+
+```bash
+python main.py review-soak --input-root output/WS24258_CNV --output-root output/WS24258_SOAK_REMOVED
+```
+
+Open [http://127.0.0.1:8050](http://127.0.0.1:8050) in a browser. The app can
+save a reviewed cast or apply an uploaded batch JSON. Review decisions are saved
+to `output/WS24258_SOAK_REMOVED/review_progress.json`; each output root has its
+own review state. The dashboard does not launch the automatic `remove-soak`
+command. Press `Ctrl+C` to stop it.
+
+These standalone commands do not change the dataset profile or the input used
+by `qc`.
 
 ## Run quality checks
 
 ```bash
-python main.py qc --profile config/ws24258/dataset_profile.json
+python main.py qc --profile config/WS24258/dataset_profile.json
 ```
 
 The profile controls the input folder (`data_root`) and where results go:
@@ -67,13 +101,13 @@ automatically after conversion or before the first QC run. Review those local
 settings for your data; later runs preserve your edits. To create another snapshot:
 
 ```bash
-python main.py generate-limits --profile config/ws24258/dataset_profile.json --output config/ws24258_alternative
+python main.py generate-limits --profile config/WS24258/dataset_profile.json --output config/WS24258_alternative
 ```
 
 Review that snapshot, fill any missing limits, and run QC with its profile:
 
 ```bash
-python main.py qc --profile config/ws24258_alternative/dataset_profile.json
+python main.py qc --profile config/WS24258_alternative/dataset_profile.json
 ```
 
 Use that same profile for visualization and XML generation.
@@ -91,7 +125,7 @@ See the [configuration guide](config_template/README.md) to set up another datas
 ## View results
 
 ```bash
-python main.py viz --profile config/ws24258/dataset_profile.json
+python main.py viz --profile config/WS24258/dataset_profile.json
 ```
 
 Open [http://127.0.0.1:8050](http://127.0.0.1:8050). Select a cruise, file,
@@ -106,7 +140,7 @@ After reviewing QC results, confirm the profile's `erddap` metadata and server
 paths, then run:
 
 ```bash
-python main.py erddap-xml --profile config/ws24258/dataset_profile.json
+python main.py erddap-xml --profile config/WS24258/dataset_profile.json
 ```
 
 The XML is saved to the profile's `erddap.output_xml` path. This prepares the

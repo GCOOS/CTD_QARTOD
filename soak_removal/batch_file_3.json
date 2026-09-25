@@ -1,0 +1,106 @@
+{
+  "SV18173": {
+    "SV18173_56.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS1018": {
+    "WS1018_54.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS15103": {
+    "WS15103_54-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    },
+    "WS15103_54.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    },
+    "WS15103_57_1-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS15264": {
+    "WS15264_55-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS16004": {
+    "WS16004_55.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS16263": {
+    "WS16263_7.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  },
+  "WS17030": {
+    "WS17030_54-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-29T01:23:00.000000"
+    }
+  }
+}

@@ -101,8 +101,8 @@ For both location and climatology lookups, QC treats `_` in a stored station ID
 as `.` in the reference files without changing the stored ID.
 
 ```bash
-python main.py qc --profile config/sav1803/dataset_profile.json
-python main.py erddap-xml --profile config/sav1803/dataset_profile.json
+python main.py qc --profile config/SAV1803/dataset_profile.json
+python main.py erddap-xml --profile config/SAV1803/dataset_profile.json
 ```
 
 QC preserves scientific arrays and adds flags/provenance. The XML generator reads

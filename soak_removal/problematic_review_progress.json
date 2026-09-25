@@ -1,0 +1,2182 @@
+{
+  "WS0612": {
+    "WS0612_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 29,
+      "auto_start_idx": 0,
+      "auto_end_idx": 29,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:27:04.759752"
+    }
+  },
+  "WS0718": {
+    "WS0718_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 6,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:30:59.069457"
+    }
+  },
+  "WS0802": {
+    "WS0802_1.nc": {
+      "status": "accepted",
+      "start_idx": 2955,
+      "end_idx": 3791,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3878,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:33:17.174583"
+    },
+    "WS0802_20-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:37:20.437144"
+    }
+  },
+  "WS0901": {
+    "WS0901_1.nc": {
+      "status": "accepted",
+      "start_idx": 2262,
+      "end_idx": 2904,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2904,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:39:07.587517"
+    },
+    "WS0901_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:40:35.072125"
+    },
+    "WS0901_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 25,
+      "auto_start_idx": 0,
+      "auto_end_idx": 25,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:41:31.037474"
+    }
+  },
+  "WS0906": {
+    "WS0906_1.nc": {
+      "status": "accepted",
+      "start_idx": 1434,
+      "end_idx": 2041,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2041,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:42:57.721498"
+    },
+    "WS0906_CAL1.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 36,
+      "auto_start_idx": 0,
+      "auto_end_idx": 36,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:45:52.578472"
+    }
+  },
+  "WS0914": {
+    "WS0914_10.nc": {
+      "status": "accepted",
+      "start_idx": 955,
+      "end_idx": 1213,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1451,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:49:08.771524"
+    },
+    "WS0914_60.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 49,
+      "auto_start_idx": 0,
+      "auto_end_idx": 49,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:49:51.465846"
+    }
+  },
+  "WS0919": {
+    "WS0919_1.nc": {
+      "status": "accepted",
+      "start_idx": 1371,
+      "end_idx": 2127,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2127,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:52:10.737299"
+    },
+    "WS0919_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 19,
+      "auto_start_idx": 0,
+      "auto_end_idx": 19,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:52:37.484799"
+    },
+    "WS0919_19.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 6,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:52:49.772397"
+    },
+    "WS0919_39.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 48,
+      "auto_start_idx": 0,
+      "auto_end_idx": 48,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:53:18.740322"
+    },
+    "WS0919_50.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 19,
+      "auto_start_idx": 0,
+      "auto_end_idx": 19,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:53:38.430840"
+    },
+    "WS0919_7.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 18,
+      "auto_start_idx": 0,
+      "auto_end_idx": 18,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:54:02.210675"
+    }
+  },
+  "WS0923": {
+    "WS0923_1.nc": {
+      "status": "accepted",
+      "start_idx": 3639,
+      "end_idx": 4544,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4544,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:54:49.044576"
+    },
+    "WS0923_22_5-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 12,
+      "auto_start_idx": 0,
+      "auto_end_idx": 12,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:55:00.770097"
+    }
+  },
+  "WS1004": {
+    "WS1004_1.nc": {
+      "status": "accepted",
+      "start_idx": 4658,
+      "end_idx": 5992,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6581,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:56:14.789270"
+    },
+    "WS1004_CAL1.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T20:56:45.000040"
+    }
+  },
+  "WS1015": {
+    "WS1015_19.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 31,
+      "auto_start_idx": 0,
+      "auto_end_idx": 31,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:05:40.859746"
+    },
+    "WS1015_4.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 37,
+      "auto_start_idx": 0,
+      "auto_end_idx": 37,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:14:56.154268"
+    },
+    "WS1015_5.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 37,
+      "auto_start_idx": 0,
+      "auto_end_idx": 37,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:23:32.077684"
+    }
+  },
+  "WS1018": {
+    "WS1018_1.nc": {
+      "status": "accepted",
+      "start_idx": 781,
+      "end_idx": 2286,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2379,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:28:23.017159"
+    },
+    "WS1018_39.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 18,
+      "auto_start_idx": 0,
+      "auto_end_idx": 18,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:28:45.774434"
+    }
+  },
+  "WS1106": {
+    "WS1106_1.nc": {
+      "status": "accepted",
+      "start_idx": 301,
+      "end_idx": 1496,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1580,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:30:06.225374"
+    },
+    "WS1106_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 47,
+      "auto_start_idx": 0,
+      "auto_end_idx": 47,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:30:24.877363"
+    }
+  },
+  "WS1207": {
+    "WS1207_21LK.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:30:39.569506"
+    }
+  },
+  "WS14335": {
+    "WS14335_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 10,
+      "auto_start_idx": 0,
+      "auto_end_idx": 10,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:30:51.917527"
+    },
+    "WS14335_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 36,
+      "auto_start_idx": 0,
+      "auto_end_idx": 36,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:31:01.212770"
+    },
+    "WS14335_71.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 15,
+      "auto_start_idx": 0,
+      "auto_end_idx": 15,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:31:13.880827"
+    },
+    "WS14335_10.nc": {
+      "status": "accepted",
+      "start_idx": 915,
+      "end_idx": 1156,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1158,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:26:49.551505"
+    },
+    "WS14335_3.nc": {
+      "status": "accepted",
+      "start_idx": 1084,
+      "end_idx": 1924,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2133,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:39:51.687394"
+    }
+  },
+  "WS15103": {
+    "WS15103_16.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 20,
+      "auto_start_idx": 0,
+      "auto_end_idx": 20,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:32:12.494232"
+    },
+    "WS15103_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 24,
+      "auto_start_idx": 0,
+      "auto_end_idx": 24,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:32:38.847473"
+    },
+    "WS15103_55-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 36,
+      "auto_start_idx": 0,
+      "auto_end_idx": 36,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:33:42.715778"
+    },
+    "WS15103_56-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:33:56.992968"
+    }
+  },
+  "WS15148": {
+    "WS15148_10.nc": {
+      "status": "accepted",
+      "start_idx": 793,
+      "end_idx": 1210,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1212,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:40:43.254938"
+    },
+    "WS15148_55-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:34:59.899778"
+    },
+    "WS15148_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 23,
+      "auto_start_idx": 0,
+      "auto_end_idx": 23,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:35:28.738113"
+    },
+    "WS15148_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 36,
+      "auto_start_idx": 0,
+      "auto_end_idx": 36,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:35:37.635929"
+    },
+    "WS15148_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 30,
+      "auto_start_idx": 0,
+      "auto_end_idx": 30,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:36:01.418402"
+    },
+    "WS15148_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 69,
+      "auto_start_idx": 0,
+      "auto_end_idx": 69,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:41:22.855125"
+    }
+  },
+  "WS15208": {
+    "WS15208_10.nc": {
+      "status": "accepted",
+      "start_idx": 1472,
+      "end_idx": 1783,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1783,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:36:54.660972"
+    },
+    "WS15208_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 28,
+      "auto_start_idx": 0,
+      "auto_end_idx": 28,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:37:03.920743"
+    },
+    "WS15208_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 21,
+      "auto_start_idx": 0,
+      "auto_end_idx": 21,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:37:08.956069"
+    }
+  },
+  "WS15320": {
+    "WS15320_10.nc": {
+      "status": "accepted",
+      "start_idx": 864,
+      "end_idx": 1354,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1356,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:42:30.721862"
+    },
+    "WS15320_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 26,
+      "auto_start_idx": 0,
+      "auto_end_idx": 26,
+      "method": "none",
+      "reviewed_at": "2026-04-07T21:38:44.228414"
+    },
+    "WS15320_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 15,
+      "auto_start_idx": 0,
+      "auto_end_idx": 15,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:12:45.828809"
+    },
+    "WS15320_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 14,
+      "auto_start_idx": 0,
+      "auto_end_idx": 14,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:12:56.397353"
+    },
+    "WS15320_2.nc": {
+      "status": "accepted",
+      "start_idx": 38,
+      "end_idx": 2321,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3256,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:43:41.159794"
+    },
+    "WS15320_57-2.nc": {
+      "status": "accepted",
+      "start_idx": 652,
+      "end_idx": 1049,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1298,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:44:58.493897"
+    }
+  },
+  "WS16004": {
+    "WS16004_10.nc": {
+      "status": "accepted",
+      "start_idx": 480,
+      "end_idx": 791,
+      "auto_start_idx": 0,
+      "auto_end_idx": 793,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:14:00.152807"
+    },
+    "WS16004_54-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 26,
+      "auto_start_idx": 0,
+      "auto_end_idx": 26,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:14:25.712665"
+    },
+    "WS16004_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:16:29.625644"
+    },
+    "WS16004_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:16:39.079813"
+    },
+    "WS16004_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 30,
+      "auto_start_idx": 0,
+      "auto_end_idx": 30,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:16:47.737306"
+    }
+  },
+  "WS16074": {
+    "WS16074_10.nc": {
+      "status": "accepted",
+      "start_idx": 1466,
+      "end_idx": 1735,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1737,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:17:20.686328"
+    },
+    "WS16074_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 19,
+      "auto_start_idx": 0,
+      "auto_end_idx": 19,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:17:31.137577"
+    },
+    "WS16074_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 15,
+      "auto_start_idx": 0,
+      "auto_end_idx": 15,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:17:40.427193"
+    },
+    "WS16074_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:17:50.067696"
+    },
+    "WS16074_62.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 35,
+      "auto_start_idx": 0,
+      "auto_end_idx": 35,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:18:08.014755"
+    },
+    "WS16074_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:18:18.633461"
+    },
+    "WS16074_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 39,
+      "auto_start_idx": 0,
+      "auto_end_idx": 39,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:18:31.977201"
+    }
+  },
+  "WS16207": {
+    "WS16207_10.nc": {
+      "status": "accepted",
+      "start_idx": 1503,
+      "end_idx": 2930,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3018,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:19:26.886359"
+    },
+    "WS16207_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 35,
+      "auto_start_idx": 0,
+      "auto_end_idx": 35,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:19:45.131721"
+    }
+  },
+  "WS16263": {
+    "WS16263_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 11,
+      "auto_start_idx": 0,
+      "auto_end_idx": 11,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:19:53.399765"
+    },
+    "WS16263_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 29,
+      "auto_start_idx": 0,
+      "auto_end_idx": 29,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:19:59.618277"
+    },
+    "WS16263_57_1-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 6,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:20:05.964169"
+    }
+  },
+  "WS16319": {
+    "WS16319_10.nc": {
+      "status": "accepted",
+      "start_idx": 888,
+      "end_idx": 1534,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1562,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:20:33.516376"
+    },
+    "WS16319_49.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:20:50.339608"
+    },
+    "WS16319_51.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 24,
+      "auto_start_idx": 0,
+      "auto_end_idx": 24,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:21:11.461113"
+    },
+    "WS16319_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 42,
+      "auto_start_idx": 0,
+      "auto_end_idx": 42,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:21:20.527934"
+    }
+  },
+  "WS17030": {
+    "WS17030_10.nc": {
+      "status": "accepted",
+      "start_idx": 711,
+      "end_idx": 1369,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1371,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:45:47.528575"
+    },
+    "WS17030_54-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:22:05.450843"
+    },
+    "WS17030_55-2.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:22:17.065574"
+    },
+    "WS17030_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 43,
+      "auto_start_idx": 0,
+      "auto_end_idx": 43,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:22:33.289393"
+    },
+    "WS17030_56-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:22:46.861413"
+    },
+    "WS17030_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 28,
+      "auto_start_idx": 0,
+      "auto_end_idx": 28,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:22:52.490188"
+    },
+    "WS17030_41.nc": {
+      "status": "accepted",
+      "start_idx": 704,
+      "end_idx": 1632,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1632,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:47:36.047626"
+    }
+  },
+  "WS17086": {
+    "WS17086_10.nc": {
+      "status": "accepted",
+      "start_idx": 1075,
+      "end_idx": 1864,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1866,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:23:50.988138"
+    },
+    "WS17086_62.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:24:00.393474"
+    },
+    "WS17086_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 25,
+      "auto_start_idx": 0,
+      "auto_end_idx": 25,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:25:23.230662"
+    }
+  },
+  "WS17170": {
+    "WS17170_10.nc": {
+      "status": "accepted",
+      "start_idx": 587,
+      "end_idx": 848,
+      "auto_start_idx": 0,
+      "auto_end_idx": 862,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:26:09.669167"
+    },
+    "WS17170_41.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 37,
+      "auto_start_idx": 0,
+      "auto_end_idx": 37,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:26:17.995307"
+    },
+    "WS17170_56-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 23,
+      "auto_start_idx": 0,
+      "auto_end_idx": 23,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:26:26.381558"
+    },
+    "WS17170_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 26,
+      "auto_start_idx": 0,
+      "auto_end_idx": 26,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:26:34.616893"
+    }
+  },
+  "WS17282": {
+    "WS17282_1.nc": {
+      "status": "accepted",
+      "start_idx": 1234,
+      "end_idx": 1753,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1755,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:15:16.534234"
+    },
+    "WS17282_53.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:27:22.405668"
+    },
+    "WS17282_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 6,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:27:32.210607"
+    },
+    "WS17282_EKIN.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 7,
+      "auto_start_idx": 0,
+      "auto_end_idx": 7,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:27:38.515646"
+    },
+    "WS17282_56.nc": {
+      "status": "accepted",
+      "start_idx": 185,
+      "end_idx": 581,
+      "auto_start_idx": 0,
+      "auto_end_idx": 772,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:23:12.620621"
+    }
+  },
+  "WS18120": {
+    "WS18120_10.nc": {
+      "status": "accepted",
+      "start_idx": 965,
+      "end_idx": 1245,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1247,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:24:12.187422"
+    },
+    "WS18120_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 24,
+      "auto_start_idx": 0,
+      "auto_end_idx": 24,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:28:20.552555"
+    },
+    "WS18120_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:28:27.891999"
+    },
+    "WS18120_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 39,
+      "auto_start_idx": 0,
+      "auto_end_idx": 39,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:28:33.548301"
+    },
+    "WS18120_57_1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 41,
+      "auto_start_idx": 0,
+      "auto_end_idx": 41,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:28:38.062836"
+    },
+    "WS18120_68.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:28:51.253781"
+    },
+    "WS18120_57.nc": {
+      "status": "accepted",
+      "start_idx": 785,
+      "end_idx": 1114,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1116,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:26:00.118276"
+    },
+    "WS18120_57_2.nc": {
+      "status": "accepted",
+      "start_idx": 312,
+      "end_idx": 437,
+      "auto_start_idx": 0,
+      "auto_end_idx": 439,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:32:12.479470"
+    }
+  },
+  "WS18218": {
+    "WS18218_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:33:05.677969"
+    },
+    "WS18218_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 39,
+      "auto_start_idx": 0,
+      "auto_end_idx": 39,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:36:11.980186"
+    },
+    "WS18218_57_1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 20,
+      "auto_start_idx": 0,
+      "auto_end_idx": 20,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:36:19.412723"
+    },
+    "WS18218_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 40,
+      "auto_start_idx": 0,
+      "auto_end_idx": 40,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:36:33.748136"
+    },
+    "WS18218_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 15,
+      "auto_start_idx": 0,
+      "auto_end_idx": 15,
+      "method": "none",
+      "reviewed_at": "2026-04-07T22:36:46.405401"
+    },
+    "WS18218_21LK.nc": {
+      "status": "accepted",
+      "start_idx": 338,
+      "end_idx": 2979,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3511,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:34:50.418128"
+    }
+  },
+  "WS18285": {
+    "WS18285_16.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 21,
+      "auto_start_idx": 0,
+      "auto_end_idx": 21,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:35:36.036034"
+    },
+    "WS18285_68.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:17:31.062288"
+    },
+    "WS18285_57.nc": {
+      "status": "accepted",
+      "start_idx": 2019,
+      "end_idx": 2448,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4089,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:36:11.648109"
+    },
+    "WS18285_CAL5.nc": {
+      "status": "accepted",
+      "start_idx": 1496,
+      "end_idx": 4837,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4840,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:38:29.284319"
+    },
+    "WS18285_RP1.nc": {
+      "status": "accepted",
+      "start_idx": 1948,
+      "end_idx": 2429,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4046,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:39:46.333238"
+    }
+  },
+  "WS19028": {
+    "WS19028_21LK.nc": {
+      "status": "accepted",
+      "start_idx": 2008,
+      "end_idx": 4907,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5988,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:18:28.424185"
+    },
+    "WS19028_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:18:43.303827"
+    }
+  },
+  "WS19119": {
+    "WS19119_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 17,
+      "auto_start_idx": 0,
+      "auto_end_idx": 17,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:18:59.171240"
+    }
+  },
+  "WS19266": {
+    "WS19266_10.nc": {
+      "status": "accepted",
+      "start_idx": 938,
+      "end_idx": 1507,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1509,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:19:55.206819"
+    },
+    "WS19266_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 7,
+      "auto_start_idx": 0,
+      "auto_end_idx": 7,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:20:14.398275"
+    }
+  },
+  "WS19322": {
+    "WS19322_10.nc": {
+      "status": "accepted",
+      "start_idx": 1117,
+      "end_idx": 1403,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1405,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:21:06.335423"
+    },
+    "WS19322_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 12,
+      "auto_start_idx": 0,
+      "auto_end_idx": 12,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:21:19.007962"
+    },
+    "WS19322_CAL1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 17,
+      "auto_start_idx": 0,
+      "auto_end_idx": 17,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:21:25.870577"
+    }
+  },
+  "WS20006": {
+    "WS20006_10.nc": {
+      "status": "accepted",
+      "start_idx": 884,
+      "end_idx": 1351,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1353,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:23:02.793565"
+    },
+    "WS20006_7.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:23:37.549465"
+    }
+  },
+  "WS20231": {
+    "WS20231_1-2.nc": {
+      "status": "accepted",
+      "start_idx": 2620,
+      "end_idx": 3258,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3319,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:43:05.819380"
+    },
+    "WS20231_41.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 8,
+      "auto_start_idx": 0,
+      "auto_end_idx": 8,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:44:17.755107"
+    },
+    "WS20231_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 35,
+      "auto_start_idx": 0,
+      "auto_end_idx": 35,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:44:25.360442"
+    },
+    "WS20231_7.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 37,
+      "auto_start_idx": 0,
+      "auto_end_idx": 37,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:44:32.008535"
+    },
+    "WS20231_31.nc": {
+      "status": "accepted",
+      "start_idx": 861,
+      "end_idx": 1955,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1955,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:45:49.119949"
+    }
+  },
+  "WS20279": {
+    "WS20279_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 21,
+      "auto_start_idx": 0,
+      "auto_end_idx": 21,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:46:07.406750"
+    },
+    "WS20279_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 13,
+      "auto_start_idx": 0,
+      "auto_end_idx": 13,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:45:00.117066"
+    },
+    "WS20279_65.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 13,
+      "auto_start_idx": 0,
+      "auto_end_idx": 13,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:45:11.615222"
+    },
+    "WS20279_21LK.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2868,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2868,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:53:31.175987"
+    },
+    "WS20279_TB11.nc": {
+      "status": "accepted",
+      "start_idx": 2705,
+      "end_idx": 3876,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5119,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:02:37.183034"
+    }
+  },
+  "WS20342": {
+    "WS20342_10.nc": {
+      "status": "accepted",
+      "start_idx": 2281,
+      "end_idx": 2798,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2804,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:45:51.720129"
+    },
+    "WS20342_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 20,
+      "auto_start_idx": 0,
+      "auto_end_idx": 20,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:45:59.099796"
+    },
+    "WS20342_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 47,
+      "auto_start_idx": 0,
+      "auto_end_idx": 47,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:46:08.848102"
+    },
+    "WS20342_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 8,
+      "auto_start_idx": 0,
+      "auto_end_idx": 8,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:46:15.899101"
+    },
+    "WS20342_CAL1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 5,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:46:25.041029"
+    }
+  },
+  "WS21032": {
+    "WS21032_12.nc": {
+      "status": "accepted",
+      "start_idx": 1952,
+      "end_idx": 4093,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4193,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:05:15.677212"
+    },
+    "WS21032_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:47:34.794591"
+    },
+    "WS21032_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 35,
+      "auto_start_idx": 0,
+      "auto_end_idx": 35,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:47:42.037797"
+    },
+    "WS21032_57_2.nc": {
+      "status": "accepted",
+      "start_idx": 1894,
+      "end_idx": 2180,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2182,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:08:15.446144"
+    },
+    "WS21032_KW1.nc": {
+      "status": "accepted",
+      "start_idx": 1540,
+      "end_idx": 2188,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2190,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:10:57.839511"
+    },
+    "WS21032_TB5.nc": {
+      "status": "accepted",
+      "start_idx": 1774,
+      "end_idx": 3766,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3772,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:16:14.071319"
+    }
+  },
+  "WS21093": {
+    "WS21093_10.nc": {
+      "status": "accepted",
+      "start_idx": 1425,
+      "end_idx": 1658,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1661,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:17:20.098935"
+    },
+    "WS21093_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 41,
+      "auto_start_idx": 0,
+      "auto_end_idx": 41,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:49:38.144219"
+    },
+    "WS21093_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 10,
+      "auto_start_idx": 0,
+      "auto_end_idx": 10,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:49:46.177197"
+    },
+    "WS21093_7.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 29,
+      "auto_start_idx": 0,
+      "auto_end_idx": 29,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:49:54.242927"
+    },
+    "WS21093_53.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 807,
+      "auto_start_idx": 0,
+      "auto_end_idx": 807,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:24:44.813081"
+    },
+    "WS21093_TB1.nc": {
+      "status": "accepted",
+      "start_idx": 1599,
+      "end_idx": 2762,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2796,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:25:41.532123"
+    }
+  },
+  "WS21151": {
+    "WS21151_1.nc": {
+      "status": "accepted",
+      "start_idx": 3454,
+      "end_idx": 3999,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4083,
+      "method": "none",
+      "reviewed_at": "2026-04-09T16:53:17.728651"
+    },
+    "WS21151_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 21,
+      "auto_start_idx": 0,
+      "auto_end_idx": 21,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:50:50.856045"
+    },
+    "WS21151_68.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 26,
+      "auto_start_idx": 0,
+      "auto_end_idx": 26,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:51:03.785392"
+    },
+    "WS21151_12.nc": {
+      "status": "accepted",
+      "start_idx": 3419,
+      "end_idx": 4629,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4989,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:31:41.691290"
+    },
+    "WS21151_33.nc": {
+      "status": "accepted",
+      "start_idx": 862,
+      "end_idx": 1610,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1939,
+      "method": "none",
+      "reviewed_at": "2026-04-08T23:34:09.947744"
+    },
+    "WS21151_V8.nc": {
+      "status": "accepted",
+      "start_idx": 1270,
+      "end_idx": 3445,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3542,
+      "method": "none",
+      "reviewed_at": "2026-04-09T16:59:22.789416"
+    },
+    "WS21151_V6.nc": {
+      "status": "accepted",
+      "start_idx": 1435,
+      "end_idx": 3241,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3316,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:00:32.313224"
+    },
+    "WS21151_V2.nc": {
+      "status": "accepted",
+      "start_idx": 1368,
+      "end_idx": 2969,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3053,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:03:50.635794"
+    },
+    "WS21151_TBC.nc": {
+      "status": "accepted",
+      "start_idx": 1289,
+      "end_idx": 2395,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2402,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:05:19.728110"
+    },
+    "WS21151_TBB.nc": {
+      "status": "accepted",
+      "start_idx": 1333,
+      "end_idx": 1833,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1884,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:06:00.647018"
+    },
+    "WS21151_TB5.nc": {
+      "status": "accepted",
+      "start_idx": 1237,
+      "end_idx": 3384,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3469,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:07:36.992790"
+    },
+    "WS21151_RP1.nc": {
+      "status": "accepted",
+      "start_idx": 1763,
+      "end_idx": 2646,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2651,
+      "method": "none",
+      "reviewed_at": "2026-04-09T17:08:59.671921"
+    }
+  },
+  "WS21212": {
+    "WS21212_10.nc": {
+      "status": "accepted",
+      "start_idx": 1260,
+      "end_idx": 1440,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1534,
+      "method": "none",
+      "reviewed_at": "2026-04-10T14:52:25.952062"
+    },
+    "WS21212_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 41,
+      "auto_start_idx": 0,
+      "auto_end_idx": 41,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:52:00.904057"
+    },
+    "WS21212_31.nc": {
+      "status": "accepted",
+      "start_idx": 1275,
+      "end_idx": 2505,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3025,
+      "method": "none",
+      "reviewed_at": "2026-04-09T16:49:32.075945"
+    },
+    "WS21212_18.nc": {
+      "status": "accepted",
+      "start_idx": 1180,
+      "end_idx": 2448,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2942,
+      "method": "none",
+      "reviewed_at": "2026-04-09T16:50:33.837018"
+    },
+    "WS21212_12.nc": {
+      "status": "accepted",
+      "start_idx": 1400,
+      "end_idx": 3302,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3807,
+      "method": "none",
+      "reviewed_at": "2026-04-09T16:51:36.565395"
+    },
+    "WS21212_60.nc": {
+      "status": "accepted",
+      "start_idx": 610,
+      "end_idx": 701,
+      "auto_start_idx": 0,
+      "auto_end_idx": 707,
+      "method": "none",
+      "reviewed_at": "2026-04-10T14:55:09.031078"
+    },
+    "WS21212_CW4.nc": {
+      "status": "accepted",
+      "start_idx": 415,
+      "end_idx": 3358,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3473,
+      "method": "none",
+      "reviewed_at": "2026-04-10T14:56:46.863170"
+    }
+  },
+  "WS21278": {
+    "WS21278_10.nc": {
+      "status": "accepted",
+      "start_idx": 1575,
+      "end_idx": 2526,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2665,
+      "method": "none",
+      "reviewed_at": "2026-04-10T14:58:49.661327"
+    },
+    "WS21278_2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 32,
+      "auto_start_idx": 0,
+      "auto_end_idx": 32,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:53:15.635953"
+    },
+    "WS21278_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 45,
+      "auto_start_idx": 0,
+      "auto_end_idx": 45,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:53:22.490808"
+    },
+    "WS21278_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:53:37.211288"
+    },
+    "WS21278_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 24,
+      "auto_start_idx": 0,
+      "auto_end_idx": 24,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:53:45.918249"
+    },
+    "WS21278_57.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 32,
+      "auto_start_idx": 0,
+      "auto_end_idx": 32,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:53:52.502386"
+    },
+    "WS21278_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 11,
+      "auto_start_idx": 0,
+      "auto_end_idx": 11,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:54:03.311888"
+    },
+    "WS21278_AMI1.nc": {
+      "status": "accepted",
+      "start_idx": 1240,
+      "end_idx": 1697,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1964,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:05:04.567703"
+    },
+    "WS21278_AMI2.nc": {
+      "status": "accepted",
+      "start_idx": 3216,
+      "end_idx": 3802,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4902,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:09:51.954737"
+    },
+    "WS21278_AMI3.nc": {
+      "status": "accepted",
+      "start_idx": 3576,
+      "end_idx": 4349,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5644,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:13:41.463644"
+    },
+    "WS21278_AMI6.nc": {
+      "status": "accepted",
+      "start_idx": 1697,
+      "end_idx": 4069,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4073,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:15:10.852783"
+    },
+    "WS21278_BG2.nc": {
+      "status": "accepted",
+      "start_idx": 790,
+      "end_idx": 2563,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2568,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:45:49.426767"
+    },
+    "WS21278_RP3.nc": {
+      "status": "accepted",
+      "start_idx": 1439,
+      "end_idx": 2208,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4323,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:46:39.325172"
+    }
+  },
+  "WS21338": {
+    "WS21338_10.nc": {
+      "status": "accepted",
+      "start_idx": 1156,
+      "end_idx": 1694,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1701,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:55:43.368889"
+    },
+    "WS21338_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:55:56.146800"
+    },
+    "WS21338_GP5-2.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 27,
+      "auto_start_idx": 0,
+      "auto_end_idx": 27,
+      "method": "none",
+      "reviewed_at": "2026-04-07T23:56:05.903965"
+    },
+    "WS21338_31.nc": {
+      "status": "accepted",
+      "start_idx": 2081,
+      "end_idx": 3201,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3396,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:47:29.315487"
+    },
+    "WS21338_33.nc": {
+      "status": "accepted",
+      "start_idx": 1617,
+      "end_idx": 2652,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2947,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:52:46.052124"
+    },
+    "WS21338_65.nc": {
+      "status": "accepted",
+      "start_idx": 127,
+      "end_idx": 219,
+      "auto_start_idx": 0,
+      "auto_end_idx": 222,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:53:39.478901"
+    }
+  },
+  "WS22022": {
+    "WS22022_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 364,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1711,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:54:34.533466"
+    },
+    "WS22022_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:03:33.111466"
+    },
+    "WS22022_64.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 31,
+      "auto_start_idx": 0,
+      "auto_end_idx": 31,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:03:43.231514"
+    },
+    "WS22022_9.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3157,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4317,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:55:21.167033"
+    },
+    "WS22022_BG1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 584,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2456,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:56:23.610049"
+    },
+    "WS22022_BG2.nc": {
+      "status": "accepted",
+      "start_idx": 1137,
+      "end_idx": 1726,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3995,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:57:04.227567"
+    }
+  },
+  "WS22072": {
+    "WS22072_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 89,
+      "auto_start_idx": 0,
+      "auto_end_idx": 89,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:03:52.191191"
+    },
+    "WS22072_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 21,
+      "auto_start_idx": 0,
+      "auto_end_idx": 21,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:04:00.139466"
+    }
+  },
+  "WS22141": {
+    "WS22141_10.nc": {
+      "status": "accepted",
+      "start_idx": 1595,
+      "end_idx": 2778,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2780,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:04:54.925552"
+    },
+    "WS22141_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 37,
+      "auto_start_idx": 0,
+      "auto_end_idx": 37,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:05:03.397820"
+    },
+    "WS22141_7.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:05:11.029140"
+    }
+  },
+  "WS22281": {
+    "WS22281_10.nc": {
+      "status": "accepted",
+      "start_idx": 1177,
+      "end_idx": 2554,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5868,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:58:16.188458"
+    },
+    "WS22281_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 19,
+      "auto_start_idx": 0,
+      "auto_end_idx": 19,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:09:19.181771"
+    },
+    "WS22281_7.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 22,
+      "auto_start_idx": 0,
+      "auto_end_idx": 22,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:09:34.220885"
+    },
+    "WS22281_56.nc": {
+      "status": "accepted",
+      "start_idx": 2258,
+      "end_idx": 3143,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5293,
+      "method": "none",
+      "reviewed_at": "2026-04-10T15:59:06.490828"
+    },
+    "WS22281_BG3.nc": {
+      "status": "accepted",
+      "start_idx": 2141,
+      "end_idx": 3258,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3262,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:00:30.240228"
+    }
+  },
+  "WS22337": {
+    "WS22337_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 4,
+      "auto_start_idx": 0,
+      "auto_end_idx": 4,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:09:48.291293"
+    },
+    "WS22337_64.nc": {
+      "status": "problematic",
+      "should_delete": true,
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:10:13.868069"
+    },
+    "WS22337_CW1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:10:26.076982"
+    }
+  },
+  "WS23011": {
+    "WS23011_10.nc": {
+      "status": "accepted",
+      "start_idx": 2310,
+      "end_idx": 3128,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3213,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:01:21.801635"
+    },
+    "WS23011_54.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 35,
+      "auto_start_idx": 0,
+      "auto_end_idx": 35,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:11:54.252515"
+    },
+    "WS23011_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 18,
+      "auto_start_idx": 0,
+      "auto_end_idx": 18,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:12:06.767419"
+    },
+    "WS23011_57.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 13,
+      "auto_start_idx": 0,
+      "auto_end_idx": 13,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:13:31.041288"
+    },
+    "WS23011_TB10.nc": {
+      "status": "accepted",
+      "start_idx": 1777,
+      "end_idx": 4947,
+      "auto_start_idx": 0,
+      "auto_end_idx": 9390,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:08:25.081421"
+    },
+    "WS23011_TB5.nc": {
+      "status": "accepted",
+      "start_idx": 2407,
+      "end_idx": 5237,
+      "auto_start_idx": 0,
+      "auto_end_idx": 5371,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:10:15.065878"
+    }
+  },
+  "WS23061": {
+    "WS23061_10.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 80,
+      "auto_start_idx": 0,
+      "auto_end_idx": 80,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:11:13.445581"
+    },
+    "WS23061_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:13:54.132996"
+    },
+    "WS23061_CAL1.nc": {
+      "status": "accepted",
+      "start_idx": 2339,
+      "end_idx": 2674,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2674,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:12:18.572055"
+    }
+  },
+  "WS23203": {
+    "WS23203_10.nc": {
+      "status": "accepted",
+      "start_idx": 2186,
+      "end_idx": 2506,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2509,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:13:06.968082"
+    },
+    "WS23203_49.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 3,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:14:52.233538"
+    },
+    "WS23203_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 7,
+      "auto_start_idx": 0,
+      "auto_end_idx": 7,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:15:00.132311"
+    },
+    "WS23203_55.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 6,
+      "auto_start_idx": 0,
+      "auto_end_idx": 6,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:15:10.838078"
+    },
+    "WS23203_56.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 2,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:15:26.462823"
+    },
+    "WS23203_RP1.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 14,
+      "auto_start_idx": 0,
+      "auto_end_idx": 14,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:15:34.818096"
+    },
+    "WS23203_CAL4.nc": {
+      "status": "accepted",
+      "start_idx": 2082,
+      "end_idx": 3030,
+      "auto_start_idx": 0,
+      "auto_end_idx": 3033,
+      "method": "none",
+      "reviewed_at": "2026-04-10T16:14:53.255376"
+    }
+  },
+  "WS24139": {
+    "WS24139_10.nc": {
+      "status": "accepted",
+      "start_idx": 1858,
+      "end_idx": 2380,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2382,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:16:59.236044"
+    },
+    "WS24139_53.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 19,
+      "auto_start_idx": 0,
+      "auto_end_idx": 19,
+      "method": "none",
+      "reviewed_at": "2026-04-08T00:17:38.817085"
+    }
+  },
+  "WS1116": {
+    "WS1116_1.nc": {
+      "status": "accepted",
+      "start_idx": 398,
+      "end_idx": 922,
+      "auto_start_idx": 0,
+      "auto_end_idx": 935,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:21:36.393622"
+    },
+    "WS1116_12.nc": {
+      "status": "accepted",
+      "start_idx": 0,
+      "end_idx": 1615,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2033,
+      "method": "none",
+      "reviewed_at": "2026-04-08T15:25:04.003871"
+    }
+  },
+  "WS19210": {
+    "WS19210_10.nc": {
+      "status": "accepted",
+      "start_idx": 1292,
+      "end_idx": 1803,
+      "auto_start_idx": 0,
+      "auto_end_idx": 1805,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:40:31.004265"
+    },
+    "WS19210_7.nc": {
+      "status": "accepted",
+      "start_idx": 1734,
+      "end_idx": 2033,
+      "auto_start_idx": 0,
+      "auto_end_idx": 2035,
+      "method": "none",
+      "reviewed_at": "2026-04-08T22:42:17.417720"
+    }
+  }
+}

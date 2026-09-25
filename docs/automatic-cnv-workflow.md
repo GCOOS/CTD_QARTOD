@@ -4,8 +4,8 @@ Work from `/Volumes/Crucial X9/CTD_QARTOD`. The standard workflow is:
 
 ```bash
 python main.py convert-cnv cnv_data/WS24258
-python main.py qc --profile config/ws24258/dataset_profile.json
-python main.py erddap-xml --profile config/ws24258/dataset_profile.json
+python main.py qc --profile config/WS24258/dataset_profile.json
+python main.py erddap-xml --profile config/WS24258/dataset_profile.json
 ```
 
 Conversion accepts one file, one cruise folder, or a multi-cruise input folder.
@@ -170,10 +170,10 @@ the same rectangle (longitude -83 to -80, latitude 24 to 26). It remains human-o
 Typical defaults:
 
 ```text
-config/ws24258/dataset_profile.json
-config/ws24258/cnv_mapping.json
-config/ws24258/variable_mapping/walton_mapping.json
-config/ws24258/variable_mapping/source_variable_mapping.json
+config/WS24258/dataset_profile.json
+config/WS24258/cnv_mapping.json
+config/WS24258/variable_mapping/walton_mapping.json
+config/WS24258/variable_mapping/source_variable_mapping.json
 output/WS24258_CNV/WS24258/WS24258_10.nc
 output/WS24258_QC/WS24258/WS24258_10.nc
 output/erddap/ws24258_datasets.xml
@@ -236,8 +236,8 @@ The usual conversion/QC commands initialize settings automatically. To explicitl
 create another independent snapshot from converted NetCDF, choose a new folder:
 
 ```bash
-python main.py generate-limits --profile config/ws24258/dataset_profile.json --output config/ws24258_alternative
-python main.py qc --profile config/ws24258_alternative/dataset_profile.json
+python main.py generate-limits --profile config/WS24258/dataset_profile.json --output config/WS24258_alternative
+python main.py qc --profile config/WS24258_alternative/dataset_profile.json
 ```
 
 `generate-limits` creates variable mappings, unit-specific gross ranges, spike,
@@ -253,11 +253,10 @@ Missing template gross ranges are explicit null placeholders. The older
 `generate-sensor-config` command remains a null-limit skeleton utility, not the
 standard template-copy workflow.
 
-For example, a new `WS2425A` dataset is arranged as follows (configuration folder
-names are lowercase):
+For example, a new `WS2425A` dataset keeps the dataset scope's case:
 
 ```text
-config/ws2425a/
+config/WS2425A/
   dataset_profile.json
   cnv_mapping.json
   limit_report.json
@@ -320,7 +319,7 @@ silently skipped or assigned invented observations.
 
 ### Verified WS24258 results
 
-The active `config/ws24258/dataset_profile.json` now uses the dataset-root layout.
+The active `config/WS24258/dataset_profile.json` now uses the dataset-root layout.
 Its human/fixed/derived metadata sections and existing numerical QC limits were
 preserved. The conversion refreshed 88 files and reported the two invalid headers;
 QC completed on all 88 valid files, and the XML contains 88 dataset entries.
@@ -354,11 +353,11 @@ manual coordinate preparation or variable mapping:
 
 ```bash
 python main.py convert-cnv cnv_data/02_CNV/SAV1803_cnv
-python main.py qc --profile config/sav1803/dataset_profile.json
-python main.py erddap-xml --profile config/sav1803/dataset_profile.json
+python main.py qc --profile config/SAV1803/dataset_profile.json
+python main.py erddap-xml --profile config/SAV1803/dataset_profile.json
 ```
 
-The first run created dataset-owned settings under `config/sav1803/`, 31 source
+The first run created dataset-owned settings under `config/SAV1803/`, 31 source
 NetCDF files under `output/SAV1803_CNV/`, 31 QC files under `output/SAV1803_QC/`,
 and 31 XML dataset entries in `output/erddap/sav1803_datasets.xml`. Existing
 conversion outputs remain protected; a deliberate rerun requires `--overwrite`.
