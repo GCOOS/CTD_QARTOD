@@ -17,11 +17,7 @@ from cnv_metadata import validate_ownership
 REPO_ROOT = Path(__file__).resolve().parent
 CONFIG_TEMPLATE_DIR = REPO_ROOT / "config_template"
 TEMPLATE_PROFILE_PATH = CONFIG_TEMPLATE_DIR / "dataset_profile.json"
-WALTON_SMITH_CONFIG_DIR = REPO_ROOT / "config" / "walton_smith"
-DEFAULT_PROFILE_PATH = WALTON_SMITH_CONFIG_DIR / "dataset_profile.json"
-DEFAULT_CNV_PROFILE_PATH = (
-    REPO_ROOT / "config" / "hogarth_cnv" / "dataset_profile.json"
-)
+DEFAULT_PROFILE_PATH = TEMPLATE_PROFILE_PATH
 QC_TEST_MODE_NAMES = ("gap_test", "syntax_test")
 QC_TEST_MODES = {"not_evaluated", "run"}
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from dataset_profile import DEFAULT_CNV_PROFILE_PATH, DEFAULT_PROFILE_PATH, load_dataset_profile
+from dataset_profile import DEFAULT_PROFILE_PATH, load_dataset_profile
 from qc_validation import validate_qc_profile
 
 
@@ -20,9 +20,8 @@ def _replace_json(profile, tmp_path: Path, key: str, payload: object):
     return _replace_path(profile, key, path)
 
 
-@pytest.mark.parametrize("profile_path", [DEFAULT_PROFILE_PATH, DEFAULT_CNV_PROFILE_PATH])
-def test_active_profiles_pass_preflight(profile_path: Path):
-    paths = validate_qc_profile(load_dataset_profile(profile_path))
+def test_template_profile_passes_preflight():
+    paths = validate_qc_profile(load_dataset_profile(DEFAULT_PROFILE_PATH))
     assert paths["variable_mapping"].is_file()
     assert paths["flat_line_config"].is_file()
 

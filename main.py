@@ -140,12 +140,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python main.py inspect-cnv cnv_data/WS24258 --output config/walton_smith/cnv_mapping.json
-    python main.py convert-cnv cnv_data/WS24258 --profile config/ws24258/dataset_profile.json
-    python main.py generate-sensor-config --profile config/walton_smith/dataset_profile.json
-    python main.py qc
-    python main.py qc --profile config/walton_smith/dataset_profile.json
-    python main.py erddap-xml --profile config/hogarth_cnv/dataset_profile.json
+    python main.py convert-cnv /path/to/cnv/files
+    python main.py qc --profile config/your_dataset/dataset_profile.json
+    python main.py erddap-xml --profile config/your_dataset/dataset_profile.json
     python main.py viz
         """,
     )

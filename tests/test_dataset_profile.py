@@ -83,7 +83,7 @@ def test_default_profile_loads_sfer_layout():
     assert profile.erddap.output_xml == (
         REPO_ROOT / "output" / "erddap" / "datasets.xml"
     )
-    assert profile.erddap.dataset_id_prefix == ""
+    assert profile.erddap.dataset_id_prefix == profile_json["erddap"]["dataset_id_prefix"]
     assert "title" in profile.erddap.required_global_attributes
     assert profile.erddap.global_add_attributes["_NCProperties"] is None
 

@@ -13,16 +13,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from qc_config import STATION_COORDS_CSV
-
-
-def normalize_station_coord(value: str) -> str:
-    """
-    Normalize station strings to a canonical, case-insensitive form.
-    """
-    value = value.strip()
-    if value.endswith(".0"):
-        value = value[:-2]
-    return value.lower()
+from station_names import normalize_reference_station as normalize_station_coord
 
 
 @lru_cache(maxsize=None)

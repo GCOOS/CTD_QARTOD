@@ -8,9 +8,15 @@ This guide describes the schema-5 workflow. For commands and full examples, see
 
 `python main.py convert-cnv /path/to/cnv` accepts a single CNV, a cruise folder,
 or a tree containing multiple cruises. The actual filename supplies cruise and
-station, not the embedded `FileName`. Numeric leading zeros are removed while
-station suffixes remain: `054b` becomes `54b`, not a repeat of station 54.
-Supported vessel prefixes include WS, WB, SV/SAV and HG. Unresolved identities
+station, not the embedded `FileName`. Numeric leading zeros are removed and
+source station aliases are applied: `054b` becomes `54-2`, and `057-2` becomes
+`57_2`. The aliases belong to filename conversion, not QC.
+A final underscore plus a running number of any length is discarded for any
+cruise; `HG26193_Stn.TB1_003.cnv` is station `TB1`, and
+`WS20278_Stn.9_5.cnv` is station `9`. Dots within station numbers become
+underscores, so `HG26193_Stn.009.5_080.cnv` is station `9_5`.
+Supported vessel prefixes include WS, WB, SV/SAV and HG; `HG12_Stv.057-2_069.cnv`
+is also accepted and becomes station `57_2`. Unresolved identities
 fail instead of being guessed. A processing tree prefers a sibling `06-drv`;
 other ambiguous processing stages require an explicit input selection.
 
@@ -91,6 +97,8 @@ Settings live directly under `config/<dataset>/`: no nested QC folder,
 `qc_limits` selector or per-cast override file. Existing local settings are not
 regenerated. Missing thresholds or station references yield NOT_EVALUATED;
 successful execution is not the same as every sample passing QC.
+For both location and climatology lookups, QC treats `_` in a stored station ID
+as `.` in the reference files without changing the stored ID.
 
 ```bash
 python main.py qc --profile config/sav1803/dataset_profile.json

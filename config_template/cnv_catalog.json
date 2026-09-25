@@ -265,6 +265,18 @@
     },
     "chlorophyll_fluorescence": {
       "sources": [
+        "flECO-AFL"
+      ],
+      "description": "^Fluorescence, WET Labs ECO-AFL/FL",
+      "long_name": "Chlorophyll Fluorescence",
+      "units": [
+        "mg m-3"
+      ],
+      "ioos_category": "Ocean Color",
+      "sensor_tag": "FluoroWetlabECO_AFL_FL_Sensor"
+    },
+    "seapoint_fluorescence": {
+      "sources": [
         "flSP"
       ],
       "description": "^Fluorescence, Seapoint",
@@ -274,8 +286,7 @@
     },
     "chlorophyll_concentration": {
       "sources": [
-        "wetStar",
-        "flECO-AFL"
+        "wetStar"
       ],
       "description": "^Fluorescence, WET Labs",
       "long_name": "Chlorophyll Concentration from Fluorescence",
@@ -284,8 +295,7 @@
       ],
       "ioos_category": "Ocean Color",
       "sensor_by_source": {
-        "wetStar": "FluoroWetlabWetstarSensor",
-        "flECO-AFL": "FluoroWetlabECO_AFL_FL_Sensor"
+        "wetStar": "FluoroWetlabWetstarSensor"
       },
       "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water"
     },

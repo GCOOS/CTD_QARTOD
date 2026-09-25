@@ -18,6 +18,7 @@ import xarray as xr
 from cnv_catalog import catalog, normalize_unit
 from cnv_coordinates import resolve_header_coordinates
 from cnv_metadata import FIXED_DEFAULTS, publication_metadata, validate_ownership
+from station_names import STATION_ALIASES
 
 from cnv_mapping import (
     CnvHeaderColumn,
@@ -33,8 +34,10 @@ from cnv_mapping import (
 )
 
 
+_CRUISE_RE = r"(?:(?:WS|WB|SV|SAV)\d{4,5}|HG\d{2,5})[A-Za-z]?"
 _FILENAME_RE = re.compile(
-    r"^(?P<cruise>(?:WS|WB|SV|SAV|HG)\d{4,5}[A-Za-z]?)(?:[_. -]?(?:Stn|Sta)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)\.cnv$", re.IGNORECASE
+    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)\.cnv$",
+    re.IGNORECASE,
 )
 _NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
 _PROCESSING_STAGES = {
@@ -103,14 +106,22 @@ def filename_identity(path: Path | str) -> tuple[str, str]:
             source,
             "filename must match <cruiseID>_Stn.<station>.cnv or a reviewed cruise/station delimiter pattern",
         )
-    if re.search(r"(?i)(deck|dunk|wettest|test|tst|recast|surface|do_up)", match.group("station")):
+    cruise = match.group("cruise").upper()
+    station = match.group("station")
+    station_part, separator, running_number = station.rpartition("_")
+    if separator and re.fullmatch(r"\d+", running_number):
+        station = station_part
+    station = _station_id(station)
+    station = STATION_ALIASES.get(station.lower(), station)
+    station = station.replace(".", "_")
+    if re.search(r"(?i)(deck|dunk|wettest|test|tst|recast|surface|do_up)", station):
         raise _format_error(source, "test/recast filename needs explicit identity review")
-    if not re.fullmatch(r"(?:\d+(?:[._-]\d+)?[A-Za-z]*|[A-Za-z]+\d*(?:[._]\d+)?[A-Za-z]?)", match.group("station")):
+    if not re.fullmatch(r"(?:\d+(?:[._-]\d+)?[A-Za-z]*|[A-Za-z]+\d*(?:[._]\d+)?[A-Za-z]?|[A-Za-z]+-\d+)", station):
         raise _format_error(source, "ambiguous station token; identity review required")
-    parent_cruise = re.fullmatch(r"((?:WS|WB|SV|SAV|HG)\d{4,5}[A-Za-z]?)_cnv", source.parent.name, re.I)
-    if parent_cruise and parent_cruise[1].upper() != match.group("cruise").upper():
+    parent_cruise = re.fullmatch(rf"({_CRUISE_RE})_cnv", source.parent.name, re.I)
+    if parent_cruise and parent_cruise[1].upper() != cruise:
         raise _format_error(source, "filename cruise differs from cruise folder; identity review required")
-    return match.group("cruise").upper(), _station_id(match.group("station"))
+    return cruise, station
 
 
 def _embedded_stem(value: str) -> str:

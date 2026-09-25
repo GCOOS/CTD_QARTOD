@@ -12,7 +12,7 @@ from cnv_converter import convert_cnv, filename_identity
 from cnv_mapping import discover_cnv_files, inspect_cnv
 from cnv_workflow import prepare_profile
 from cnv_metadata import publication_metadata
-from dataset_profile import load_dataset_profile, resolve_config_path, WALTON_SMITH_CONFIG_DIR
+from dataset_profile import load_dataset_profile, resolve_config_path
 from qc_limit_generation import generate_limits, prepare_dataset_qc
 from qc_runner import run_qc_for_all
 from qc_template_limits import template_gross_ranges, template_thresholds
@@ -26,7 +26,23 @@ from test_cnv_converter import _cnv
     ('WS15152Sta59.cnv', ('WS15152', '59')),
     ('WS24139.Stn002.cnv', ('WS24139', '2')),
     ('HG26193_Stn.TB1.cnv', ('HG26193', 'TB1')),
-    ('WS24258_Stn.054b.cnv', ('WS24258', '54b')),
+    ('HG26193_Stn.TB1_003.cnv', ('HG26193', 'TB1')),
+    ('HG26193_Stn.009_081.cnv', ('HG26193', '9')),
+    ('HG26193_Stn.009.5_080.cnv', ('HG26193', '9_5')),
+    ('HG26193_Stn.057.1_068.cnv', ('HG26193', '57_1')),
+    ('HG26193_Stn.21LK_088.cnv', ('HG26193', '21LK')),
+    ('HG12_Stv.057-2_069.cnv', ('HG12', '57_2')),
+    ('HG26193_Stn.TB1_7.cnv', ('HG26193', 'TB1')),
+    ('HG26193_Stn.TB1_1234.cnv', ('HG26193', 'TB1')),
+    ('WB22215_Stn.TB1_003.cnv', ('WB22215', 'TB1')),
+    ('WS24258_Stn.009.5.cnv', ('WS24258', '9_5')),
+    ('WS24258_Stn.009.5_2.cnv', ('WS24258', '9_5')),
+    ('WS24258_Stn.057.1_068.cnv', ('WS24258', '57_1')),
+    ('WS20278_Stn.9_5.cnv', ('WS20278', '9')),
+    ('WS24258_Stn.054b.cnv', ('WS24258', '54-2')),
+    ('WS24258_Stn.021.cnv', ('WS24258', '21LK')),
+    ('WS24258_Stn.021-5.cnv', ('WS24258', '21_5')),
+    ('WS24258_Stn.MRv2.cnv', ('WS24258', 'MR-2')),
     ('WS24258_Stn.021LK.cnv', ('WS24258', '21LK')),
     ('WS2425A_Stn.001.cnv', ('WS2425A', '1')),
 ])
@@ -54,10 +70,13 @@ def test_catalog_matches_beam_aliases_and_preserves_par_units():
 def test_walton_measurements_remain_distinct_from_qc_categories():
     from cnv_catalog import source_entry, template_categories
     temperature = source_entry('t090C')
-    fluorescence = source_entry('flSP')
-    concentration = source_entry('flECO-AFL')
+    seapoint = source_entry('flSP')
+    fluorescence = source_entry('flECO-AFL')
+    concentration = source_entry('wetStar')
     assert temperature['target'] == 'sea_water_temperature'
     assert temperature['qc_category'] == 'temperature'
+    assert seapoint['target'] == 'seapoint_fluorescence'
+    assert seapoint['qc_category'] is None
     assert fluorescence['target'] == 'chlorophyll_fluorescence'
     assert concentration['target'] == 'chlorophyll_concentration'
     assert fluorescence['qc_category'] == concentration['qc_category'] == 'chlorophyll'

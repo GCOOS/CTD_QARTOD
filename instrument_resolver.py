@@ -147,7 +147,10 @@ def resolve_gross_ranges(
                 continue
             if not _sensor_present(sensor_spec, instrument_long_names):
                 continue
-            unit = get_variable_unit(ds, var_name)
+            source_names = sensor_spec.get("source_names")
+            if source_names and ds[var_name].attrs.get("source_name") not in source_names:
+                continue
+            unit = get_variable_unit(ds, var_name) or sensor_spec.get("unit_when_missing")
             ranges = sensor_spec.get("ranges", {}) or {}
             span = _find_unit_range(unit, ranges)
             if span:

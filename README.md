@@ -25,8 +25,16 @@ python main.py convert-cnv /path/to/cnv/files
 ```
 
 The command creates missing configuration under `config/<dataset>/` and writes
-NetCDF files under `output/<dataset>_CNV/`. It preserves existing configuration
-and output files. To replace converted files deliberately, add `--overwrite`.
+each NetCDF file to `output/<dataset>_CNV/<cruise>/<cruise>_<station>.nc`.
+Dataset configuration under `config/<dataset>/` is local and ignored by Git;
+`config_template/` supplies the shared starting files.
+For example, a new conversion of `WS24258_Stn.054b.cnv` maps the source station
+alias to `54-2` and writes `output/WS24258_CNV/WS24258/WS24258_54-2.nc`.
+The command prints the output directory and writes `conversion_report.json` and
+`conversion_index.json` there.
+Repeated casts at one station receive a `-2`, `-3`, and so on suffix.
+It preserves existing configuration and output files. To replace converted files
+deliberately, add `--overwrite`.
 
 Latitude/longitude data columns are preserved per sample. When both columns are
 absent, valid NMEA header coordinates are written once per cast instead.

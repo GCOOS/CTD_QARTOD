@@ -143,3 +143,22 @@ def test_get_climatology_config_for_file(tmp_path: Path):
     cfg = get_climatology_config_for_file(ds, limits_json_path=lim_path, classification_json_path=cls_path)
     assert cfg is not None
     assert "sea_water_temperature" in cfg
+
+
+@pytest.mark.parametrize("stored_station,reference_station", [
+    ("57_2", "57.2"),
+    ("9_5", "9.5"),
+])
+def test_climatology_matches_dotted_station_reference(
+    tmp_path: Path, stored_station: str, reference_station: str
+):
+    limits_path = tmp_path / "limits.json"
+    classes_path = tmp_path / "classes.json"
+    limits_path.write_text(json.dumps({"deep_cast_limits": {"sea_water_temperature": [{}]}}))
+    classes_path.write_text(json.dumps({"deep_cast": [reference_station], "shallow_cast": []}))
+    ds = xr.Dataset({"station": xr.DataArray(stored_station)})
+
+    config = get_climatology_config_for_file(ds, limits_path, classes_path)
+
+    assert config is not None
+    assert "sea_water_temperature" in config

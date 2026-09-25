@@ -74,10 +74,10 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
 
     report = convert_cnv(source, output, mapping)
 
-    target = output / "WS24258" / "WS24258_54b.nc"
+    target = output / "WS24258" / "WS24258_54-2.nc"
     assert report["counts"] == {"cnv_discovered": 1, "converted": 1, "failed": 0}
     assert target.is_file()
-    assert not (output / "WS24258" / "WS24258_54-2.nc").exists()
+    assert not (output / "WS24258" / "WS24258_54b.nc").exists()
     assert "embedded filename differs from actual filename" in report["records"][0]["warnings"]
     with xr.open_dataset(target, decode_cf=False) as dataset:
         assert dataset["time"].dims == ("profile", "z")
@@ -95,13 +95,13 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
         assert dataset["sea_water_temperature_2"].attrs["source_occurrence"] == 2
         assert dataset["sea_water_temperature"].attrs["instrument"] == "instrument1"
         assert dataset["sea_water_temperature_2"].attrs["instrument"] == "instrument2"
-        assert set(dataset["station"].values.ravel()) == {"54b"}
+        assert set(dataset["station"].values.ravel()) == {"54-2"}
         assert set(dataset["cruiseID"].values.ravel()) == {"WS24258"}
         assert dataset.attrs["standard_name_vocabulary"] == (
             "CF Standard Name Table v94"
         )
         assert dataset.attrs["title"] == (
-            "SFER CTD, SFER_CTD_WS24258_54b, 2024-09-18, 27.1000N 82.1000W"
+            "SFER CTD, SFER_CTD_WS24258_54-2, 2024-09-18, 27.1000N 82.1000W"
         )
 
 
@@ -164,6 +164,26 @@ def test_recursive_conversion_numbers_only_identical_station_ids(tmp_path: Path)
     assert report["counts"]["converted"] == 2
     assert (tmp_path / "output" / "WS24258" / "WS24258_54.nc").is_file()
     assert (tmp_path / "output" / "WS24258" / "WS24258_54-2.nc").is_file()
+
+
+@pytest.mark.parametrize("filename,cruise,station", [
+    ("WS24258_Stn.009.5_2.cnv", "WS24258", "9_5"),
+    ("WS20278_Stn.9_5.cnv", "WS20278", "9"),
+    ("WB22215_Stn.TB1_1234.cnv", "WB22215", "TB1"),
+    ("HG12_Stv.057-2_069.cnv", "HG12", "57_2"),
+])
+def test_running_number_is_not_part_of_station_id_for_other_cruises(
+    tmp_path: Path, filename: str, cruise: str, station: str
+):
+    source = _cnv(tmp_path / "input" / filename)
+    mapping = _ready_mapping(source, tmp_path / "mapping.json")
+
+    report = convert_cnv(source, tmp_path / "output", mapping)
+
+    assert report["counts"]["failed"] == 0
+    target = tmp_path / "output" / cruise / f"{cruise}_{station}.nc"
+    with xr.open_dataset(target) as dataset:
+        assert set(dataset["station"].values.ravel()) == {station}
 
 
 def test_conversion_rejects_mapping_that_still_needs_review(tmp_path: Path):

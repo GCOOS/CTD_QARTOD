@@ -51,11 +51,11 @@ The historical `02_CNV` archive supplies the evidence for aliases such as:
 | `prDM`, `prdM` | `sea_water_pressure` |
 | `sal00`, `sal11` | `sea_water_salinity` |
 | `sigma-t00`, `sigma-t11` | `sea_water_sigma_t` (not full density) |
-| `flSP` | `chlorophyll_fluorescence` |
-| `flECO-AFL` | `chlorophyll_concentration` |
+| `flSP` | `seapoint_fluorescence` |
+| `flECO-AFL` | `chlorophyll_fluorescence` |
 
-Both chlorophyll measurements belong to QC category `chlorophyll`, but remain
-distinct variables with distinct limits and units. Likewise, `t090C` maps to
+The ECO-AFL/FL measurement belongs to QC category `chlorophyll`; the unitless
+Seapoint measurement is retained without QC. Likewise, `t090C` maps to
 `sea_water_temperature`, which belongs to QC category `temperature`. Duplicate
 destinations are numbered after mapping (`sea_water_temperature`,
 `sea_water_temperature_2`), including different source codes in the same cast.
@@ -179,14 +179,14 @@ output/WS24258_QC/WS24258/WS24258_10.nc
 output/erddap/ws24258_datasets.xml
 ```
 
-Recognized filename forms include `_Stn.`, `.Stn`, `Sta`, and cruise/station
+Recognized filename forms include `_Stn.`, `.Stn`, `Sta`, `Stv`, and cruise/station
 underscore or hyphen separators. Identity comes from the actual filename,
-never the embedded `FileName`. Leading numeric zeros are removed; `054b` stays
-`54b`; `021LK` becomes `21LK`. Cruise IDs with a letter suffix, such as `WS2425A`,
-are also accepted. Named and decimal stations are preserved, not recast-normalized. Conflicting
-cruise folder/basename identities, ambiguous multi-part station tokens, and test/
-recast markers require explicit preparation; station renaming from the SFER PDF
-is not automatically applied.
+never the embedded `FileName`. Leading numeric zeros are removed; source alias
+`054b` becomes `54-2`; `021LK` becomes `21LK`. Cruise IDs with a letter suffix,
+such as `WS2425A`, are also accepted. Named and decimal stations are preserved.
+Conflicting cruise folder/basename identities, ambiguous multi-part station tokens, and test/
+recast markers require explicit preparation; station renaming beyond the explicit
+filename aliases is not automatically applied.
 
 Initial repeats are ordered by start time and source path. The persistent
 `conversion_index.json` records absolute source path -> relative NetCDF filename,
@@ -332,8 +332,13 @@ At station 10, 2,333 temperature samples change from `SUSPECT` under the incorre
 1970/January interpretation to `PASS` under the correct September climatology
 limits. This describes the climatology test, not every test or aggregate flag.
 Twenty samples from the original supplied NetCDF collection retained identical
-climatology flags with the corrected time decoder. Seapoint fluorescence still
-has no source unit, so its unit-dependent thresholds remain unavailable.
+climatology flags with the corrected time decoder. The unitless Seapoint `flSP`
+measurement is now retained as `seapoint_fluorescence` without QC. The ECO-AFL/FL
+measurement supplies `chlorophyll_fluorescence`; its WS24258 gross range uses the
+Walton Smith `mg m-3` limit only when the source and sensor match.
+WS24258 source station `54b` becomes stored station `54-2` at conversion. That reference is the
+mean of 11 historical casts explicitly named `54-2` under
+`cnv_data/SFER_CTD/DATA/01-SFER_CTD_SOAK_REMOVED_DATA/`.
 
 The previous WS24258 configuration, nested QC folder, superseded category map,
 and generated NetCDF/QC outputs were retained under
@@ -367,10 +372,13 @@ was performed.
 
 Completing the run does not mean every test was evaluated or passed. PAR has no
 declared unit, so its gross-range test remains `NOT_EVALUATED` in all 31 casts.
-Stations `21`, `21-5`, `57-1`, `57-2`, `57-3`, `9_5` and `MRv2` lack template
-station references; their location and climatology checks remain unevaluated.
-These gaps require confirmed metadata or changes to the dataset's normal config
-files, not guessed units or automatic reinterpretation of station suffixes.
+The filename converter maps `21` to `21LK`, `21-5` to `21_5`,
+`57-1` through `57-3` to `57_1` through `57_3`, and `MRv2` to `MR-2`.
+During both location and climatology QC, stored `9_5` uses the `9.5` reference
+and stored `57_2` uses `57.2`. The `MR-2` reference is the
+mean of five historical casts explicitly named `MR-2` under
+`cnv_data/SFER_CTD/DATA/01-SFER_CTD_SOAK_REMOVED_DATA/`. Climatology class
+membership remains a separate dataset setting.
 
 
 ## Schema-5 configuration verification

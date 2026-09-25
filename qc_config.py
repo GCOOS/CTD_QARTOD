@@ -14,16 +14,17 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 import xarray as xr
 
-from dataset_profile import MetadataConfig, WALTON_SMITH_CONFIG_DIR
+from dataset_profile import CONFIG_TEMPLATE_DIR, MetadataConfig
+from station_names import normalize_reference_station
 
 # CONFIG FILE PATHS
-# Default config files belong to the Walton Smith dataset. Other datasets
-# select their own paths through a dataset profile.
+# Defaults come from the shared template. Datasets select their own paths
+# through a dataset profile.
 
-CONFIG_DIR = WALTON_SMITH_CONFIG_DIR
+CONFIG_DIR = CONFIG_TEMPLATE_DIR
 
-# Standard variable name → dataset-specific variable names (Walton categories)
-VARIABLE_MAPPING_JSON = CONFIG_DIR / "variable_mapping" / "walton_mapping.json"
+# Standard variable name → data variable names
+VARIABLE_MAPPING_JSON = CONFIG_DIR / "qc_variable_mapping.json"
 
 # Station coordinates: ground truth lat/lon for each station (for location test)
 STATION_COORDS_CSV = CONFIG_DIR / "location_test" / "Station_Mean_Coords.csv"
@@ -261,15 +262,11 @@ def get_climatology_config_for_file(
     )
     classification = load_station_depth_classification(class_path)
 
-    # Normalize station id for comparison
-    sid = str(station_id).strip().lower()
-    if sid.endswith(".0"):
-        sid = sid[:-2]
+    sid = normalize_reference_station(str(station_id))
 
-    # Helper to check membership in a list of station ids (case-insensitive)
+    # Match stored underscore IDs to dotted reference station names.
     def _contains_station(stations: Iterable[str], target: str) -> bool:
-        target = target.strip().lower()
-        return any(str(s).strip().lower() == target for s in stations)
+        return any(normalize_reference_station(str(s)) == target for s in stations)
 
     station_type_priority = [
         ("deep_cast", "deep_cast_limits"),
