@@ -36,7 +36,7 @@ from cnv_mapping import (
 
 _CRUISE_RE = r"(?:(?:WS|WB|SV|SAV)\d{4,5}|HG\d{2,5})[A-Za-z]?"
 _FILENAME_RE = re.compile(
-    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)\.cnv$",
+    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._]*)(?:-[0-9]+)?\.cnv$",
     re.IGNORECASE,
 )
 _NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
