@@ -2,8 +2,7 @@
 Interactive Dash app for reviewing and adjusting CTD surface soak removal.
 
 Usage:
-    python soak_removal/review_app.py
-    python soak_removal/review_app.py --input-root /path/to/SFER_CTD --output-root /path/to/out --port 8051
+    python soak_removal/review_app.py --input-root /path/to/netcdf --output-root /path/to/out --port 8051
     python soak_removal/review_app.py --apply-batch /any/path/batch.json --input-root ... --output-root ... --progress-json ...
 """
 
@@ -30,12 +29,6 @@ from soak_detection_util import (
     get_soak_removal_index,
 )
 
-_SOAK_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _SOAK_DIR.parent
-_DEFAULT_INPUT = _REPO_ROOT / "datasets" / "SFER_CTD"
-_DEFAULT_OUTPUT = _REPO_ROOT / "datasets" / "SFER_CTD_SOAK_REMOVED"
-_DEFAULT_PROGRESS_JSON = _SOAK_DIR / "review_progress.json"
-_DEFAULT_SUSPICIOUS_JSONL = _SOAK_DIR / "suspicious_casts.jsonl"
 MIN_PROFILE_SCANS = 50
 PROFILE_TOO_SHORT_MSG = f"Profile too short (< {MIN_PROFILE_SCANS} scans)"
 
@@ -398,11 +391,18 @@ class FileNavigator:
         self._scan_folders()
 
     def _scan_folders(self):
-        """Scan input_root for cruise folders and .nc files."""
+        """Index files directly in input_root and in its cruise subfolders."""
+        root_files = sorted(
+            f.name for f in self.input_root.iterdir()
+            if f.is_file() and f.suffix.lower() == ".nc"
+        )
+        if root_files:
+            self.folders.append(".")
+            self.files_by_folder["."] = root_files
         for item in sorted(self.input_root.iterdir()):
             if not item.is_dir() or item.name.startswith("."):
                 continue
-            nc_files = sorted([f.name for f in item.iterdir() if f.suffix.lower() == ".nc"])
+            nc_files = sorted(f.name for f in item.iterdir() if f.is_file() and f.suffix.lower() == ".nc")
             if nc_files:
                 self.folders.append(item.name)
                 self.files_by_folder[item.name] = nc_files
@@ -753,14 +753,15 @@ def create_app(
 
     navigator = FileNavigator(input_root)
     progress = ProgressTracker(progress_json)
-    _export_jsonl = suspicious_export_jsonl or _DEFAULT_SUSPICIOUS_JSONL
+    _export_jsonl = suspicious_export_jsonl or output_root / "suspicious_casts.jsonl"
 
     folders = navigator.get_folders()
     if not folders:
         app.layout = html.Div(
             [
-                html.H3("No cruise folders found"),
+                html.H3("No NetCDF files found"),
                 html.P(f"Input root: {input_root}"),
+                html.P("Choose a folder containing NetCDF files or cruise subfolders."),
             ],
             style={"padding": "20px"},
         )
@@ -805,7 +806,7 @@ def create_app(
                             html.Label("Cruise Folder:", style={"margin": "10px"}),
                             dcc.Dropdown(
                                 id="folder-dropdown",
-                                options=[{"label": f, "value": f} for f in folders],
+                                options=[{"label": input_root.name if f == "." else f, "value": f} for f in folders],
                                 value=folders[0],
                                 clearable=False,
                                 style={"margin": "10px"},
@@ -1823,7 +1824,8 @@ def create_app(
 
         view_labels = {"after": " [After soak removal]", "problematic": " [Problematic]"}
         view_badge = view_labels.get(view_mode, " [Review]")
-        title = f"{disp_folder} / {disp_file}{status_badge}{view_badge}"
+        folder_label = input_root.name if disp_folder == "." else disp_folder
+        title = f"{folder_label} / {disp_file}{status_badge}{view_badge}"
 
         kept_count = max(0, current_end - current_start + 1)
         info_lines = [
@@ -2398,20 +2400,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--input-root",
         type=str,
-        default=str(_DEFAULT_INPUT),
-        help=f"Input root (original NetCDFs, default: {_DEFAULT_INPUT})",
+        required=True,
+        help="Input root (original NetCDFs)",
     )
     ap.add_argument(
         "--output-root",
         type=str,
-        default=str(_DEFAULT_OUTPUT),
-        help=f"Output root (soak-removed NetCDFs, default: {_DEFAULT_OUTPUT})",
+        required=True,
+        help="Output root (soak-removed NetCDFs)",
     )
     ap.add_argument(
         "--progress-json",
         type=str,
-        default=str(_DEFAULT_PROGRESS_JSON),
-        help=f"Progress tracking JSON (default: {_DEFAULT_PROGRESS_JSON})",
+        help="Progress tracking JSON (default: OUTPUT_ROOT/review_progress.json)",
     )
     ap.add_argument(
         "--port",
@@ -2438,22 +2439,29 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Path for 'Export problematic → JSONL' in the app "
-            f"(default: {_DEFAULT_SUSPICIOUS_JSONL})"
+            "(default: OUTPUT_ROOT/suspicious_casts.jsonl)"
         ),
     )
     args = ap.parse_args(argv)
 
     input_root = Path(args.input_root).resolve()
     output_root = Path(args.output_root).resolve()
-    progress_json = Path(args.progress_json).resolve()
+    progress_json = (
+        Path(args.progress_json).resolve()
+        if args.progress_json
+        else output_root / "review_progress.json"
+    )
     suspicious_export = (
         Path(args.suspicious_export_jsonl).resolve()
         if args.suspicious_export_jsonl
-        else None
+        else output_root / "suspicious_casts.jsonl"
     )
 
     if not input_root.is_dir():
         print(f"Input root not found: {input_root}")
+        return 1
+    if output_root.is_relative_to(input_root):
+        print("Soak output root must be outside the input root")
         return 1
 
     if args.apply_batch:

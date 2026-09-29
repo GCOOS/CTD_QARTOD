@@ -4,10 +4,10 @@ Main entry point for CNV conversion, soak removal, QC, visualization, and ERDDAP
 Usage:
     python main.py inspect-cnv INPUT --output cnv_mapping.json
     python main.py convert-cnv INPUT --profile PROFILE
-    python main.py remove-soak --input-root INPUT --output-root OUTPUT
-    python main.py review-soak --input-root INPUT --output-root OUTPUT
+    python main.py remove-soak --profile PROFILE [--input-root INPUT] [--output-root OUTPUT]
+    python main.py review-soak --profile PROFILE [--input-root INPUT] [--output-root OUTPUT]
     python main.py generate-sensor-config --profile PROFILE
-    python main.py qc --profile PROFILE
+    python main.py qc --profile PROFILE [--input-root INPUT]
     python main.py erddap-xml --profile PROFILE
     python main.py viz --profile PROFILE
 """
@@ -55,6 +55,11 @@ def _add_qc_arguments(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=str(DEFAULT_PROFILE_PATH),
         help=f"Path to dataset profile JSON (default: '{DEFAULT_PROFILE_PATH}')",
+    )
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        help="Override the profile data_root for this QC run; use the same dataset configuration",
     )
     parser.add_argument(
         "--verbose",
@@ -122,9 +127,31 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_soak_paths(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=str(DEFAULT_PROFILE_PATH),
+        help=f"Dataset profile for the input data_root (default: '{DEFAULT_PROFILE_PATH}')",
+    )
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        help="Override the profile data_root with a NetCDF root containing cruise folders",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        help=(
+            "Override the soak output root (default: a sibling of profile data_root, "
+            "replacing a trailing _CNV with _SOAK_REMOVED or appending _SOAK_REMOVED; "
+            "an input subfolder is mirrored beneath it)"
+        ),
+    )
+
+
 def _add_remove_soak_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input-root", type=Path, required=True, help="Converted NetCDF root containing cruise folders")
-    parser.add_argument("--output-root", type=Path, required=True, help="Separate root for soak-removed NetCDF files")
+    _add_soak_paths(parser)
     parser.add_argument("--dry-run", action="store_true", help="Analyze casts without writing NetCDF files")
     parser.add_argument("--overwrite", action="store_true", help="Replace existing soak-removed files")
     parser.add_argument("--limit", type=int, default=0, help="Process only the first N files (0 = all)")
@@ -133,8 +160,7 @@ def _add_remove_soak_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_review_soak_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input-root", type=Path, required=True, help="Converted NetCDF root containing cruise folders")
-    parser.add_argument("--output-root", type=Path, required=True, help="Separate root for reviewed NetCDF files")
+    _add_soak_paths(parser)
     parser.add_argument("--progress-json", type=Path, help="Review state (default: OUTPUT_ROOT/review_progress.json)")
     parser.add_argument("--host", default="127.0.0.1", help="Dashboard host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8050, help="Dashboard port (default: 8050)")
@@ -162,8 +188,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog="""
 Examples:
     python main.py convert-cnv /path/to/cnv/files
-    python main.py remove-soak --input-root output/your_dataset_CNV --output-root output/your_dataset_SOAK_REMOVED --dry-run
-    python main.py review-soak --input-root output/your_dataset_CNV --output-root output/your_dataset_SOAK_REMOVED
+    python main.py remove-soak --profile config/your_dataset/dataset_profile.json --dry-run
+    python main.py review-soak --profile config/your_dataset/dataset_profile.json
     python main.py qc --profile config/your_dataset/dataset_profile.json
     python main.py erddap-xml --profile config/your_dataset/dataset_profile.json
     python main.py viz
@@ -313,14 +339,34 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
-def _run_remove_soak(args: argparse.Namespace) -> None:
-    if args.output_root.resolve().is_relative_to(args.input_root.resolve()):
+def _soak_roots(args: argparse.Namespace) -> tuple[Path, Path]:
+    profile = load_dataset_profile(args.profile)
+    input_root = (args.input_root or profile.data_root).expanduser()
+    if not input_root.is_dir():
+        raise SystemExit(f"Soak input root is not a directory: {input_root}")
+    if args.output_root is not None:
+        output_root = args.output_root.expanduser()
+    else:
+        profile_root = profile.data_root
+        output_root = profile_root.with_name(
+            f"{profile_root.name.removesuffix('_CNV')}_SOAK_REMOVED"
+        )
+        if input_root.resolve().is_relative_to(profile_root.resolve()):
+            output_root /= input_root.resolve().relative_to(profile_root.resolve())
+    if output_root.resolve().is_relative_to(input_root.resolve()):
         raise SystemExit("Soak output root must be outside the input root")
+    print(f"Soak input root:  {input_root.resolve()}")
+    print(f"Soak output root: {output_root.resolve()}", flush=True)
+    return input_root, output_root
+
+
+def _run_remove_soak(args: argparse.Namespace) -> None:
+    input_root, output_root = _soak_roots(args)
     script = Path(__file__).resolve().parent / "soak_removal" / "sfer_ctd_remove_surface_soak.py"
     command = [
         sys.executable, str(script),
-        "--input-root", str(args.input_root),
-        "--output-root", str(args.output_root),
+        "--input-root", str(input_root),
+        "--output-root", str(output_root),
     ]
     if args.dry_run:
         command.append("--dry-run")
@@ -338,18 +384,17 @@ def _run_remove_soak(args: argparse.Namespace) -> None:
 
 
 def _run_review_soak(args: argparse.Namespace) -> None:
-    if args.output_root.resolve().is_relative_to(args.input_root.resolve()):
-        raise SystemExit("Soak output root must be outside the input root")
+    input_root, output_root = _soak_roots(args)
     script = Path(__file__).resolve().parent / "soak_removal" / "review_app.py"
-    progress_json = args.progress_json or args.output_root / "review_progress.json"
+    progress_json = args.progress_json or output_root / "review_progress.json"
     command = [
         sys.executable, str(script),
-        "--input-root", str(args.input_root),
-        "--output-root", str(args.output_root),
+        "--input-root", str(input_root),
+        "--output-root", str(output_root),
         "--progress-json", str(progress_json),
         "--host", args.host,
         "--port", str(args.port),
-        "--suspicious-export-jsonl", str(args.output_root / "suspicious_casts.jsonl"),
+        "--suspicious-export-jsonl", str(output_root / "suspicious_casts.jsonl"),
     ]
     try:
         result = subprocess.run(command, check=False)
@@ -417,7 +462,7 @@ def _run_qc(args: argparse.Namespace) -> None:
     setup_logging(verbose=args.verbose, log_file=args.log_file)
 
     profile = load_dataset_profile(args.profile)
-    base_dir = profile.data_root
+    base_dir = args.input_root.expanduser() if args.input_root is not None else profile.data_root
     if not base_dir.exists():
         logger.error("Base directory does not exist: %s", base_dir)
         sys.exit(1)

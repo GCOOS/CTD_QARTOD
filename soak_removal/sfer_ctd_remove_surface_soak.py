@@ -1,10 +1,10 @@
 """
-Batch remove CTD surface soak from SFER_CTD NetCDF profile files.
+Batch remove CTD surface soak from NetCDF profile files.
 
 This script applies the soak detection logic in ``soak_removal/soak_detection_util.py``
 (classification + ``get_soak_removal_index``).
 
-It reads each NetCDF file under an input root (default: datasets/SFER_CTD),
+It reads each NetCDF file under the selected input root,
 drops all scans before depth first reaches 2 m, then runs soak detection on
 the remainder (descent / shallow / fallback), trims the end at the first
 global maximum depth (same rule as the review app markers), and writes a
@@ -13,10 +13,10 @@ trimmed NetCDF to an output root while preserving the original directory structu
 Typical usage (from repo root):
 
   source venv/bin/activate
-  python soak_removal/sfer_ctd_remove_surface_soak.py
+  python soak_removal/sfer_ctd_remove_surface_soak.py --input-root INPUT --output-root OUTPUT
 
-Defaults read ``datasets/SFER_CTD`` and write ``datasets/SFER_CTD_SOAK_REMOVED``.
-Override with ``--input-root`` / ``--output-root`` if needed.
+Use ``main.py remove-soak --profile PROFILE`` for profile-based input and
+default output paths; add ``--output-root OUTPUT`` to override the destination.
 """
 
 from __future__ import annotations
@@ -32,11 +32,6 @@ import xarray as xr
 
 from nc_util import guess_scan_dim, safe_depth_1d, sanitize_encodings_for_netcdf
 from soak_detection_util import get_soak_removal_index
-
-_SOAK_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _SOAK_DIR.parent
-_DEFAULT_INPUT = _REPO_ROOT / "datasets" / "SFER_CTD"
-_DEFAULT_OUTPUT = _REPO_ROOT / "datasets" / "SFER_CTD_SOAK_REMOVED"
 
 
 @dataclass
@@ -127,18 +122,18 @@ def iter_input_files(input_root: Path) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Remove CTD surface soak from SFER_CTD NetCDF profiles.")
+    ap = argparse.ArgumentParser(description="Remove CTD surface soak from NetCDF profiles.")
     ap.add_argument(
         "--input-root",
         type=str,
-        default=str(_DEFAULT_INPUT),
-        help=f"Input root folder containing cruise subfolders (default: {_DEFAULT_INPUT})",
+        required=True,
+        help="Input root folder containing cruise subfolders",
     )
     ap.add_argument(
         "--output-root",
         type=str,
-        default=str(_DEFAULT_OUTPUT),
-        help=f"Output root folder for trimmed NetCDFs (default: {_DEFAULT_OUTPUT})",
+        required=True,
+        help="Output root folder for trimmed NetCDFs",
     )
     ap.add_argument("--overwrite", action="store_true", help="Overwrite existing outputs")
     ap.add_argument("--dry-run", action="store_true", help="Analyze only; do not write outputs")
@@ -157,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if not input_root.is_dir():
         print(f"Input root is not a directory or does not exist: {input_root}")
+        return 1
+    if output_root.is_relative_to(input_root):
+        print("Soak output root must be outside the input root")
         return 1
 
     files = iter_input_files(input_root)
@@ -209,4 +207,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
