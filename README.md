@@ -25,6 +25,17 @@ In later terminal sessions, activate the existing environment with
 
 ## 2. Convert the CNV files
 
+To review metadata and variable mapping before conversion, first run:
+
+```bash
+python main.py convert-cnv cnv_data/WS24258 --prepare-profile
+```
+
+This creates missing `config/WS24258/dataset_profile.json` and `cnv_mapping.json`,
+preserves existing configuration, and exits without writing NetCDF files or
+initializing dataset-owned QC settings. Edit the profile and review the mapping,
+then convert:
+
 ```bash
 python main.py convert-cnv cnv_data/WS24258
 ```
@@ -36,6 +47,7 @@ Check `output/WS24258_CNV/conversion_report.json` for failures. Review the
 variable mapping, dataset metadata, and QC settings in `config/WS24258/` before
 continuing. If conversion reports unresolved mappings, correct them using the
 [configuration guide](config_template/README.md), then rerun conversion.
+Add `--overwrite` to replace existing converted files after changing metadata.
 
 ## 3. Remove and review surface soak (optional)
 

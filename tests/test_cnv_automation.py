@@ -293,6 +293,81 @@ def test_dataset_edits_are_used_without_reading_template_again(tmp_path, monkeyp
     assert json.loads(second.paths.sensor_specs.read_text())['sensors']['sea_water_temperature']['ranges']['degree_Celsius']['max'] == 35
 
 
+@pytest.mark.parametrize('custom_profile', [False, True])
+def test_cli_prepare_profile_creates_configuration_without_conversion(tmp_path, monkeypatch, custom_profile):
+    import cnv_workflow
+    from main import main
+
+    source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
+    monkeypatch.setattr(cnv_workflow, 'prepare_profile',
+                        lambda input_path, **kwargs: prepare_profile(input_path, root=tmp_path, **kwargs))
+    args = ['convert-cnv', str(source), '--prepare-profile']
+    profile_path = tmp_path / 'config' / 'WS24258' / 'dataset_profile.json'
+    if custom_profile:
+        profile_path = tmp_path / 'reviewed' / 'profile.json'
+        args.extend(['--profile', str(profile_path.relative_to(tmp_path))])
+
+    main(args)
+
+    profile = load_dataset_profile(profile_path)
+    assert profile.paths.cnv_mapping == profile_path.parent / 'cnv_mapping.json'
+    assert profile.paths.cnv_mapping.is_file()
+    assert not (tmp_path / 'output').exists()
+    assert not (profile_path.parent / 'limit_report.json').exists()
+    assert profile.paths.sensor_specs is None
+
+    payload = json.loads(profile_path.read_text())
+    payload['netcdf_global_attributes']['creator_name'] = 'Reviewed dataset creator'
+    profile_path.write_text(json.dumps(payload))
+    main(['convert-cnv', str(source), '--profile', str(profile_path)])
+    with xr.open_dataset(profile.data_root / 'WS24258' / 'WS24258_1.nc', decode_cf=False) as ds:
+        assert ds.attrs['creator_name'] == 'Reviewed dataset creator'
+    assert load_dataset_profile(profile_path).paths.sensor_specs.is_file()
+
+
+@pytest.mark.parametrize('overwrite', [False, True])
+def test_cli_prepare_profile_preserves_edits_and_existing_outputs(tmp_path, overwrite):
+    from main import main
+
+    source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
+    profile_path = prepare_profile(source, root=tmp_path)
+    conversion_args = ['convert-cnv', str(source), '--profile', str(profile_path)]
+    main(conversion_args)
+    profile = load_dataset_profile(profile_path)
+    payload = json.loads(profile_path.read_text())
+    payload['netcdf_global_attributes']['creator_name'] = 'Reviewed dataset creator'
+    profile_path.write_text(json.dumps(payload))
+    mapping = json.loads(profile.paths.cnv_mapping.read_text())
+    mapping['review_note'] = 'Reviewed variable mapping'
+    profile.paths.cnv_mapping.write_text(json.dumps(mapping))
+    saved_files = {path: path.read_bytes() for path in tmp_path.rglob('*') if path.is_file()}
+
+    args = conversion_args + ['--prepare-profile']
+    if overwrite:
+        args.append('--overwrite')
+    main(args)
+
+    assert {path: path.read_bytes() for path in tmp_path.rglob('*') if path.is_file()} == saved_files
+    target = profile.data_root / 'WS24258' / 'WS24258_1.nc'
+    with pytest.raises(SystemExit) as exc:
+        main(conversion_args)
+    assert exc.value.code == 1
+    assert target.read_bytes() == saved_files[target]
+    main(conversion_args + ['--overwrite'])
+    with xr.open_dataset(target, decode_cf=False) as ds:
+        assert ds.attrs['creator_name'] == 'Reviewed dataset creator'
+
+
+def test_cli_prepare_profile_rejects_missing_input_before_writes(tmp_path):
+    from main import main
+
+    profile_path = tmp_path / 'config' / 'dataset_profile.json'
+    with pytest.raises(SystemExit) as exc:
+        main(['convert-cnv', str(tmp_path / 'missing'), '--prepare-profile', '--profile', str(profile_path)])
+    assert exc.value.code == 1
+    assert not profile_path.parent.exists()
+
+
 def test_cli_conversion_automatically_activates_dataset_owned_qc(tmp_path):
     from main import main
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')

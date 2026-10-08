@@ -3,6 +3,7 @@ Main entry point for CNV conversion, soak removal, QC, visualization, and ERDDAP
 
 Usage:
     python main.py inspect-cnv INPUT --output cnv_mapping.json
+    python main.py convert-cnv INPUT --prepare-profile
     python main.py convert-cnv INPUT --profile PROFILE
     python main.py remove-soak --profile PROFILE [--input-root INPUT] [--output-root OUTPUT]
     python main.py review-soak --profile PROFILE [--input-root INPUT] [--output-root OUTPUT]
@@ -112,6 +113,11 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=None,
         help="Dataset profile (default: discover/create config/<dataset>/dataset_profile.json)",
+    )
+    parser.add_argument(
+        "--prepare-profile",
+        action="store_true",
+        help="Create missing dataset profile and CNV mapping, then exit without converting; preserve existing configuration",
     )
     parser.add_argument("--report", type=Path, default=None)
     parser.add_argument(
@@ -289,14 +295,20 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
     if not args.input.exists():
         logger.error("CNV input does not exist: %s", args.input)
         raise SystemExit(1)
-    if args.profile is None:
+    if args.profile is None or args.prepare_profile:
         from cnv_workflow import prepare_profile
-        args.profile = str(prepare_profile(args.input))
+        args.profile = str(prepare_profile(args.input, profile_path=args.profile))
     profile = load_dataset_profile(args.profile)
     mapping_path = resolve_config_path("cnv_mapping", profile)
     if not mapping_path.is_file():
         logger.error("CNV mapping does not exist: %s", mapping_path)
         raise SystemExit(1)
+
+    if args.prepare_profile:
+        logger.info("Dataset profile ready: %s", profile.profile_path)
+        logger.info("CNV mapping: %s", mapping_path)
+        logger.info("Review the profile and mapping, then rerun convert-cnv without --prepare-profile.")
+        return
 
     logger.info("Converting Sea-Bird CNV casts...")
     logger.info("  Dataset profile:   %s", Path(args.profile).absolute())

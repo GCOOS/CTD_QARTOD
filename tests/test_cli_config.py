@@ -26,6 +26,7 @@ def test_convert_cnv_cli_uses_dataset_profile():
 
     assert args.input.name == "input"
     assert args.profile == "config/example/profile.json"
+    assert args.prepare_profile is False
     assert not hasattr(args, "mapping")
     assert not hasattr(args, "output")
     assert not hasattr(args, "manifest")

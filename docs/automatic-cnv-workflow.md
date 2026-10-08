@@ -16,6 +16,19 @@ Existing profiles and reviewed mappings are never silently overwritten.
 Inspect the complete intended scope before incremental conversion, so the
 mapping includes variables that occur only in later files.
 
+To prepare the profile and mapping before conversion:
+
+```bash
+python main.py convert-cnv cnv_data/WS24258 --prepare-profile
+```
+
+This creates only missing configuration and exits without writing NetCDF files,
+conversion reports, or dataset-owned QC settings. Existing profiles and mappings
+are preserved, including when `--overwrite` is supplied. Use `--profile PATH`
+with this flag to create a profile at another location; its mapping is created
+beside it. Review the metadata and mapping, then rerun without `--prepare-profile`.
+Normal conversion still requires `--overwrite` to replace existing NetCDF files.
+
 For inspection without conversion:
 
 ```bash
