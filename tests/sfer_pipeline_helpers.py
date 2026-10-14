@@ -10,7 +10,7 @@ from typing import Any, Iterable
 
 import xarray as xr
 
-from dataset_profile import DatasetProfile, OutputConfig, load_dataset_profile, resolve_config_path
+from dataset_profile import DatasetProfile, OutputConfig, load_dataset_profile
 from qc_data_loader import get_qc_variables, get_variable_category, load_mapping
 from qc_runner import (
     _IMPLEMENTED_TESTS,
@@ -22,7 +22,7 @@ from qc_writer import aggregate_qc_variable_name, qc_standard_name, qc_variable_
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SFER_ROOT = REPO_ROOT / "datasets" / "SFER_CTD_SOAK_REMOVED"
-DEFAULT_PROFILE_PATH = REPO_ROOT / "config" / "dataset_profile.json"
+DEFAULT_PROFILE_PATH = REPO_ROOT / "presets" / "sfer_aoml" / "dataset_profile.json"
 RESULTS_DIR = Path(__file__).resolve().parent / "sfer_pipeline_results"
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "pipeline_sfer_output"
 
@@ -56,18 +56,6 @@ def build_duplicate_profile(
 
 def run_kwargs(profile: DatasetProfile) -> dict[str, Any]:
     return {
-        "mapping_path": resolve_config_path("variable_mapping", profile),
-        "station_coords_csv": resolve_config_path("station_coords", profile),
-        "station_climatology_config_path": resolve_config_path("station_climatology", profile),
-        "station_depth_classification_path": resolve_config_path(
-            "station_depth_classification", profile
-        ),
-        "sensor_specs_path": resolve_config_path("sensor_specs", profile),
-        "variable_sensor_map_path": resolve_config_path("variable_sensor_map", profile),
-        "spike_thresholds_path": resolve_config_path("spike_thresholds", profile),
-        "rate_of_change_thresholds_path": resolve_config_path(
-            "rate_of_change_thresholds", profile
-        ),
         "profile": profile,
         "data_root": profile.data_root,
     }

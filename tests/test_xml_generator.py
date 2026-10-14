@@ -169,6 +169,8 @@ def test_main_erddap_xml_command_uses_generator_profile(tmp_path):
         json.dumps(
             {
                 "data_root": str(tmp_path / "source"),
+                "display_name": "Example CTD",
+                "dataset_id_prefix": "",
                 "output": {"mode": "duplicate", "directory": str(data_root)},
                 "qc_test_modes": {
                     "gap_test": "not_evaluated",
@@ -177,7 +179,6 @@ def test_main_erddap_xml_command_uses_generator_profile(tmp_path):
                 "erddap": {
                     "output_xml": str(output_xml),
                     "filedir_prefix": "/data/erddap/qc",
-                    "dataset_id_prefix": "",
                     "required_global_attributes": ["title"],
                     "global_add_attributes": {},
                 },

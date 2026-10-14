@@ -2,7 +2,8 @@
 Utilities to resolve station coordinates from station IDs.
 
 Station IDs are read from the ``station`` variable inside each NetCDF file
-and looked up in Station_Mean_Coords.csv to obtain expected (lat, lon).
+and looked up in the dataset's station coordinates CSV to obtain expected
+(lat, lon). Both sides are compared with the dataset's station normalization.
 """
 
 from __future__ import annotations
@@ -12,14 +13,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from qc_config import STATION_COORDS_CSV
-from station_names import normalize_reference_station as normalize_station_coord
+from station_identity import StationNormalization
 
 
 @lru_cache(maxsize=None)
-def load_station_coords(csv_path: Path | str = STATION_COORDS_CSV) -> Dict[str, Tuple[float, float]]:
+def load_station_coords(
+    csv_path: Path | str,
+    normalization: StationNormalization = StationNormalization(),
+) -> Dict[str, Tuple[float, float]]:
     """
-    Load station -> (lat, lon) from STATION_COORDS_CSV.
+    Load normalized station key -> (lat, lon) from a station coordinates CSV.
     """
     coords: Dict[str, Tuple[float, float]] = {}
     path = Path(csv_path)
@@ -31,18 +34,19 @@ def load_station_coords(csv_path: Path | str = STATION_COORDS_CSV) -> Dict[str, 
             lon_raw = row.get("lon_mean")
             if not station_raw or lat_raw is None or lon_raw is None:
                 continue
-            key = normalize_station_coord(station_raw)
             try:
                 lat = float(lat_raw)
                 lon = float(lon_raw)
             except ValueError:
                 continue
-            coords[key] = (lat, lon)
+            coords[normalization.key(station_raw)] = (lat, lon)
     return coords
+
 
 def resolve_coords_by_station_id(
     station_id: str | None,
-    station_csv: Path | str = STATION_COORDS_CSV,
+    station_csv: Path | str,
+    normalization: StationNormalization = StationNormalization(),
 ) -> Optional[Tuple[float, float]]:
     """
     Resolve expected (lat, lon) for a station ID.
@@ -52,13 +56,4 @@ def resolve_coords_by_station_id(
     """
     if not station_id:
         return None
-
-    station_key = normalize_station_coord(station_id)
-    station_coords = load_station_coords(station_csv)
-
-    coords = station_coords.get(station_key)
-    if coords:
-        return coords
-
-    alt_key = station_key.replace("-", "")
-    return station_coords.get(alt_key)
+    return load_station_coords(station_csv, normalization).get(normalization.key(station_id))

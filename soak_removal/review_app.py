@@ -2,8 +2,12 @@
 Interactive Dash app for reviewing and adjusting CTD surface soak removal.
 
 Usage:
-    python soak_removal/review_app.py --input-root /path/to/netcdf --output-root /path/to/out --port 8051
-    python soak_removal/review_app.py --apply-batch /any/path/batch.json --input-root ... --output-root ... --progress-json ...
+    python soak_removal/review_app.py --input-root /path/to/netcdf --output-root /path/to/out \
+        --soak-config config/DATASET/soak_config.json --depth-variable depth --sample-dimension z --port 8051
+    python soak_removal/review_app.py --apply-batch /any/path/batch.json --input-root ... --output-root ... \
+        --progress-json ... --soak-config ... --depth-variable depth --sample-dimension z
+
+``main.py review-soak --profile PROFILE`` supplies these settings from the dataset profile.
 """
 
 from __future__ import annotations
@@ -22,11 +26,19 @@ import xarray as xr
 from dash import Input, Output, State, dcc, html
 from dash.exceptions import PreventUpdate
 
-from nc_util import guess_scan_dim, safe_depth_1d, sanitize_encodings_for_netcdf
+from nc_util import (
+    ProfileLayout,
+    add_layout_arguments,
+    layout_from_args,
+    safe_depth_1d,
+    sanitize_encodings_for_netcdf,
+    scan_dimension,
+)
 from soak_detection_util import (
-    PRE_SOAK_DEPTH_THRESHOLD_M,
+    SoakSettings,
     first_index_depth_at_least,
     get_soak_removal_index,
+    load_soak_settings,
 )
 
 MIN_PROFILE_SCANS = 50
@@ -125,6 +137,8 @@ def apply_batch_from_progress_data(
     input_root: Path,
     output_root: Path,
     progress: ProgressTracker,
+    *,
+    layout: ProfileLayout,
 ) -> dict:
     """
     Apply accepted (trim + mark_reviewed) and problematic (delete output + mark_deleted).
@@ -150,7 +164,7 @@ def apply_batch_from_progress_data(
                 auto_e = int(entry.get("auto_end_idx", end_idx))
                 method = str(entry.get("method", "unknown"))
                 res = save_trimmed_netcdf(
-                    input_root, output_root, folder, filename, start_idx, end_idx
+                    input_root, output_root, folder, filename, start_idx, end_idx, layout=layout
                 )
                 if res.get("ok"):
                     progress.mark_reviewed(
@@ -259,12 +273,14 @@ class SuspiciousCastTracker:
         }
 
 
-def _collect_too_short_profiles(input_root: Path, navigator) -> list[dict]:
+def _collect_too_short_profiles(
+    input_root: Path, navigator, *, layout: ProfileLayout, settings: SoakSettings
+) -> list[dict]:
     """All .nc files under navigator where load_and_analyze_file hits PROFILE_TOO_SHORT_MSG."""
     rows: list[dict] = []
     for folder in navigator.get_folders():
         for filename in navigator.get_files(folder):
-            res = load_and_analyze_file(input_root, folder, filename)
+            res = load_and_analyze_file(input_root, folder, filename, layout=layout, settings=settings)
             if not res or res.get("error") != PROFILE_TOO_SHORT_MSG:
                 continue
             dp = int(res.get("data_points", res.get("total_scans", 0)))
@@ -627,7 +643,13 @@ def _first_scan_rounded_maximum(scan_indices: np.ndarray, depths: np.ndarray) ->
 
 
 def load_and_analyze_file(
-    input_root: Path, folder: str, filename: str, *, force_load: bool = False
+    input_root: Path,
+    folder: str,
+    filename: str,
+    *,
+    layout: ProfileLayout,
+    settings: SoakSettings,
+    force_load: bool = False,
 ) -> dict | None:
     """
     Load a NetCDF, extract depth and other variables, run soak detection.
@@ -641,7 +663,7 @@ def load_and_analyze_file(
 
     try:
         ds = xr.open_dataset(file_path)
-        depth_data = safe_depth_1d(ds)
+        depth_data = safe_depth_1d(ds, layout.depth_names)
 
         def extract_var(var_name: str) -> np.ndarray | None:
             if var_name in ds.data_vars:
@@ -686,7 +708,7 @@ def load_and_analyze_file(
         })
         return base
 
-    soak_result = get_soak_removal_index(depth_data, verbose=False)
+    soak_result = get_soak_removal_index(depth_data, settings, verbose=False)
     k0 = int(soak_result["keep_from_idx"])
     auto_until = int(soak_result.get("keep_until_idx", n))
     auto_until = max(k0 + 1, min(auto_until, n))
@@ -709,6 +731,8 @@ def save_trimmed_netcdf(
     filename: str,
     start_idx: int,
     end_idx: int,
+    *,
+    layout: ProfileLayout,
 ) -> dict:
     """
     Slice original NetCDF at keep_from_idx and write to output_root.
@@ -721,8 +745,8 @@ def save_trimmed_netcdf(
     try:
         ds = xr.open_dataset(input_path)
         try:
-            scan_dim = guess_scan_dim(ds)
-            n = int(ds.dims[scan_dim])
+            scan_dim = scan_dimension(ds, layout.sample_dimension)
+            n = int(ds.sizes[scan_dim])
             start_idx = max(0, min(int(start_idx), n))
             end_idx = max(0, min(int(end_idx), n))
             if end_idx < start_idx:
@@ -745,6 +769,8 @@ def create_app(
     output_root: Path,
     progress_json: Path,
     *,
+    layout: ProfileLayout,
+    settings: SoakSettings,
     suspicious_export_jsonl: Path | None = None,
 ) -> dash.Dash:
     """Build and return the Dash app."""
@@ -1362,7 +1388,7 @@ def create_app(
             file_path = output_root / folder / filename
             if not file_path.exists():
                 return {"error": f"Soak-removed file not found: {file_path}"}
-            result = load_and_analyze_file(output_root, folder, filename)
+            result = load_and_analyze_file(output_root, folder, filename, layout=layout, settings=settings)
             if result is None:
                 return {"error": "Soak-removed file not found"}
             total_scans = int(result.get("total_scans", 0))
@@ -1373,7 +1399,7 @@ def create_app(
             result["pre_depth_trim_idx"] = 0
         elif view_mode == "problematic":
             result = load_and_analyze_file(
-                input_root, folder, filename, force_load=True
+                input_root, folder, filename, layout=layout, settings=settings, force_load=True
             )
             if result is None:
                 return {"error": "File not found"}
@@ -1383,7 +1409,7 @@ def create_app(
             init_start = 0
             init_end_excl = total_scans
         else:
-            result = load_and_analyze_file(input_root, folder, filename)
+            result = load_and_analyze_file(input_root, folder, filename, layout=layout, settings=settings)
             if result is None:
                 return {"error": "File not found"}
 
@@ -1991,7 +2017,7 @@ def create_app(
             start_idx, end_idx_incl = int(cut_value[0]), int(cut_value[1])
             end_idx_excl = end_idx_incl + 1
             result = save_trimmed_netcdf(
-                input_root, output_root, folder, filename, start_idx, end_idx_excl
+                input_root, output_root, folder, filename, start_idx, end_idx_excl, layout=layout
             )
             if result["ok"]:
                 progress.mark_reviewed(
@@ -2281,7 +2307,7 @@ def create_app(
         if not n_clicks:
             raise PreventUpdate
 
-        rows = _collect_too_short_profiles(input_root, navigator)
+        rows = _collect_too_short_profiles(input_root, navigator, layout=layout, settings=settings)
         newly_added = 0
         for row in rows:
             folder, fn, dp = row["folder"], row["filename"], row["data_points"]
@@ -2345,7 +2371,7 @@ def create_app(
                 style={"color": "red", "fontWeight": "bold"},
             )
         result = apply_batch_from_progress_data(
-            data, input_root, output_root, progress
+            data, input_root, output_root, progress, layout=layout
         )
         if not result.get("ok"):
             return html.Div(
@@ -2372,13 +2398,15 @@ def run_apply_batch_cli(
     input_root: Path,
     output_root: Path,
     progress_json: Path,
+    *,
+    layout: ProfileLayout,
 ) -> int:
     """Load batch JSON from path, apply, print summary. Returns exit code."""
     with open(batch_json, "r", encoding="utf-8") as f:
         data = json.load(f)
     progress = ProgressTracker(progress_json)
     result = apply_batch_from_progress_data(
-        data, input_root, output_root, progress
+        data, input_root, output_root, progress, layout=layout
     )
     if not result.get("ok"):
         print(result.get("error", "Invalid batch"))
@@ -2442,7 +2470,10 @@ def main(argv: list[str] | None = None) -> int:
             "(default: OUTPUT_ROOT/suspicious_casts.jsonl)"
         ),
     )
+    ap.add_argument("--soak-config", type=Path, required=True, help="Dataset soak_config.json")
+    add_layout_arguments(ap)
     args = ap.parse_args(argv)
+    layout = layout_from_args(args)
 
     input_root = Path(args.input_root).resolve()
     output_root = Path(args.output_root).resolve()
@@ -2470,7 +2501,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Batch JSON not found: {batch_path}")
             return 1
         return run_apply_batch_cli(
-            batch_path, input_root, output_root, progress_json
+            batch_path, input_root, output_root, progress_json, layout=layout
         )
 
     print("=" * 80)
@@ -2486,6 +2517,8 @@ def main(argv: list[str] | None = None) -> int:
         input_root,
         output_root,
         progress_json,
+        layout=layout,
+        settings=load_soak_settings(args.soak_config),
         suspicious_export_jsonl=suspicious_export,
     )
     app.run(host=args.host, port=args.port, debug=True)

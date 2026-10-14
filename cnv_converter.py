@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -17,14 +17,16 @@ import xarray as xr
 
 from cnv_catalog import catalog, normalize_unit
 from cnv_coordinates import resolve_header_coordinates
-from cnv_metadata import FIXED_DEFAULTS, publication_metadata, validate_ownership
-from station_names import STATION_ALIASES
+from cnv_metadata import FIXED_DEFAULTS, PublicationSettings, dataset_id, publication_metadata, validate_ownership
+from station_identity import StationIdentityConfig, resolve_identity
 
 from cnv_mapping import (
     CnvHeaderColumn,
     CnvMapping,
     CnvSensor,
     DERIVED_SENSOR_TAG,
+    PRESSURE_SOURCES,
+    TIME_SCALE_SECONDS,
     SourceCandidate,
     cf_standard_name_url,
     discover_cnv_files,
@@ -34,12 +36,6 @@ from cnv_mapping import (
 )
 
 
-_CRUISE_RE = r"(?:(?:WS|WB|SV|SAV)\d{4,5}|HG\d{2,5})[A-Za-z]?"
-_FILENAME_RE = re.compile(
-    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._]*)(?:-[0-9]+)?\.cnv$",
-    re.IGNORECASE,
-)
-_NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
 _PROCESSING_STAGES = {
     "datcnv",
     "filter",
@@ -57,6 +53,8 @@ class CnvCast:
     source_path: Path
     cruise_id: str
     station_id: str
+    platform: str | None
+    variant: str | None
     embedded_filename: str | None
     columns: tuple[CnvHeaderColumn, ...]
     values: np.ndarray
@@ -87,41 +85,6 @@ class CnvFormatError(ValueError):
 
 def _format_error(path: Path, detail: str) -> CnvFormatError:
     return CnvFormatError(f"{path.name}: {detail}")
-
-
-def _station_id(value: str) -> str:
-    match = _NUMERIC_STATION_RE.fullmatch(value.strip())
-    if match is None:
-        return value.strip()
-    return f"{int(match.group('number'))}{match.group('suffix')}"
-
-
-def filename_identity(path: Path | str) -> tuple[str, str]:
-    """Derive cruise and station only from the actual CNV basename."""
-
-    source = Path(path)
-    match = _FILENAME_RE.fullmatch(source.name)
-    if match is None:
-        raise _format_error(
-            source,
-            "filename must match <cruiseID>_Stn.<station>.cnv or a reviewed cruise/station delimiter pattern",
-        )
-    cruise = match.group("cruise").upper()
-    station = match.group("station")
-    station_part, separator, running_number = station.rpartition("_")
-    if separator and re.fullmatch(r"\d+", running_number):
-        station = station_part
-    station = _station_id(station)
-    station = STATION_ALIASES.get(station.lower(), station)
-    station = station.replace(".", "_")
-    if re.search(r"(?i)(deck|dunk|wettest|test|tst|recast|surface|do_up)", station):
-        raise _format_error(source, "test/recast filename needs explicit identity review")
-    if not re.fullmatch(r"(?:\d+(?:[._-]\d+)?[A-Za-z]*|[A-Za-z]+\d*(?:[._]\d+)?[A-Za-z]?|[A-Za-z]+-\d+)", station):
-        raise _format_error(source, "ambiguous station token; identity review required")
-    parent_cruise = re.fullmatch(rf"({_CRUISE_RE})_cnv", source.parent.name, re.I)
-    if parent_cruise and parent_cruise[1].upper() != cruise:
-        raise _format_error(source, "filename cruise differs from cruise folder; identity review required")
-    return cruise, station
 
 
 def _embedded_stem(value: str) -> str:
@@ -180,11 +143,11 @@ def _mapped_destinations(
     return destinations
 
 
-def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
+def parse_cnv(path: Path | str, mapping: CnvMapping, identity: StationIdentityConfig) -> CnvCast:
     """Parse one final-format CNV file using its actual filename identity."""
 
     source = Path(path)
-    cruise_id, station_id = filename_identity(source)
+    cast_identity = resolve_identity(source, identity)
     lines = source.read_text(encoding="utf-8", errors="strict").splitlines()
     delimiters = [index for index, line in enumerate(lines) if line == "*END*"]
     if len(delimiters) != 1:
@@ -258,7 +221,7 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
 
     destinations = _mapped_destinations(source, columns, mapping)
     time_candidate = mapping.required_fields["time"]
-    elapsed = values[
+    raw_time = values[
         :,
         next(
             column.index
@@ -267,8 +230,9 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
             == time_candidate
         ),
     ]
+    elapsed = _elapsed_seconds(raw_time, time_candidate.name)
     if not np.all(np.isfinite(elapsed)) or np.any(np.diff(elapsed) < 0):
-        raise _format_error(source, "timeS values must be finite and monotonic")
+        raise _format_error(source, "time values must be finite and monotonic")
     latitude = (np.array([header_coordinates["latitude"]]) if header_coordinates is not None
                 else values[:, next(column.index for column in columns if column.source_name == "latitude")])
     longitude = (np.array([header_coordinates["longitude"]]) if header_coordinates is not None
@@ -301,8 +265,10 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
     }
     return CnvCast(
         source_path=source,
-        cruise_id=cruise_id,
-        station_id=station_id,
+        cruise_id=cast_identity.cruise_id,
+        station_id=cast_identity.station_id,
+        platform=cast_identity.platform,
+        variant=cast_identity.variant,
         embedded_filename=embedded_filename,
         columns=columns,
         values=values,
@@ -317,6 +283,29 @@ def parse_cnv(path: Path | str, mapping: CnvMapping) -> CnvCast:
         header_keys=tuple(sorted(set(fields) - known_fields)),
         warnings=tuple(warnings),
     )
+
+
+def _elapsed_seconds(values: np.ndarray, source_name: str) -> np.ndarray:
+    """Convert a Sea-Bird time column to elapsed seconds from the first sample."""
+
+    scale = TIME_SCALE_SECONDS[source_name]
+    if source_name == "timeJ":
+        origin = values[0]
+        return (values - origin) * scale
+    return values * scale
+
+
+def pressure_to_depth(pressure_dbar: np.ndarray, latitude: np.ndarray | float) -> np.ndarray:
+    """UNESCO 1983 / Saunders-Fofonoff pressure-to-depth, no extra dependency."""
+
+    p = np.asarray(pressure_dbar, dtype=float)
+    lat = np.asarray(latitude, dtype=float)
+    if lat.size == 1:
+        lat = np.full(p.shape, float(lat))
+    x = np.sin(np.deg2rad(lat)) ** 2
+    gravity = 9.780318 * (1.0 + (5.2788e-3 + 2.36e-5 * x) * x) + 1.092e-6 * p
+    height = ((((-1.82e-15 * p + 2.279e-10) * p - 2.2512e-5) * p + 9.72659) * p)
+    return height / gravity
 
 
 def _source_column(cast: CnvCast, candidate: SourceCandidate) -> CnvHeaderColumn:
@@ -401,27 +390,33 @@ def _build_dataset(
     stem: str,
     source: str,
     target: str,
-    netcdf_global_attributes: Mapping[str, object],
-    fixed_attributes: Mapping[str, object],
-    derived_attributes: Mapping[str, object],
+    publication: PublicationSettings,
 ) -> xr.Dataset:
     time_candidate = mapping.required_fields["time"]
     latitude_candidate = mapping.required_fields["latitude"]
     longitude_candidate = mapping.required_fields["longitude"]
     depth_candidate = mapping.vertical_field
-    time = cast.column(time_candidate.name, time_candidate.occurrence)
+    time = _elapsed_seconds(
+        cast.column(time_candidate.name, time_candidate.occurrence),
+        time_candidate.name,
+    )
     header_coordinates = cast.header_coordinates
     latitude = (np.array([header_coordinates["latitude"]]) if header_coordinates is not None
                 else cast.column(latitude_candidate.name, latitude_candidate.occurrence))
     longitude = (np.array([header_coordinates["longitude"]]) if header_coordinates is not None
                  else cast.column(longitude_candidate.name, longitude_candidate.occurrence))
     coordinate_dims = ("profile",) if header_coordinates is not None else ("profile", "z")
-    depth = cast.column(depth_candidate.name, depth_candidate.occurrence)
+    vertical = cast.column(depth_candidate.name, depth_candidate.occurrence)
+    if depth_candidate.name in PRESSURE_SOURCES:
+        depth = pressure_to_depth(vertical, latitude)
+        depth_units = "m"
+    else:
+        depth = vertical
+        depth_units = _source_column(cast, depth_candidate).units or "m"
     time_min, time_max = _finite_range(time)
     latitude_min, latitude_max = _finite_range(latitude)
     longitude_min, longitude_max = _finite_range(longitude)
     depth_min, depth_max = _finite_range(depth)
-    depth_units = _source_column(cast, depth_candidate).units or "m"
     rows = time.size
     coordinates = "time longitude latitude depth"
     data: dict[str, tuple[tuple[str, ...], object, dict[str, object]]] = {
@@ -599,15 +594,16 @@ def _build_dataset(
     comment = _processing_comment(cast.processing)
     if comment is not None:
         generated_attributes["comment"] = comment
-    validate_ownership(netcdf_global_attributes, fixed_attributes, derived_attributes)
-    fixed = {**FIXED_DEFAULTS, **{key: value for key, value in fixed_attributes.items() if value is not None}}
+    validate_ownership(publication.global_attributes, publication.fixed_attributes, publication.derived_attributes)
+    fixed = {**FIXED_DEFAULTS, **{key: value for key, value in publication.fixed_attributes.items() if value is not None}}
     generated_attributes.update(publication_metadata(
-        cast.cruise_id, stem, cast.start_time.date().isoformat(),
-        float(latitude[0]), float(longitude[0]), fixed, derived_attributes,
+        cast.cruise_id, cast.platform, stem, cast.start_time.date().isoformat(),
+        float(latitude[0]), float(longitude[0]),
+        replace(publication, fixed_attributes=fixed),
     ))
     configured_attributes = {
         name: value
-        for name, value in netcdf_global_attributes.items()
+        for name, value in publication.global_attributes.items()
         if value is not None
     }
     converter_owned = generated_attributes.keys() | {"comment"}
@@ -621,7 +617,7 @@ def _build_dataset(
     return dataset
 
 
-def _validate_temporary(path: Path, cast: CnvCast, stem: str) -> None:
+def _validate_temporary(path: Path, cast: CnvCast, stem: str, publication: PublicationSettings) -> None:
     with xr.open_dataset(path, decode_cf=False) as dataset:
         if (
             dataset.sizes.get("profile") != 1
@@ -636,7 +632,7 @@ def _validate_temporary(path: Path, cast: CnvCast, stem: str) -> None:
                     f"temporary NetCDF structural variable {name!r} is invalid"
                 )
         if (
-            dataset.attrs.get("id") != f"SFER_CTD_{stem}"
+            dataset.attrs.get("id") != dataset_id(stem, publication)
             or dataset.attrs.get("station_name") != stem
         ):
             raise ValueError("temporary NetCDF identity attributes are invalid")
@@ -655,9 +651,7 @@ def _write_cast(
     source: str,
     output_root: Path,
     overwrite: bool,
-    netcdf_global_attributes: Mapping[str, object],
-    fixed_attributes: Mapping[str, object],
-    derived_attributes: Mapping[str, object],
+    publication: PublicationSettings,
 ) -> None:
     if target.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite existing {target}")
@@ -679,16 +673,14 @@ def _write_cast(
             stem,
             source,
             relative_target,
-            netcdf_global_attributes,
-            fixed_attributes,
-            derived_attributes,
+            publication,
         )
         dataset.to_netcdf(
             temporary, mode="w", format="NETCDF4", engine="netcdf4"
         )
         dataset.close()
         dataset = None
-        _validate_temporary(temporary, cast, stem)
+        _validate_temporary(temporary, cast, stem, publication)
         os.replace(temporary, target)
     except BaseException:
         if temporary is not None:
@@ -728,9 +720,8 @@ def convert_cnv(
     report_path: Path | str | None = None,
     overwrite: bool = False,
     *,
-    netcdf_global_attributes: Mapping[str, object] | None = None,
-    netcdf_fixed_global_attributes: Mapping[str, object] | None = None,
-    netcdf_derived_global_attributes: Mapping[str, object] | None = None,
+    identity: StationIdentityConfig,
+    publication: PublicationSettings,
 ) -> dict[str, object]:
     """Convert one CNV file or every CNV recursively found under a folder."""
 
@@ -748,10 +739,7 @@ def convert_cnv(
     else:
         source_base = source_input.parent
     mapping = load_cnv_mapping(mapping_path)
-    global_attributes = netcdf_global_attributes or {}
-    fixed_attributes = netcdf_fixed_global_attributes or {}
-    derived_attributes = netcdf_derived_global_attributes or {}
-    validate_ownership(global_attributes, fixed_attributes, derived_attributes)
+    validate_ownership(publication.global_attributes, publication.fixed_attributes, publication.derived_attributes)
     index_path = output / "conversion_index.json"
     index = json.loads(index_path.read_text()) if index_path.exists() else {}
     if not isinstance(index, dict) or not all(isinstance(k, str) and isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.nc", v) and ".." not in v for k, v in index.items()):
@@ -765,7 +753,7 @@ def convert_cnv(
         record: dict[str, object] = {"source": source, "warnings": []}
         records[path] = record
         try:
-            cast = parse_cnv(path, mapping)
+            cast = parse_cnv(path, mapping, identity)
         except Exception as exc:
             record.update(
                 {
@@ -779,6 +767,7 @@ def convert_cnv(
                 "status": "prepared",
                 "cruise_id": cast.cruise_id,
                 "station": cast.station_id,
+                "variant": cast.variant,
                 "embedded_filename": cast.embedded_filename,
                 "start_time": cast.start_time.isoformat(),
                 "warnings": list(cast.warnings),
@@ -849,9 +838,7 @@ def convert_cnv(
                     str(record["source"]),
                     output,
                     overwrite,
-                    global_attributes,
-                    fixed_attributes,
-                    derived_attributes,
+                    publication,
                 )
             except Exception as exc:
                 record.update(
@@ -872,6 +859,7 @@ def convert_cnv(
         "input": str(source_input),
         "output_root": str(output),
         "mapping": str(mapping_path),
+        "station_identity": str(identity.source_path),
         "counts": {
             "cnv_discovered": len(paths),
             "converted": statuses["converted"],

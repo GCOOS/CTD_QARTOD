@@ -1,4 +1,4 @@
-"""Create independent, dataset-owned QC settings from the Walton Smith template."""
+"""Create independent, dataset-owned QC settings from a preset or the generic template."""
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -8,19 +8,18 @@ import xarray as xr
 
 from cnv_catalog import CATALOG_PATH, qc_entry
 from cnv_mapping import _atomic_json
-from dataset_profile import TEMPLATE_PROFILE_PATH, REPO_ROOT, CONFIG_TEMPLATE_DIR, load_dataset_profile
+from dataset_profile import CONFIG_LAYOUT, load_dataset_profile, reference_file
 from qc_template_limits import template_gross_ranges, template_reference
+from qc_validation import REQUIRED_QC_PATHS
+
+GENERATED_SETTINGS = (*REQUIRED_QC_PATHS, "source_variable_mapping")
+REFERENCE_SETTINGS = (
+    "station_coords", "location_config", "station_climatology", "station_classification",
+    "spike_thresholds", "rate_of_change_thresholds", "flat_line_config",
+)
 
 
-def config_layout(reference):
-    """Use the config_template layout, directly in each dataset."""
-    layout = {key: (REPO_ROOT / value).relative_to(CONFIG_TEMPLATE_DIR)
-              for key, value in reference["paths"].items()}
-    layout["source_variable_mapping"] = Path("variable_mapping/source_variable_mapping.json")
-    return layout
-
-
-def generate_limits(profile, output=None, *, activate=None):
+def generate_limits(profile, output=None, *, preset=None, activate=None):
     if profile.profile_path is None:
         raise ValueError("generate-limits requires a saved dataset profile")
     destination = Path(output) if output else profile.profile_path.parent
@@ -33,16 +32,18 @@ def generate_limits(profile, output=None, *, activate=None):
     sources = sorted(profile.data_root.rglob("*.nc"))
     if not sources:
         raise ValueError(f"no converted NetCDF files under {profile.data_root}")
-    reference = json.loads(TEMPLATE_PROFILE_PATH.read_text())
-    layout = config_layout(reference)
+    preset = profile.preset if preset is None else preset
     # Validate every destination before writing any setting; preserve user edits.
-    targets = [destination / relative for relative in layout.values()]
+    targets = [destination / CONFIG_LAYOUT[key] for key in GENERATED_SETTINGS]
     targets.append(destination / "limit_report.json")
     for target in targets:
         if target.exists():
             raise FileExistsError(f"refusing to replace existing QC setting {target}")
+    def reference_path(key):
+        return reference_file(CONFIG_LAYOUT[key], preset)
+
     def reference_json(key):
-        return json.loads((REPO_ROOT / reference["paths"][key]).read_text())
+        return json.loads(reference_path(key).read_text(encoding="utf-8"))
 
     sensors = {}
     categories = defaultdict(set)
@@ -78,7 +79,7 @@ def generate_limits(profile, output=None, *, activate=None):
                 categories[category].add(name)
                 references[name].add(template_reference(name, variable))
                 spec = sensors.setdefault(name, {
-                    "description": "Dataset-owned limit initialized from config_template; not an instrument model assignment",
+                    "description": "Dataset-owned limit initialized from the reference gross ranges; not an instrument model assignment",
                     "requires_instrument": False, "identifiers": {"long_names": []}, "ranges": {},
                 })
                 unit = variable.attrs.get("units")
@@ -107,8 +108,8 @@ def generate_limits(profile, output=None, *, activate=None):
         "variable_sensor_map": {name: name for name in sensors},
         "spike_thresholds": remap(reference_json("spike_thresholds")),
         "rate_of_change_thresholds": remap(reference_json("rate_of_change_thresholds")),
-        "station_climatology": {key: remap(table) for key, table in reference_json("station_climatology").items()},
-        "station_depth_classification": reference_json("station_depth_classification"),
+        "station_climatology": {name: remap(table) for name, table in reference_json("station_climatology").items()},
+        "station_classification": reference_json("station_classification"),
         "location_config": reference_json("location_config"),
         "flat_line_config": reference_json("flat_line_config"),
     }
@@ -116,16 +117,17 @@ def generate_limits(profile, output=None, *, activate=None):
     # Profiles resolve relative paths against the repository, even after relocation.
     updated.setdefault("paths", {})
     for key, payload in payloads.items():
-        target = destination / layout[key]
+        target = destination / CONFIG_LAYOUT[key]
         _atomic_json(target, payload)
         updated["paths"][key] = str(target.resolve())
-    coords = destination / layout["station_coords"]
+    coords = destination / CONFIG_LAYOUT["station_coords"]
     coords.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(REPO_ROOT / reference["paths"]["station_coords"], coords)
+    shutil.copyfile(reference_path("station_coords"), coords)
     updated["paths"]["station_coords"] = str(coords.resolve())
-    report = {"reference": str(TEMPLATE_PROFILE_PATH), "netcdf_file_count": len(sources),
+    report = {"preset": preset, "netcdf_file_count": len(sources),
+              "references": {key: str(reference_path(key)) for key in REFERENCE_SETTINGS},
               "issues": sorted(issues), "profile": str(destination / "dataset_profile.json"),
-              "rate_of_change_basis": "unchanged Walton Smith per-adjacent-sample thresholds; not per-second"}
+              "rate_of_change_basis": "unchanged reference per-adjacent-sample thresholds; not per-second"}
     _atomic_json(destination / "limit_report.json", report)
     from cnv_converter import _atomic_json as replace_json
     if profile_target.resolve() == profile.profile_path.resolve():
@@ -140,7 +142,7 @@ def generate_limits(profile, output=None, *, activate=None):
 def prepare_dataset_qc(profile):
     """Initialize only profiles with no QC paths; never replace configured settings."""
     # Explicit paths are the configuration, not a separate template/custom switch.
-    qc_keys = set(profile.paths.__dataclass_fields__) - {"cnv_mapping", "source_variable_mapping"}
+    qc_keys = REQUIRED_QC_PATHS
     if any(profile.paths.get(key) is not None for key in qc_keys):
         return profile
     if profile.profile_path is None:

@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from dataset_profile import load_dataset_profile
+from dataset_profile import PRESETS_DIR, load_dataset_profile
 from qc_config import (
     load_rate_of_change_thresholds,
     load_flat_line_config,
     load_location_config,
     load_spike_thresholds,
     load_station_climatology_config,
-    load_station_depth_classification,
 )
+from station_classification import load_station_classification
 from instrument_resolver import load_sensor_specs, load_variable_sensor_map
 from qc_data_loader import load_mapping
 
@@ -32,7 +32,9 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "config_template"
         "gross_range_test/sensor_specs.json",
         "gross_range_test/variable_sensor_map.json",
         "climatology_test/station_climatology_config.json",
-        "climatology_test/station_depth_classification.json",
+        "climatology_test/station_classification.json",
+        "station_identity.json",
+        "soak_config.json",
         "location_test/location_config.json",
         "spike_test/spike_thresholds.json",
         "rate_of_change_test/rate_of_change_thresholds.json",
@@ -50,18 +52,18 @@ def test_template_station_coords_csv():
     path = TEMPLATE_ROOT / "location_test" / "Station_Mean_Coords.csv"
     assert path.exists()
     with path.open(encoding="utf-8", newline="") as f:
-        rows = list(csv.DictReader(f))
-    assert rows
-    assert {"station", "lat_mean", "lon_mean"} <= set(rows[0].keys())
+        reader = csv.DictReader(f)
+        assert reader.fieldnames is not None
+        assert {"station", "lat_mean", "lon_mean"} <= set(reader.fieldnames)
 
 
 def test_template_loaders_accept_templates():
     profile = load_dataset_profile(TEMPLATE_ROOT / "dataset_profile.json")
     assert profile.metadata.sample_dimension == "z"
     assert profile.output.mode == "duplicate"
-    assert profile.netcdf_global_attributes["creator_name"] == "Christopher R. Kelble"
-    assert profile.netcdf_fixed_global_attributes["institution"].startswith("NOAA")
-    assert profile.netcdf_fixed_global_attributes["publisher_email"] == "data@gcoos.org"
+    assert profile.display_name == "CTD"
+    assert profile.dataset_id_prefix == ""
+    assert profile.netcdf_global_attributes["creator_name"] is None
     mapping = load_mapping(TEMPLATE_ROOT / "qc_variable_mapping.json")
     assert "temperature" in mapping
     assert load_sensor_specs(
@@ -73,10 +75,12 @@ def test_template_loaders_accept_templates():
     clim = load_station_climatology_config(
         TEMPLATE_ROOT / "climatology_test" / "station_climatology_config.json"
     )
-    assert "deep_cast_limits" in clim
-    assert load_station_depth_classification(
-        TEMPLATE_ROOT / "climatology_test" / "station_depth_classification.json"
+    assert clim == {}
+    classification = load_station_classification(
+        TEMPLATE_ROOT / "climatology_test" / "station_classification.json"
     )
+    assert classification.class_names == ()
+    assert classification.rules == ()
     spike = load_spike_thresholds(TEMPLATE_ROOT / "spike_test" / "spike_thresholds.json")
     assert spike["sea_water_temperature"]["fail_threshold"] > 0
     roc = load_rate_of_change_thresholds(
@@ -87,3 +91,19 @@ def test_template_loaders_accept_templates():
     assert location["tolerance"] > 0
     flat = load_flat_line_config(TEMPLATE_ROOT / "flat_line_test" / "flat_line_config.json")
     assert flat["rep_cnt_fail"] >= flat["rep_cnt_suspect"]
+
+
+def test_sfer_preset_keeps_program_publication_defaults():
+    profile = load_dataset_profile(PRESETS_DIR / "sfer_aoml" / "dataset_profile.json")
+    assert profile.display_name == "SFER CTD"
+    assert profile.dataset_id_prefix == "SFER_CTD_"
+    assert profile.netcdf_global_attributes["creator_name"] == "Christopher R. Kelble"
+    assert profile.netcdf_fixed_global_attributes["publisher_email"] == "data@gcoos.org"
+    classification = load_station_classification(
+        PRESETS_DIR / "sfer_aoml" / "climatology_test" / "station_classification.json"
+    )
+    assert "deep_cast" in classification.class_names
+    clim = load_station_climatology_config(
+        PRESETS_DIR / "sfer_aoml" / "climatology_test" / "station_climatology_config.json"
+    )
+    assert "deep_cast" in clim

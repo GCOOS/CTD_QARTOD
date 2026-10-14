@@ -281,7 +281,7 @@ config/WS2425A/
     variable_sensor_map.json
   climatology_test/
     station_climatology_config.json
-    station_depth_classification.json
+    station_classification.json
   location_test/
     Station_Mean_Coords.csv
     location_config.json

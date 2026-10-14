@@ -5,18 +5,19 @@ This script applies the soak detection logic in ``soak_removal/soak_detection_ut
 (classification + ``get_soak_removal_index``).
 
 It reads each NetCDF file under the selected input root,
-drops all scans before depth first reaches 2 m, then runs soak detection on
-the remainder (descent / shallow / fallback), trims the end at the first
-global maximum depth (same rule as the review app markers), and writes a
-trimmed NetCDF to an output root while preserving the original directory structure.
+drops all scans before depth first reaches the configured pre-trim depth, then
+runs soak detection on the remainder (descent / shallow / fallback), trims the
+end at the first global maximum depth (same rule as the review app markers), and
+writes a trimmed NetCDF to an output root while preserving the original directory
+structure.
 
 Typical usage (from repo root):
 
-  source venv/bin/activate
-  python soak_removal/sfer_ctd_remove_surface_soak.py --input-root INPUT --output-root OUTPUT
+  python soak_removal/remove_surface_soak.py --input-root INPUT --output-root OUTPUT \
+      --soak-config config/DATASET/soak_config.json --depth-variable depth --sample-dimension z
 
-Use ``main.py remove-soak --profile PROFILE`` for profile-based input and
-default output paths; add ``--output-root OUTPUT`` to override the destination.
+Use ``main.py remove-soak --profile PROFILE`` for profile-based input, settings,
+and default output paths; add ``--output-root OUTPUT`` to override the destination.
 """
 
 from __future__ import annotations
@@ -25,13 +26,17 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
-
-import numpy as np
 import xarray as xr
 
-from nc_util import guess_scan_dim, safe_depth_1d, sanitize_encodings_for_netcdf
-from soak_detection_util import get_soak_removal_index
+from nc_util import (
+    ProfileLayout,
+    add_layout_arguments,
+    layout_from_args,
+    safe_depth_1d,
+    sanitize_encodings_for_netcdf,
+    scan_dimension,
+)
+from soak_detection_util import SoakSettings, get_soak_removal_index, load_soak_settings
 
 
 @dataclass
@@ -57,6 +62,8 @@ def process_one_file(
     input_path: Path,
     output_path: Path,
     *,
+    settings: SoakSettings,
+    layout: ProfileLayout,
     overwrite: bool,
     dry_run: bool,
     verbose: bool,
@@ -74,13 +81,13 @@ def process_one_file(
 
         ds = xr.open_dataset(input_path)
         try:
-            scan_dim = guess_scan_dim(ds)
-            depth_1d = safe_depth_1d(ds)
+            scan_dim = scan_dimension(ds, layout.sample_dimension)
+            depth_1d = safe_depth_1d(ds, layout.depth_names)
 
             res.total_scans = int(depth_1d.size)
-            n = int(ds.dims[scan_dim])
+            n = int(ds.sizes[scan_dim])
 
-            soak = get_soak_removal_index(depth_1d, verbose=verbose)
+            soak = get_soak_removal_index(depth_1d, settings, verbose=verbose)
             keep_from_idx = int(soak["keep_from_idx"])
             keep_until_idx = int(soak.get("keep_until_idx", n))
 
@@ -135,6 +142,8 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Output root folder for trimmed NetCDFs",
     )
+    ap.add_argument("--soak-config", type=Path, required=True, help="Dataset soak_config.json")
+    add_layout_arguments(ap)
     ap.add_argument("--overwrite", action="store_true", help="Overwrite existing outputs")
     ap.add_argument("--dry-run", action="store_true", help="Analyze only; do not write outputs")
     ap.add_argument("--limit", type=int, default=0, help="Process only first N files (0 = all)")
@@ -157,6 +166,8 @@ def main(argv: list[str] | None = None) -> int:
         print("Soak output root must be outside the input root")
         return 1
 
+    settings = load_soak_settings(args.soak_config)
+    layout = layout_from_args(args)
     files = iter_input_files(input_root)
     if args.limit and args.limit > 0:
         files = files[: args.limit]
@@ -178,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
             res = process_one_file(
                 in_file,
                 out_file,
+                settings=settings,
+                layout=layout,
                 overwrite=args.overwrite,
                 dry_run=args.dry_run,
                 verbose=args.verbose,

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "cruise_pattern": "(?P<cruise>[A-Za-z]*[0-9][A-Za-z0-9]*)",
+  "filename_patterns": [
+    {
+      "name": "cruise_station",
+      "pattern": "{cruise}[_. -]+(?:stn|sta|station|st)?[._ ]*(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)"
+    }
+  ],
+  "exclusion_patterns": [
+    "(deck|dunk|test)"
+  ],
+  "strip_run_number": false,
+  "uppercase_cruise": true,
+  "normalize": {
+    "strip_leading_zeros": true,
+    "decimal_separator": "."
+  },
+  "aliases": {},
+  "overrides": {}
+}

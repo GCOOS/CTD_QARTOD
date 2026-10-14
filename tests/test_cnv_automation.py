@@ -8,10 +8,15 @@ import xarray as xr
 from lxml import etree
 
 from cnv_catalog import catalog, match_entry, normalize_unit, qc_entry
-from cnv_converter import convert_cnv, filename_identity
 from cnv_mapping import discover_cnv_files, inspect_cnv
-from cnv_workflow import default_mapping_path, prepare_profile
-from cnv_metadata import publication_metadata
+from cnv_workflow import default_mapping_path
+from cnv_metadata import PublicationSettings, publication_metadata
+from cnv_test_support import (
+    convert_sfer,
+    convert_with_profile,
+    filename_identity,
+    prepare_sfer_profile,
+)
 from dataset_profile import load_dataset_profile, resolve_config_path
 from qc_limit_generation import generate_limits, prepare_dataset_qc
 from qc_runner import run_qc_for_all
@@ -108,11 +113,11 @@ def test_incremental_repeat_names_remain_stable(tmp_path):
     late = _cnv(tmp_path / 'second' / 'WS24258_Stn.1.cnv', start_time='Sep 19 2024 12:21:12')
     mapping = tmp_path / 'mapping.json'
     inspect_cnv(early, mapping)
-    first = convert_cnv(early, tmp_path / 'out', mapping)
-    second = convert_cnv(late, tmp_path / 'out', mapping)
+    first = convert_sfer(early, tmp_path / 'out', mapping)
+    second = convert_sfer(late, tmp_path / 'out', mapping)
     assert first['records'][0]['output_stem'] == 'WS24258_1'
     assert second['records'][0]['output_stem'] == 'WS24258_1-2'
-    rerun = convert_cnv(late, tmp_path / 'out', mapping, overwrite=True)
+    rerun = convert_sfer(late, tmp_path / 'out', mapping, overwrite=True)
     assert rerun['records'][0]['output_stem'] == 'WS24258_1-2'
     assert rerun['records'][0]['repeat'] == 2
 
@@ -122,7 +127,7 @@ def test_incompatible_units_cannot_be_relabelled(tmp_path):
     mapping = tmp_path / 'mapping.json'
     payload = inspect_cnv(source, mapping)
     source.write_text(source.read_text().replace('deg C', 'K'))
-    report = convert_cnv(source, tmp_path / 'out', mapping)
+    report = convert_sfer(source, tmp_path / 'out', mapping)
     assert report['counts']['failed'] == 1
     assert 'unit conversion is required' in report['records'][0]['failure_reason']
     assert not list((tmp_path / 'out').rglob('*.nc'))
@@ -147,16 +152,13 @@ def test_template_limits_match_units_and_do_not_guess_missing_units():
 
 def test_automatic_end_to_end_and_editable_limit_folder(tmp_path):
     source = _cnv(tmp_path / 'input' / 'WB24258_Stn.001.cnv')
-    profile_path = prepare_profile(source, root=tmp_path)
-    assert prepare_profile(source, root=tmp_path) == profile_path
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
+    assert prepare_sfer_profile(source, root=tmp_path) == profile_path
     profile = load_dataset_profile(profile_path)
     assert profile.netcdf_global_attributes['creator_name'] == 'Christopher R. Kelble'
     assert 'qc_limits' not in json.loads(profile.profile_path.read_text())
     assert profile.paths.spike_thresholds is None
-    report = convert_cnv(source, profile.data_root, profile.paths.cnv_mapping,
-                         netcdf_global_attributes=profile.netcdf_global_attributes,
-                         netcdf_fixed_global_attributes=profile.netcdf_fixed_global_attributes,
-                         netcdf_derived_global_attributes=profile.netcdf_derived_global_attributes)
+    report = convert_with_profile(source, profile.data_root, profile.paths.cnv_mapping, profile)
     assert report['counts']['converted'] == 1
     target = profile.data_root / 'WB24258' / 'WB24258_1.nc'
     with xr.open_dataset(target, decode_cf=False) as ds:
@@ -190,24 +192,31 @@ def test_automatic_end_to_end_and_editable_limit_folder(tmp_path):
 
 def test_metadata_ownership_and_literal_cast_examples_rejected(tmp_path):
     source = _cnv(tmp_path / 'WS24258_Stn.1.cnv')
-    profile_path = prepare_profile(source, root=tmp_path)
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
     payload = json.loads(profile_path.read_text())
     payload['netcdf_global_attributes']['institution'] = 'another owner'
     profile_path.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match='multiple owners'):
         load_dataset_profile(profile_path)
     with pytest.raises(ValueError, match='template'):
-        publication_metadata('WS24258', 'WS24258_1', '2024-09-18', 25, -81,
-                             {}, {'title': 'SFER CTD WS24139_41'})
+        publication_metadata(
+            'WS24258',
+            'WS',
+            'WS24258_1',
+            '2024-09-18',
+            25,
+            -81,
+            PublicationSettings(derived_attributes={'title': 'SFER CTD WS24139_41', 'summary': 'CTD profile {id}'}),
+        )
 
 
 def test_multi_cruise_input_automatically_uses_batch_scope(tmp_path):
     root = tmp_path / 'batch'
     _cnv(root / 'WS24258' / 'WS24258_Stn.1.cnv')
     _cnv(root / 'HG26193' / 'HG26193_Stn.2.cnv')
-    profile = load_dataset_profile(prepare_profile(root, root=tmp_path))
+    profile = load_dataset_profile(prepare_sfer_profile(root, root=tmp_path))
     assert profile.profile_path.parent.name == 'batch'
-    report = convert_cnv(root, profile.data_root, profile.paths.cnv_mapping)
+    report = convert_sfer(root, profile.data_root, profile.paths.cnv_mapping)
     assert report['counts']['converted'] == 2
     assert (profile.data_root / 'WS24258' / 'WS24258_1.nc').is_file()
     assert (profile.data_root / 'HG26193' / 'HG26193_2.nc').is_file()
@@ -237,8 +246,8 @@ def test_catalog_canonical_name_and_existing_netcdf_aliases(name):
 
 def test_dataset_snapshot_records_reversible_file_and_channel_mapping(tmp_path):
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.001.cnv')
-    profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
-    assert convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)['counts']['converted'] == 1
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
+    assert convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)['counts']['converted'] == 1
     prepared = prepare_dataset_qc(profile)
     mapping = json.loads(prepared.paths.source_variable_mapping.read_text())
     channels = mapping['variables']['sea_water_temperature']['files']['WS24258/WS24258_1.nc']
@@ -277,8 +286,8 @@ def test_dataset_edits_are_used_without_reading_template_again(tmp_path, monkeyp
     profiles = []
     for cruise in ['WS24258', 'WB24258']:
         source = _cnv(tmp_path / 'input' / f'{cruise}_Stn.001.cnv')
-        profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
-        convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)
+        profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
+        convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)
         profiles.append(prepare_dataset_qc(profile))
     first, second = profiles
     specs = json.loads(first.paths.sensor_specs.read_text())
@@ -300,7 +309,7 @@ def test_cli_prepare_profile_creates_configuration_without_conversion(tmp_path, 
 
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
     monkeypatch.setattr(cnv_workflow, 'prepare_profile',
-                        lambda input_path, **kwargs: prepare_profile(input_path, root=tmp_path, **kwargs))
+                        lambda input_path, **kwargs: prepare_sfer_profile(input_path, root=tmp_path, **kwargs))
     args = ['convert-cnv', str(source), '--prepare-profile']
     profile_path = tmp_path / 'config' / 'WS24258' / 'dataset_profile.json'
     if custom_profile:
@@ -330,7 +339,7 @@ def test_cli_prepare_profile_preserves_edits_and_existing_outputs(tmp_path, over
     from main import main
 
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
-    profile_path = prepare_profile(source, root=tmp_path)
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
     conversion_args = ['convert-cnv', str(source), '--profile', str(profile_path)]
     main(conversion_args)
     profile = load_dataset_profile(profile_path)
@@ -371,7 +380,7 @@ def test_cli_prepare_profile_rejects_missing_input_before_writes(tmp_path):
 def test_cli_conversion_automatically_activates_dataset_owned_qc(tmp_path):
     from main import main
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
-    profile_path = prepare_profile(source, root=tmp_path)
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
     main(['convert-cnv', str(source), '--profile', str(profile_path)])
     profile = load_dataset_profile(profile_path)
     assert 'qc_limits' not in json.loads(profile.profile_path.read_text())
@@ -385,7 +394,7 @@ def test_cli_conversion_automatically_activates_dataset_owned_qc(tmp_path):
 def test_partial_conversion_initializes_successful_files_but_still_reports_failure(tmp_path):
     from main import main
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
-    profile_path = prepare_profile(source, root=tmp_path)
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
     (source.parent / 'WS24258_Stn.2.cnv').write_text('invalid header\n')
     with pytest.raises(SystemExit) as exc:
         main(['convert-cnv', str(source.parent), '--profile', str(profile_path)])
@@ -400,8 +409,8 @@ def test_dataset_limits_apply_to_all_casts_and_preserve_time(tmp_path):
     from qc_runner import run_single_test
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
     _cnv(tmp_path / 'input' / 'WS24258_Stn.2.cnv')
-    profile = load_dataset_profile(prepare_profile(source.parent, root=tmp_path))
-    convert_cnv(source.parent, profile.data_root, profile.paths.cnv_mapping)
+    profile = load_dataset_profile(prepare_sfer_profile(source.parent, root=tmp_path))
+    convert_sfer(source.parent, profile.data_root, profile.paths.cnv_mapping)
     profile = prepare_dataset_qc(profile)
     specs = json.loads(profile.paths.sensor_specs.read_text())
     specs['sensors']['sea_water_temperature']['ranges']['degree_Celsius']['max'] = 11
@@ -426,10 +435,10 @@ def test_dataset_limits_apply_to_all_casts_and_preserve_time(tmp_path):
 
 def test_initialization_preserves_existing_setting_before_any_writes(tmp_path):
     source = _cnv(tmp_path / 'input' / 'WS2425A_Stn.1.cnv')
-    profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
     assert profile.profile_path.parent.name == 'WS2425A'
     assert default_mapping_path(source, root=tmp_path) == profile.paths.cnv_mapping
-    assert convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)['counts']['converted'] == 1
+    assert convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)['counts']['converted'] == 1
     with xr.open_dataset(profile.data_root / 'WS2425A/WS2425A_1.nc') as ds:
         assert ds.attrs['platform'] == 'RV_FG_Walton_Smith'
     existing = profile.profile_path.parent / 'spike_test/spike_thresholds.json'
@@ -445,8 +454,8 @@ def test_initialization_preserves_existing_setting_before_any_writes(tmp_path):
 
 def test_nonactivating_write_beside_profile_is_rejected_before_writes(tmp_path):
     source = _cnv(tmp_path / 'input' / 'WS24258_Stn.1.cnv')
-    profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
-    convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
+    convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)
     with pytest.raises(ValueError, match='requires activation'):
         generate_limits(profile, activate=False)
     assert not (profile.profile_path.parent / 'variable_mapping').exists()
@@ -455,8 +464,8 @@ def test_nonactivating_write_beside_profile_is_rejected_before_writes(tmp_path):
 def test_profile_defaults_are_independent_and_user_edits_survive(tmp_path):
     first_source = _cnv(tmp_path / 'input/WS24258_Stn.1.cnv')
     second_source = _cnv(tmp_path / 'input/WB24258_Stn.1.cnv')
-    first_path = prepare_profile(first_source, root=tmp_path)
-    second_path = prepare_profile(second_source, root=tmp_path)
+    first_path = prepare_sfer_profile(first_source, root=tmp_path)
+    second_path = prepare_sfer_profile(second_source, root=tmp_path)
     first = json.loads(first_path.read_text())
     second = json.loads(second_path.read_text())
     assert first['netcdf_global_attributes'] == second['netcdf_global_attributes']
@@ -464,7 +473,7 @@ def test_profile_defaults_are_independent_and_user_edits_survive(tmp_path):
     first['netcdf_global_attributes']['creator_name'] = 'Reviewed dataset creator'
     first['netcdf_global_attributes']['geospatial_bounds'] = None
     first_path.write_text(json.dumps(first))
-    prepare_profile(first_source, root=tmp_path)
+    prepare_sfer_profile(first_source, root=tmp_path)
     assert json.loads(first_path.read_text()) == first
     assert json.loads(second_path.read_text()) == second
 
@@ -474,7 +483,7 @@ def test_stale_inventory_cannot_hide_changed_source_description(tmp_path):
     mapping = tmp_path / 'mapping.json'
     inspect_cnv(source, mapping)
     source.write_text(source.read_text().replace('Temperature [ITS-90', 'Potential Temperature [ITS-90'))
-    report = convert_cnv(source, tmp_path / 'out', mapping)
+    report = convert_sfer(source, tmp_path / 'out', mapping)
     assert report['counts']['failed'] == 1
     assert 'source description conflicts' in report['records'][0]['failure_reason']
 
@@ -485,7 +494,7 @@ def test_missing_source_units_are_not_filled_from_catalog(tmp_path):
     mapping = tmp_path / 'mapping.json'
     inspected = inspect_cnv(source, mapping)
     assert inspected['science_variables']['t090C']['observed']['missing_units'] is True
-    assert convert_cnv(source, tmp_path / 'out', mapping)['counts']['converted'] == 1
+    assert convert_sfer(source, tmp_path / 'out', mapping)['counts']['converted'] == 1
     with xr.open_dataset(tmp_path / 'out/WS24258/WS24258_1.nc', decode_cf=False) as ds:
         assert 'units' not in ds.sea_water_temperature.attrs
 
@@ -502,7 +511,6 @@ def test_cli_inspection_writes_lean_mapping(tmp_path):
 
 def test_new_dataset_limits_use_config_template_not_live_walton(tmp_path, monkeypatch):
     import shutil
-    import qc_limit_generation
     import qc_template_limits
     from dataset_profile import CONFIG_TEMPLATE_DIR
 
@@ -519,17 +527,15 @@ def test_new_dataset_limits_use_config_template_not_live_walton(tmp_path, monkey
     for span in sensor['ranges'].values():
         span['max'] = 29
     spec_path.write_text(json.dumps(specs))
-    monkeypatch.setattr(qc_limit_generation, 'CONFIG_TEMPLATE_DIR', template)
-    monkeypatch.setattr(qc_limit_generation, 'TEMPLATE_PROFILE_PATH', template / 'dataset_profile.json')
     monkeypatch.setattr(qc_template_limits, 'CONFIG_TEMPLATE_DIR', template)
     source = _cnv(tmp_path / 'input/WS24258_Stn.1.cnv')
-    profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
-    convert_cnv(source, profile.data_root, profile.paths.cnv_mapping)
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
+    convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)
     profile = prepare_dataset_qc(profile)
     copied = json.loads(profile.paths.sensor_specs.read_text())
     assert copied['sensors']['sea_water_temperature']['ranges']['degree_Celsius']['max'] == 29
     assert profile.paths.variable_mapping == profile.profile_path.parent / 'qc_variable_mapping.json'
     report = json.loads((profile.profile_path.parent / 'limit_report.json').read_text())
-    assert report['reference'] == str(template / 'dataset_profile.json')
+    assert report['preset'] == 'sfer_aoml'
     assert all(path.is_relative_to(profile.profile_path.parent) for key in reference['paths']
                if (path := profile.paths.get(key)) is not None)

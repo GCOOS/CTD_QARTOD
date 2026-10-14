@@ -4,10 +4,11 @@ Validation Tool for Surface Soak Detection
 Randomly selects files from specified cast types, runs the detection algorithm,
 and visualizes the results in a grid; or plot explicit paths via ``--file``.
 
-Usage:
-    python validate_soak_detection.py --cast_types shallow_stable shallow_cast deep_cast --n_files 6
-    python validate_soak_detection.py --file datasets/SFER_CTD/WS0603/WS0603_1.nc
-    python validate_soak_detection.py --file a.nc b.nc
+Usage (layout flags as for remove_surface_soak.py):
+    python validate_soak_detection.py --input-root output/DATASET_CNV --soak-config config/DATASET/soak_config.json \
+        --depth-variable depth --sample-dimension z --cast_types shallow_stable shallow_cast deep_cast --n_files 6
+    python validate_soak_detection.py --soak-config ... --depth-variable depth --sample-dimension z \
+        --file output/DATASET_CNV/CRUISE/CRUISE_1.nc
 """
 
 import os
@@ -25,16 +26,22 @@ import sys
 _SOAK_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SOAK_DIR.parent
 sys.path.insert(0, str(_SOAK_DIR))
+from nc_util import ProfileLayout, add_layout_arguments, layout_from_args, safe_depth_1d
 from soak_detection_util import (
-    PRE_SOAK_DEPTH_THRESHOLD_M,
+    SoakSettings,
     classify_station,
     detect_descent_start_v4,
     first_index_depth_at_least,
     get_soak_removal_index,
+    load_soak_settings,
 )
 
-BASE_PATH = str(_REPO_ROOT / "datasets" / "SFER_CTD")
 ANALYSIS_PATH = str(_SOAK_DIR)
+
+
+def _load_depth(file_path: str, layout: ProfileLayout) -> np.ndarray:
+    with xr.open_dataset(file_path) as ds:
+        return safe_depth_1d(ds, layout.depth_names)
 
 
 def iter_nc_files(base_path: str):
@@ -48,34 +55,34 @@ def iter_nc_files(base_path: str):
                 yield cruise, filename, os.path.join(cruise_path, filename)
 
 
-def analyze_nc_file_for_validation(cruise: str, filename: str, file_path: str) -> dict | None:
+def analyze_nc_file_for_validation(
+    cruise: str, filename: str, file_path: str, settings: SoakSettings, layout: ProfileLayout
+) -> dict | None:
     """
     Load depth, classify station (V4), run V4 descent detection.
     Returns a file_info dict compatible with visualize_file(), or None if invalid.
     """
     try:
-        ds = xr.open_dataset(file_path)
-        depth_data = ds.coords["depth"].values.flatten()
-        ds.close()
+        depth_data = _load_depth(file_path, layout)
     except Exception:
         return None
 
-    depth_data = depth_data[~np.isnan(depth_data)]
     if len(depth_data) < 200:
         return None
 
-    pre_idx = first_index_depth_at_least(depth_data, PRE_SOAK_DEPTH_THRESHOLD_M)
+    pre_idx = first_index_depth_at_least(depth_data, settings.pre_trim_depth_m)
     trimmed = depth_data[pre_idx:]
     if len(trimmed) < 50:
         return None
 
     depth_range = float(np.max(trimmed) - np.min(trimmed))
-    station_type = classify_station(trimmed)
+    station_type = classify_station(trimmed, settings)
     detection = detect_descent_start_v4(trimmed)
 
     return {
         "cruise": cruise,
         "file": filename,
+        "full_path": file_path,
         "cast_type": station_type,
         "total_scans": int(len(depth_data)),
         "depth_range": depth_range,
@@ -92,7 +99,7 @@ def _resolve_user_nc_path(path: str) -> Path | None:
 
     Relative paths are tried against the current working directory first, then
     against the repository root (parent of ``soak_removal/``). That way
-    ``datasets/SFER_CTD/...`` works when you run the script from inside
+    ``output/DATASET_CNV/...`` works when you run the script from inside
     ``soak_removal/`` as well as from the repo root.
     """
     raw = Path(path).expanduser()
@@ -106,25 +113,19 @@ def _resolve_user_nc_path(path: str) -> Path | None:
     return None
 
 
-def build_file_info_from_disk_path(path: str) -> dict | None:
-    """
-    Build a ``file_info`` dict for an arbitrary ``.nc`` path (for ``--file``).
-    Adds ``full_path`` so ``visualize_file`` does not require ``BASE_PATH``.
-    """
+def build_file_info_from_disk_path(path: str, settings: SoakSettings, layout: ProfileLayout) -> dict | None:
+    """Build a ``file_info`` dict for an arbitrary ``.nc`` path (for ``--file``)."""
     p = _resolve_user_nc_path(path)
     if p is None:
         return None
     if p.suffix.lower() != ".nc":
         return None
-    cruise = p.parent.name
-    info = analyze_nc_file_for_validation(cruise, p.name, str(p))
-    if info is None:
-        return None
-    info["full_path"] = str(p)
-    return info
+    return analyze_nc_file_for_validation(p.parent.name, p.name, str(p), settings, layout)
 
 
-def sample_files_by_type_dynamic(cast_types, n_files_total=6, seed=None):
+def sample_files_by_type_dynamic(
+    input_root: str, cast_types, settings: SoakSettings, layout: ProfileLayout, n_files_total=6, seed=None
+):
     """
     Sample files by cast type, computing cast type dynamically using V4.
     This supports the 1.5–3m transition zone (classification depends on detection).
@@ -156,7 +157,7 @@ def sample_files_by_type_dynamic(cast_types, n_files_total=6, seed=None):
     selected_by_type: dict[str, list[dict]] = {t: [] for t in cast_types}
 
     # Shuffle file order so sampling is random but bounded
-    all_files = list(iter_nc_files(BASE_PATH))
+    all_files = list(iter_nc_files(input_root))
     random.shuffle(all_files)
 
     for cruise, filename, path in all_files:
@@ -164,7 +165,7 @@ def sample_files_by_type_dynamic(cast_types, n_files_total=6, seed=None):
         if all(len(selected_by_type[t]) >= target_per_type[t] for t in cast_types):
             break
 
-        info = analyze_nc_file_for_validation(cruise, filename, path)
+        info = analyze_nc_file_for_validation(cruise, filename, path, settings, layout)
         if not info:
             continue
 
@@ -186,7 +187,7 @@ def sample_files_by_type_dynamic(cast_types, n_files_total=6, seed=None):
         for cruise, filename, path in all_files:
             if len(selected) >= n_files_total:
                 break
-            info = analyze_nc_file_for_validation(cruise, filename, path)
+            info = analyze_nc_file_for_validation(cruise, filename, path, settings, layout)
             if not info:
                 continue
             if info.get("total_scans", 0) <= 500:
@@ -197,18 +198,18 @@ def sample_files_by_type_dynamic(cast_types, n_files_total=6, seed=None):
     return selected[:n_files_total]
 
 
-def visualize_file(file_info, ax, show_details=True):
+def visualize_file(file_info, ax, settings: SoakSettings, layout: ProfileLayout, show_details=True):
     """
     Visualize a single file's depth profile with detection results.
     
     Args:
         file_info: Dictionary with file information
         ax: Matplotlib axis to plot on
+        settings: Dataset soak thresholds
+        layout: Depth variable names and sample dimension
         show_details: Whether to show detailed annotations
     """
-    file_path = file_info.get("full_path") or os.path.join(
-        BASE_PATH, file_info["cruise"], file_info["file"]
-    )
+    file_path = file_info["full_path"]
 
     if not os.path.exists(file_path):
         ax.text(0.5, 0.5, f"File not found:\n{file_info['file']}", 
@@ -218,10 +219,7 @@ def visualize_file(file_info, ax, show_details=True):
     
     try:
         # Load the NetCDF file
-        ds = xr.open_dataset(file_path)
-        depth_data = ds.coords['depth'].values.flatten()
-        depth_data = depth_data[~np.isnan(depth_data)]
-        ds.close()
+        depth_data = _load_depth(file_path, layout)
         
         scans = np.arange(len(depth_data))
         
@@ -236,8 +234,8 @@ def visualize_file(file_info, ax, show_details=True):
         total_scans = file_info.get("total_scans", len(depth_data))
         depth_range = file_info.get("depth_range", 0)
         
-        # Unified soak removal (2 m pre-trim + detection on remainder)
-        soak_result = get_soak_removal_index(depth_data)
+        # Unified soak removal (pre-trim + detection on remainder)
+        soak_result = get_soak_removal_index(depth_data, settings)
         pre_trim_idx = int(soak_result.get("pre_depth_trim_idx", 0))
         keep_from_idx = soak_result["keep_from_idx"]
         keep_until_idx = int(soak_result.get("keep_until_idx", len(depth_data)))
@@ -251,7 +249,7 @@ def visualize_file(file_info, ax, show_details=True):
                 linestyle=":",
                 linewidth=1.5,
                 alpha=0.9,
-                label=f"First ≥{PRE_SOAK_DEPTH_THRESHOLD_M:g} m (scan {pre_trim_idx})",
+                label=f"First ≥{settings.pre_trim_depth_m:g} m (scan {pre_trim_idx})",
             )
 
         if was_detected:
@@ -306,7 +304,15 @@ def visualize_file(file_info, ax, show_details=True):
         ax.set_title(f"{file_info['cast_type']}\n{file_info['file']}")
 
 
-def create_validation_plot(selected_files, output_path=None, seed=None, *, explicit_paths: bool = False):
+def create_validation_plot(
+    selected_files,
+    settings: SoakSettings,
+    layout: ProfileLayout,
+    output_path=None,
+    seed=None,
+    *,
+    explicit_paths: bool = False,
+):
     """
     Grid visualization of one or more file dicts (``file_info``).
 
@@ -332,7 +338,7 @@ def create_validation_plot(selected_files, output_path=None, seed=None, *, expli
 
     for idx, ax in enumerate(axes_flat):
         if idx < n:
-            visualize_file(selected_files[idx], ax)
+            visualize_file(selected_files[idx], ax, settings, layout)
         else:
             ax.set_visible(False)
 
@@ -395,14 +401,21 @@ def main():
         default=None,
         help='Output file path (default: auto-generated)'
     )
+    parser.add_argument("--input-root", default=None, help="NetCDF root with cruise folders (required unless --file)")
+    parser.add_argument("--soak-config", type=Path, required=True, help="Dataset soak_config.json")
+    add_layout_arguments(parser)
     
     args = parser.parse_args()
+    settings = load_soak_settings(args.soak_config)
+    layout = layout_from_args(args)
 
     explicit_paths = bool(args.explicit_files)
+    if not explicit_paths and args.input_root is None:
+        parser.error("--input-root is required unless --file is used")
     if explicit_paths:
         selected = []
         for raw in args.explicit_files:
-            info = build_file_info_from_disk_path(raw)
+            info = build_file_info_from_disk_path(raw, settings, layout)
             if info is None:
                 p = _resolve_user_nc_path(raw)
                 if p is None:
@@ -423,15 +436,17 @@ def main():
     else:
         print("Sampling files (dynamic cast types via V4)...")
         selected = sample_files_by_type_dynamic(
-            cast_types=args.cast_types,
+            args.input_root,
+            args.cast_types,
+            settings,
+            layout,
             n_files_total=args.n_files,
             seed=args.seed,
         )
 
     print(f"\nSelected {len(selected)} files:")
     for f in selected:
-        label = f.get("full_path") or os.path.join(BASE_PATH, f["cruise"], f["file"])
-        print(f"  {f['cast_type']}: {label}")
+        print(f"  {f['cast_type']}: {f['full_path']}")
 
     # Generate output path if not provided
     if args.output is None:
@@ -448,7 +463,7 @@ def main():
             args.output = os.path.join(ANALYSIS_PATH, f"validation_{cast_str}{seed_str}.png")
 
     print(f"\nCreating visualization...")
-    create_validation_plot(selected, args.output, args.seed, explicit_paths=explicit_paths)
+    create_validation_plot(selected, settings, layout, args.output, args.seed, explicit_paths=explicit_paths)
     
     print(f"\nDone! Visualization saved to: {args.output}")
 

@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from cnv_converter import convert_cnv
 from cnv_mapping import inspect_cnv
+from cnv_test_support import convert_sfer, publication_with
 from cnv_sensor_config import generate_sensor_configs
 from dataset_profile import DatasetProfile, PathsConfig
 
@@ -72,7 +72,7 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
     mapping = _ready_mapping(source, tmp_path / "mapping.json")
     output = tmp_path / "output"
 
-    report = convert_cnv(source, output, mapping)
+    report = convert_sfer(source, output, mapping)
 
     target = output / "WS24258" / "WS24258_54-2.nc"
     assert report["counts"] == {"cnv_discovered": 1, "converted": 1, "failed": 0}
@@ -110,15 +110,18 @@ def test_conversion_writes_human_global_attributes_and_omits_nulls(tmp_path: Pat
     mapping = _ready_mapping(source, tmp_path / "mapping.json")
     output = tmp_path / "output"
 
-    report = convert_cnv(
+    report = convert_sfer(
         source,
         output,
         mapping,
-        netcdf_global_attributes={
-            "institution": "Example Ocean Institute",
-            "acknowledgment": "Example cruise hydrographic measurements",
-            "license": None,
-        },
+        publication=publication_with(
+            global_attributes={
+                "institution": "Example Ocean Institute",
+                "acknowledgment": "Example cruise hydrographic measurements",
+                "license": None,
+            },
+            fixed_attributes={},
+        ),
     )
 
     assert report["counts"]["failed"] == 0
@@ -142,8 +145,12 @@ def test_conversion_rejects_human_override_of_converter_owned_global_attribute(
     output = tmp_path / "output"
 
     with pytest.raises(ValueError, match=attribute):
-        convert_cnv(source, output, mapping,
-                    netcdf_global_attributes={attribute: "manually replaced"})
+        convert_sfer(
+            source,
+            output,
+            mapping,
+            publication=publication_with(global_attributes={attribute: "manually replaced"}),
+        )
     assert not (output / "WS24258" / "WS24258_2.nc").exists()
 
 
@@ -159,7 +166,7 @@ def test_recursive_conversion_numbers_only_identical_station_ids(tmp_path: Path)
     )
     mapping = _ready_mapping(early, tmp_path / "mapping.json")
 
-    report = convert_cnv(root, tmp_path / "output", mapping)
+    report = convert_sfer(root, tmp_path / "output", mapping)
 
     assert report["counts"]["converted"] == 2
     assert (tmp_path / "output" / "WS24258" / "WS24258_54.nc").is_file()
@@ -178,7 +185,7 @@ def test_running_number_is_not_part_of_station_id_for_other_cruises(
     source = _cnv(tmp_path / "input" / filename)
     mapping = _ready_mapping(source, tmp_path / "mapping.json")
 
-    report = convert_cnv(source, tmp_path / "output", mapping)
+    report = convert_sfer(source, tmp_path / "output", mapping)
 
     assert report["counts"]["failed"] == 0
     target = tmp_path / "output" / cruise / f"{cruise}_{station}.nc"
@@ -196,7 +203,7 @@ def test_conversion_rejects_mapping_that_still_needs_review(tmp_path: Path):
     mapping.write_text(json.dumps(data), encoding="utf-8")
 
     with pytest.raises(ValueError, match="still requires review"):
-        convert_cnv(source, tmp_path / "output", mapping)
+        convert_sfer(source, tmp_path / "output", mapping)
 
 
 def test_sensor_config_is_derived_from_converted_variables(tmp_path: Path):
@@ -206,7 +213,7 @@ def test_sensor_config_is_derived_from_converted_variables(tmp_path: Path):
     data["science_variables"]["flag"].update({"ignore": False, "mapped_to": "flag"})
     mapping.write_text(json.dumps(data), encoding="utf-8")
     output = tmp_path / "output"
-    assert convert_cnv(source, output, mapping)["counts"]["failed"] == 0
+    assert convert_sfer(source, output, mapping)["counts"]["failed"] == 0
 
     variable_mapping = tmp_path / "qc_variable_mapping.json"
     variable_mapping.write_text(

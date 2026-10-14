@@ -22,6 +22,8 @@ from dataset_profile import (
 def _profile_payload() -> dict[str, object]:
     return {
         "data_root": "datasets/example",
+        "display_name": "Example CTD",
+        "dataset_id_prefix": "",
         "netcdf_global_attributes": {
             "institution": "Example Ocean Institute",
             "license": None,
@@ -33,7 +35,6 @@ def _profile_payload() -> dict[str, object]:
         "erddap": {
             "output_xml": "output/erddap/datasets.xml",
             "filedir_prefix": "/data/erddap/SFER_QC",
-            "dataset_id_prefix": "",
             "required_global_attributes": ["title", "summary"],
             "global_add_attributes": {
                 "_NCProperties": None,
@@ -67,11 +68,13 @@ def test_profile_rejects_nested_netcdf_global_attribute(tmp_path: Path):
         load_dataset_profile(profile_path)
 
 
-def test_default_profile_loads_sfer_layout():
+def test_default_profile_loads_template_layout():
     profile = default_profile()
     with DEFAULT_PROFILE_PATH.open("r", encoding="utf-8") as f:
         profile_json = json.load(f)
     assert profile.data_root == REPO_ROOT / profile_json["data_root"]
+    assert profile.display_name == profile_json["display_name"]
+    assert profile.dataset_id_prefix == profile_json["dataset_id_prefix"]
     assert profile.output.mode == profile_json["output"]["mode"]
     assert profile.output.directory == REPO_ROOT / profile_json["output"]["directory"]
     assert profile.metadata.sample_dimension == "z"
@@ -83,7 +86,7 @@ def test_default_profile_loads_sfer_layout():
     assert profile.erddap.output_xml == (
         REPO_ROOT / "output" / "erddap" / "datasets.xml"
     )
-    assert profile.erddap.dataset_id_prefix == profile_json["erddap"]["dataset_id_prefix"]
+    assert profile.erddap.dataset_id_prefix == profile.dataset_id_prefix
     assert "title" in profile.erddap.required_global_attributes
     assert profile.erddap.global_add_attributes["_NCProperties"] is None
 

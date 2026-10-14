@@ -2,19 +2,22 @@
 import json
 from pathlib import Path
 import re
+import shutil
 
-from cnv_converter import filename_identity
 from cnv_mapping import _atomic_json, discover_cnv_files, inspect_cnv
-from dataset_profile import REPO_ROOT, TEMPLATE_PROFILE_PATH
+from dataset_profile import CONFIG_LAYOUT, REPO_ROOT, reference_file
+from station_identity import IdentityError, load_station_identity, resolve_identity
+
+COPIED_SETTINGS = ("station_identity", "soak_config")
 
 
-def dataset_scope(input_path):
+def dataset_scope(input_path, identity):
     source = Path(input_path)
     cruises = set()
     for path in discover_cnv_files(source):
         try:
-            cruises.add(filename_identity(path)[0])
-        except ValueError:
+            cruises.add(resolve_identity(path, identity).cruise_id)
+        except IdentityError:
             pass
     if len(cruises) == 1:
         return next(iter(cruises))
@@ -25,14 +28,18 @@ def dataset_scope(input_path):
     return name
 
 
-def default_mapping_path(input_path, root=REPO_ROOT):
-    return Path(root) / "config" / dataset_scope(input_path) / "cnv_mapping.json"
+def _preset_scope(input_path, preset):
+    return dataset_scope(input_path, load_station_identity(reference_file(CONFIG_LAYOUT["station_identity"], preset)))
 
 
-def prepare_profile(input_path, *, root=REPO_ROOT, profile_path=None):
+def default_mapping_path(input_path, *, preset=None, root=REPO_ROOT):
+    return Path(root) / "config" / _preset_scope(input_path, preset) / "cnv_mapping.json"
+
+
+def prepare_profile(input_path, *, preset=None, root=REPO_ROOT, profile_path=None):
     """Create missing files only. Existing review decisions are never overwritten."""
     root = Path(root)
-    scope = dataset_scope(input_path)
+    scope = _preset_scope(input_path, preset)
     if profile_path is None:
         profile_path = root / "config" / scope / "dataset_profile.json"
     else:
@@ -42,14 +49,22 @@ def prepare_profile(input_path, *, root=REPO_ROOT, profile_path=None):
     config = profile_path.parent
     if profile_path.exists():
         return profile_path
+    paths = {}
+    for key in COPIED_SETTINGS:
+        target = config / CONFIG_LAYOUT[key]
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(reference_file(CONFIG_LAYOUT[key], preset), target)
+        paths[key] = str(target)
     mapping_path = config / "cnv_mapping.json"
     if not mapping_path.exists():
         inspect_cnv(input_path, mapping_path)
-    profile = json.loads(TEMPLATE_PROFILE_PATH.read_text())
+    profile = json.loads(reference_file("dataset_profile.json", preset).read_text(encoding="utf-8"))
     profile.update({
         "data_root": str(root / "output" / f"{scope}_CNV"),
+        "preset": preset,
         "output": {"mode": "duplicate", "directory": str(root / "output" / f"{scope}_QC")},
-        "paths": {"cnv_mapping": str(mapping_path)},
+        "paths": {"cnv_mapping": str(mapping_path), **paths},
     })
     profile["erddap"].update({"output_xml": str(root / "output" / "erddap" / f"{scope.lower()}_datasets.xml"),
                               "filedir_prefix": f"/data/erddap/{scope}_QC"})

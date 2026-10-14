@@ -28,16 +28,18 @@ In later terminal sessions, activate the existing environment with
 To review metadata and variable mapping before conversion, first run:
 
 ```bash
-python main.py convert-cnv cnv_data/WS24258 --prepare-profile
+python main.py convert-cnv cnv_data/WS24258 --prepare-profile --preset sfer_aoml
 ```
 
-This creates missing `config/WS24258/dataset_profile.json` and `cnv_mapping.json`,
+`--preset sfer_aoml` copies SFER station identity, platforms, and publication
+defaults. Omit `--preset` to start from the generic `config_template`. This
+creates missing `config/WS24258/dataset_profile.json` and `cnv_mapping.json`,
 preserves existing configuration, and exits without writing NetCDF files or
 initializing dataset-owned QC settings. Edit the profile and review the mapping,
 then convert:
 
 ```bash
-python main.py convert-cnv cnv_data/WS24258
+python main.py convert-cnv cnv_data/WS24258 --profile config/WS24258/dataset_profile.json
 ```
 
 This creates configuration in `config/WS24258/` and NetCDF files in

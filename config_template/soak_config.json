@@ -1,0 +1,7 @@
+{
+  "pre_trim_depth_m": 2.0,
+  "shallow_stable_keep_last_n": 250,
+  "shallow_stable_max_range_m": 1.5,
+  "transition_max_range_m": 3.0,
+  "shallow_cast_max_range_m": 10.0
+}

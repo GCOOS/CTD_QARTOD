@@ -18,13 +18,14 @@ class ErddapConfig:
         cls,
         data: object,
         base_dir: Path,
+        *,
+        dataset_id_prefix: str,
     ) -> "ErddapConfig":
         if not isinstance(data, Mapping):
             raise ValueError("dataset profile must define an erddap JSON object")
         required_keys = {
             "output_xml",
             "filedir_prefix",
-            "dataset_id_prefix",
             "required_global_attributes",
             "global_add_attributes",
         }
@@ -45,13 +46,10 @@ class ErddapConfig:
         if not output_xml.is_absolute():
             output_xml = base_dir / output_xml
         filedir_prefix = data["filedir_prefix"]
-        dataset_id_prefix = data["dataset_id_prefix"]
         required_attributes = data["required_global_attributes"]
         additions = data["global_add_attributes"]
         if not isinstance(filedir_prefix, str) or not filedir_prefix.startswith("/"):
             raise ValueError("erddap.filedir_prefix must be an absolute server path")
-        if not isinstance(dataset_id_prefix, str):
-            raise ValueError("erddap.dataset_id_prefix must be a string")
         if isinstance(required_attributes, (str, bytes)) or not isinstance(required_attributes, Sequence):
             raise ValueError("erddap.required_global_attributes must be a JSON array")
         if not all(isinstance(name, str) and name.strip() for name in required_attributes):

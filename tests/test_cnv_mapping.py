@@ -223,7 +223,7 @@ def test_dataset_mapping_cannot_duplicate_catalog_definitions(tmp_path, field, v
 def test_conversion_resolves_current_catalog_without_reinspection(tmp_path, monkeypatch):
     from copy import deepcopy
     import cnv_catalog
-    from cnv_converter import convert_cnv
+    from cnv_test_support import convert_sfer
     import xarray as xr
 
     source = _cnv(tmp_path / "WS24258_Stn.001.cnv")
@@ -233,7 +233,7 @@ def test_conversion_resolves_current_catalog_without_reinspection(tmp_path, monk
     definition = deepcopy(cnv_catalog.catalog()["variables"]["sea_water_temperature"])
     definition["long_name"] = "Catalog-owned updated label"
     monkeypatch.setitem(cnv_catalog.catalog()["variables"], "sea_water_temperature", definition)
-    report = convert_cnv(source, tmp_path / "output", path)
+    report = convert_sfer(source, tmp_path / "output", path)
     assert report["counts"]["converted"] == 1
     with xr.open_dataset(tmp_path / "output/WS24258/WS24258_1.nc", decode_cf=False) as ds:
         assert ds.sea_water_temperature.attrs["long_name"] == "Catalog-owned updated label"

@@ -8,9 +8,8 @@ import xarray as xr
 from lxml import etree
 
 from cnv_coordinates import resolve_header_coordinates
-from cnv_converter import convert_cnv
 from cnv_mapping import inspect_cnv, read_cnv_header
-from cnv_workflow import prepare_profile
+from cnv_test_support import convert_sfer, convert_with_profile, prepare_sfer_profile
 from dataset_profile import load_dataset_profile
 from qc_limit_generation import prepare_dataset_qc
 from qc_runner import run_qc_for_all
@@ -69,7 +68,7 @@ def test_invalid_header_coordinates_report_issue_and_block_conversion(tmp_path, 
     assert not payload['inspection']['coordinate_sources']
     with pytest.raises(ValueError, match='NMEA'):
         read_cnv_header(source)
-    report = convert_cnv(source, tmp_path / 'out', mapping)
+    report = convert_sfer(source, tmp_path / 'out', mapping)
     assert report['counts']['failed'] == 1
     assert not list((tmp_path / 'out').rglob('*.nc'))
 
@@ -85,14 +84,11 @@ def test_ambiguous_headers_or_partial_columns_are_rejected():
 
 def test_header_coordinates_convert_qc_and_xml_without_human_input(tmp_path):
     source = _header_cnv(tmp_path / 'input' / 'SAV1803-12.cnv')
-    profile = load_dataset_profile(prepare_profile(source, root=tmp_path))
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
     inventory = json.loads(profile.paths.cnv_mapping.read_text())['inspection']
     assert inventory['coordinate_sources'] == {'nmea_header': 1}
     assert not inventory['conversion_issues']
-    report = convert_cnv(source, profile.data_root, profile.paths.cnv_mapping,
-                         netcdf_global_attributes=profile.netcdf_global_attributes,
-                         netcdf_fixed_global_attributes=profile.netcdf_fixed_global_attributes,
-                         netcdf_derived_global_attributes=profile.netcdf_derived_global_attributes)
+    report = convert_with_profile(source, profile.data_root, profile.paths.cnv_mapping, profile)
     assert report['counts']['converted'] == 1
     assert report['records'][0]['coordinate_source'] == 'nmea_header'
     profile = prepare_dataset_qc(profile)
@@ -131,7 +127,7 @@ def test_mixed_scope_preserves_sample_coordinates_and_uses_headers_per_cast(tmp_
     mapping = tmp_path / 'mapping.json'
     payload = inspect_cnv(root, mapping)
     assert payload['inspection']['coordinate_sources'] == {'data_columns': 1, 'nmea_header': 1}
-    report = convert_cnv(root, tmp_path / 'out', mapping)
+    report = convert_sfer(root, tmp_path / 'out', mapping)
     assert report['counts']['converted'] == 2
     with xr.open_dataset(tmp_path / 'out/WS24258/WS24258_1.nc', decode_cf=False) as ds:
         assert ds.latitude.dims == ds.longitude.dims == ('profile', 'z')
@@ -145,6 +141,6 @@ def test_invalid_sample_coordinate_is_not_replaced_by_valid_header(tmp_path):
     source.write_text(source.read_text().replace('27.1', '99.0').replace('*END*', '* NMEA Latitude = 0 0 N\n* NMEA Longitude = 0 0 E\n*END*'))
     mapping = tmp_path / 'mapping.json'
     inspect_cnv(source, mapping)
-    report = convert_cnv(source, tmp_path / 'out', mapping)
+    report = convert_sfer(source, tmp_path / 'out', mapping)
     assert report['counts']['failed'] == 1
     assert 'latitude or longitude samples are invalid' in report['records'][0]['failure_reason']

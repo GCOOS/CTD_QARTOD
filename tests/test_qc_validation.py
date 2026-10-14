@@ -64,10 +64,16 @@ def test_validation_rejects_overlapping_station_classes(tmp_path: Path):
     profile = _replace_json(
         load_dataset_profile(DEFAULT_PROFILE_PATH),
         tmp_path,
-        "station_depth_classification",
-        {"deep_cast": ["A"], "shallow_cast": ["a "]},
+        "station_classification",
+        {
+            "classes": {
+                "deep_cast": {"stations": ["A"]},
+                "shallow_cast": {"stations": ["a "]},
+            },
+            "rules": [],
+        },
     )
-    with pytest.raises(ValueError, match="deep_cast and shallow_cast.*a"):
+    with pytest.raises(ValueError, match="station in both deep_cast and shallow_cast"):
         validate_qc_profile(profile)
 
 

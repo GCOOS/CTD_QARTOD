@@ -23,6 +23,7 @@ from pathlib import Path
 
 from dataset_profile import (
     DEFAULT_PROFILE_PATH,
+    available_presets,
     load_dataset_profile,
     resolve_config_path,
 )
@@ -102,6 +103,15 @@ def _add_viz_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_preset_argument(parser: argparse.ArgumentParser, usage: str) -> None:
+    parser.add_argument(
+        "--preset",
+        choices=available_presets(),
+        default=None,
+        help=f"Program preset under presets/ to start from {usage} (default: generic config_template)",
+    )
+
+
 def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "input",
@@ -119,6 +129,7 @@ def _add_convert_cnv_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Create missing dataset profile and CNV mapping, then exit without converting; preserve existing configuration",
     )
+    _add_preset_argument(parser, "when creating a new dataset profile")
     parser.add_argument("--report", type=Path, default=None)
     parser.add_argument(
         "--overwrite",
@@ -189,11 +200,12 @@ def _add_erddap_xml_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="SFER CTD CNV conversion, QC, and ERDDAP datasets.xml generation",
+        description="Sea-Bird CNV conversion, QARTOD QC, and ERDDAP datasets.xml generation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
     python main.py convert-cnv /path/to/cnv/files
+    python main.py convert-cnv /path/to/cnv/files --preset sfer_aoml
     python main.py remove-soak --profile config/your_dataset/dataset_profile.json --dry-run
     python main.py review-soak --profile config/your_dataset/dataset_profile.json
     python main.py qc --profile config/your_dataset/dataset_profile.json
@@ -205,7 +217,7 @@ Examples:
 
     convert_parser = sub.add_parser(
         "convert-cnv",
-        help="Convert NOAA AOML Sea-Bird CNV casts to standardized netCDF profiles",
+        help="Convert Sea-Bird CNV casts to standardized netCDF profiles",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     _add_convert_cnv_arguments(convert_parser)
@@ -230,6 +242,7 @@ Examples:
         help="One CNV file, one cruise folder, or a root containing cruise folders",
     )
     inspect_parser.add_argument("--output", type=Path, default=None)
+    _add_preset_argument(inspect_parser, "when naming the default config/<dataset>/ folder")
     inspect_parser.add_argument(
         "--verbose",
         "-v",
@@ -267,9 +280,10 @@ Examples:
     )
     _add_qc_arguments(qc_parser)
 
-    limits_parser = sub.add_parser("generate-limits", help="Initialize dataset-owned settings from the Walton Smith template")
+    limits_parser = sub.add_parser("generate-limits", help="Initialize dataset-owned QC settings from the profile preset or the generic template")
     limits_parser.add_argument("--profile", required=True)
     limits_parser.add_argument("--output", type=Path, default=None, help="Optional new dataset folder; defaults beside the profile; existing settings are preserved")
+    _add_preset_argument(limits_parser, "instead of the profile preset")
 
     erddap_parser = sub.add_parser(
         "erddap-xml",
@@ -290,6 +304,7 @@ Examples:
 
 def _run_convert_cnv(args: argparse.Namespace) -> None:
     from cnv_converter import convert_cnv
+    from station_identity import load_station_identity
 
     setup_logging(verbose=args.verbose)
     if not args.input.exists():
@@ -297,17 +312,20 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         raise SystemExit(1)
     if args.profile is None or args.prepare_profile:
         from cnv_workflow import prepare_profile
-        args.profile = str(prepare_profile(args.input, profile_path=args.profile))
+        args.profile = str(prepare_profile(args.input, preset=args.preset, profile_path=args.profile))
     profile = load_dataset_profile(args.profile)
     mapping_path = resolve_config_path("cnv_mapping", profile)
-    if not mapping_path.is_file():
-        logger.error("CNV mapping does not exist: %s", mapping_path)
-        raise SystemExit(1)
+    identity_path = resolve_config_path("station_identity", profile)
+    for label, path in (("CNV mapping", mapping_path), ("Station identity", identity_path)):
+        if not path.is_file():
+            logger.error("%s does not exist: %s", label, path)
+            raise SystemExit(1)
 
     if args.prepare_profile:
         logger.info("Dataset profile ready: %s", profile.profile_path)
         logger.info("CNV mapping: %s", mapping_path)
-        logger.info("Review the profile and mapping, then rerun convert-cnv without --prepare-profile.")
+        logger.info("Station identity: %s", identity_path)
+        logger.info("Review the profile, mapping and station identity, then rerun convert-cnv without --prepare-profile.")
         return
 
     logger.info("Converting Sea-Bird CNV casts...")
@@ -321,9 +339,8 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
             mapping_path,
             args.report,
             args.overwrite,
-            netcdf_global_attributes=profile.netcdf_global_attributes,
-            netcdf_fixed_global_attributes=profile.netcdf_fixed_global_attributes,
-            netcdf_derived_global_attributes=profile.netcdf_derived_global_attributes,
+            identity=load_station_identity(identity_path),
+            publication=profile.publication,
         )
     except KeyboardInterrupt:
         logger.warning("CNV conversion interrupted by user.")
@@ -351,7 +368,17 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
-def _soak_roots(args: argparse.Namespace) -> tuple[Path, Path]:
+def _soak_profile_arguments(profile) -> list[str]:
+    soak_config = resolve_config_path("soak_config", profile)
+    if not soak_config.is_file():
+        raise SystemExit(f"Soak config does not exist: {soak_config}")
+    command = ["--soak-config", str(soak_config), "--sample-dimension", profile.metadata.sample_dimension]
+    for name in profile.metadata.depth:
+        command.extend(("--depth-variable", name))
+    return command
+
+
+def _soak_roots(args: argparse.Namespace) -> tuple[Path, Path, list[str]]:
     profile = load_dataset_profile(args.profile)
     input_root = (args.input_root or profile.data_root).expanduser()
     if not input_root.is_dir():
@@ -369,16 +396,17 @@ def _soak_roots(args: argparse.Namespace) -> tuple[Path, Path]:
         raise SystemExit("Soak output root must be outside the input root")
     print(f"Soak input root:  {input_root.resolve()}")
     print(f"Soak output root: {output_root.resolve()}", flush=True)
-    return input_root, output_root
+    return input_root, output_root, _soak_profile_arguments(profile)
 
 
 def _run_remove_soak(args: argparse.Namespace) -> None:
-    input_root, output_root = _soak_roots(args)
-    script = Path(__file__).resolve().parent / "soak_removal" / "sfer_ctd_remove_surface_soak.py"
+    input_root, output_root, settings = _soak_roots(args)
+    script = Path(__file__).resolve().parent / "soak_removal" / "remove_surface_soak.py"
     command = [
         sys.executable, str(script),
         "--input-root", str(input_root),
         "--output-root", str(output_root),
+        *settings,
     ]
     if args.dry_run:
         command.append("--dry-run")
@@ -396,13 +424,14 @@ def _run_remove_soak(args: argparse.Namespace) -> None:
 
 
 def _run_review_soak(args: argparse.Namespace) -> None:
-    input_root, output_root = _soak_roots(args)
+    input_root, output_root, settings = _soak_roots(args)
     script = Path(__file__).resolve().parent / "soak_removal" / "review_app.py"
     progress_json = args.progress_json or output_root / "review_progress.json"
     command = [
         sys.executable, str(script),
         "--input-root", str(input_root),
         "--output-root", str(output_root),
+        *settings,
         "--progress-json", str(progress_json),
         "--host", args.host,
         "--port", str(args.port),
@@ -422,7 +451,7 @@ def _run_inspect_cnv(args: argparse.Namespace) -> None:
     setup_logging(verbose=args.verbose)
     if args.output is None:
         from cnv_workflow import default_mapping_path
-        args.output = default_mapping_path(args.input)
+        args.output = default_mapping_path(args.input, preset=args.preset)
     try:
         mapping = inspect_cnv(args.input, args.output)
     except KeyboardInterrupt:
@@ -560,7 +589,7 @@ def main(argv: list[str] | None = None) -> None:
         _run_generate_sensor_config(args)
     elif args.command == "generate-limits":
         from qc_limit_generation import generate_limits
-        report = generate_limits(load_dataset_profile(args.profile), args.output)
+        report = generate_limits(load_dataset_profile(args.profile), args.output, preset=args.preset)
         print(f"QC profile: {report['profile']} (use qc --profile with this path)")
     elif args.command == "qc":
         _run_qc(args)

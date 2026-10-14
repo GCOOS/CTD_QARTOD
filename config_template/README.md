@@ -1,13 +1,15 @@
 # Shared defaults for new datasets
 
-`config_template/` is the single source of reusable configuration. Its QC values
-were copied from `config/walton_smith/`; they are now independent defaults, not
-live references to that dataset. Existing dataset configs are never recopied on
-normal reruns.
+`config_template/` is the generic starting point for a new Sea-Bird CNV program.
+Program-specific identity, platforms, and climatology live in `presets/`.
+`python main.py convert-cnv INPUT --prepare-profile --preset sfer_aoml` copies
+the SFER/AOML preset; omit `--preset` to start from this template.
 
 ```text
 config_template/
   dataset_profile.json
+  station_identity.json
+  soak_config.json
   cnv_catalog.json
   qc_variable_mapping.json
   gross_range_test/
@@ -16,12 +18,19 @@ config_template/
   spike_test/
   rate_of_change_test/
   flat_line_test/
+presets/sfer_aoml/
+  dataset_profile.json
+  station_identity.json
+  climatology_test/
+  location_test/Station_Mean_Coords.csv
 ```
 
-- `dataset_profile.json`: populated human, fixed and derived metadata, output and
-  XML defaults, QC modes, and paths to the template settings. Human values retain
-  the approved WS24258/SFER defaults. Review the creator and geographic polygon
-  for other datasets; null omits an inapplicable human value.
+- `dataset_profile.json`: generic display name, empty platforms, and null human
+  contacts. SFER publication defaults are in `presets/sfer_aoml/`.
+- `station_identity.json`: permissive cruise/station filename rules. SFER aliases
+  and hyphen stations are in the preset.
+- `climatology_test/station_classification.json`: named classes plus ordered
+  fallback rules (`max_cast_max_depth`, bbox). The template has no classes.
 - `cnv_catalog.json`: recognized CNV names/descriptions, canonical measurement
   names, attributes, sensor associations and spelling-only unit normalization.
   It is shared by conversion, not duplicated into dataset inventories.
@@ -35,9 +44,10 @@ config_template/
 ## Automatic CNV workflow
 
 ```bash
-python main.py convert-cnv /path/to/cruise_cnv
-python main.py qc --profile config/CRUISE_ID_LOWERCASE/dataset_profile.json
-python main.py erddap-xml --profile config/CRUISE_ID_LOWERCASE/dataset_profile.json
+python main.py convert-cnv /path/to/cruise_cnv --prepare-profile --preset sfer_aoml
+python main.py convert-cnv /path/to/cruise_cnv --profile config/CRUISE/dataset_profile.json
+python main.py qc --profile config/CRUISE/dataset_profile.json
+python main.py erddap-xml --profile config/CRUISE/dataset_profile.json
 ```
 
 Conversion creates a dataset profile from this template and an observed

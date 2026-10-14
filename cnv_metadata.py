@@ -1,9 +1,10 @@
 """Ownership and derivation rules for CNV NetCDF global metadata."""
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import re
+from typing import Mapping
+
 from cnv_mapping import CF_STANDARD_NAME_VOCABULARY
 
-PLATFORMS = {"WS": "RV_FG_Walton_Smith", "WB": "RV_Weatherbird_II", "SV": "RV_Savannah", "SAV": "RV_Savannah", "HG": "RV_hogarth"}
 FIXED_DEFAULTS = {
     "source": "Sea-Bird CNV processed ASCII", "source_format": "Sea-Bird CNV",
     "processing_level": "Geophysical units from processed CNV data",
@@ -22,6 +23,17 @@ DERIVED_NAMES = frozenset({
 })
 
 
+@dataclass(frozen=True)
+class PublicationSettings:
+    """Dataset-owned global metadata applied to every converted cast."""
+
+    global_attributes: Mapping[str, object] = field(default_factory=dict)
+    fixed_attributes: Mapping[str, object] = field(default_factory=dict)
+    derived_attributes: Mapping[str, object] = field(default_factory=dict)
+    platforms: Mapping[str, str] = field(default_factory=dict)
+    dataset_id_prefix: str = ""
+
+
 def validate_ownership(human, fixed, derived):
     for name, section in (("human", human), ("fixed", fixed)):
         conflict = set(section) & DERIVED_NAMES
@@ -35,20 +47,26 @@ def validate_ownership(human, fixed, derived):
         raise ValueError(f"unknown derived global attributes: {', '.join(sorted(unknown))}")
 
 
-def publication_metadata(cruise, stem, date, latitude, longitude, fixed, derived):
-    prefix = re.split(r"\d", cruise, maxsplit=1)[0].upper()
-    if prefix not in PLATFORMS:
-        raise ValueError(f"unknown cruise platform prefix {prefix!r}; add a reviewed platform mapping")
-    identifier = f"SFER_CTD_{stem}"
+def dataset_id(stem, settings):
+    return f"{settings.dataset_id_prefix}{stem}"
+
+
+def publication_metadata(cruise, platform, stem, date, latitude, longitude, settings):
+    platforms = settings.platforms
+    if platforms and platform not in platforms:
+        raise ValueError(f"unknown platform {platform!r} for cruise {cruise}; add it to the dataset profile platforms")
+    identifier = dataset_id(stem, settings)
     position = f"{abs(latitude):.4f}{'N' if latitude >= 0 else 'S'} {abs(longitude):.4f}{'E' if longitude >= 0 else 'W'}"
     context = {"id": identifier, "cruise": cruise, "station_name": stem,
-               "date": date, "position": position, "sea_name": fixed.get("sea_name", "the study area")}
-    title = derived.get("title", "SFER CTD, {id}, {date}, {position}")
-    summary = derived.get("summary", "SFER CTD data, {id}, {date}, {position}. Hydrographic Measurements in {sea_name}.")
-    for name, value in (("title", title), ("summary", summary)):
+               "date": date, "position": position,
+               "sea_name": settings.fixed_attributes.get("sea_name", "the study area")}
+    templates = {}
+    for name in ("title", "summary"):
+        value = settings.derived_attributes.get(name)
         if not isinstance(value, str) or "{id}" not in value:
             raise ValueError(f"derived {name} must be a template containing {{id}}, not an example cast")
+        templates[name] = value.format_map(context)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    return {"id": identifier, "title": title.format_map(context), "summary": summary.format_map(context),
-            **{key: PLATFORMS[prefix] for key in ("platform", "platform_name", "platform_id")},
+    return {"id": identifier, **templates,
+            **({key: platforms[platform] for key in ("platform", "platform_name", "platform_id")} if platforms else {}),
             **{key: now for key in ("date_created", "date_modified", "date_metadata_modified")}}

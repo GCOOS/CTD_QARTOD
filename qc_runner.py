@@ -1,5 +1,5 @@
 """
-Run QC pipeline for SFER_CTD NetCDF files.
+Run QC pipeline for converted CTD NetCDF files.
 
 Station and cruise IDs are read from the ``station`` and ``cruiseID``
 variables embedded in each file — no filename parsing is required.
@@ -51,6 +51,7 @@ from qc_data_loader import (
     load_mapping,
     load_nc_file,
 )
+from station_identity import station_normalization
 from station_resolver import resolve_coords_by_station_id
 from qc_result_viz import QCTestResult, _flag_summary
 from qc_tests import (
@@ -288,7 +289,7 @@ def _test_provenance(
     if test_name == "climatology_test":
         return {
             "limits": (climatology_config or {}).get(var_name)
-        }, sources("station_climatology", "station_depth_classification")
+        }, sources("station_climatology", "station_classification")
     if test_name == "flat_line_test":
         return dict(flat_line_config or {}), sources("flat_line_config")
     if test_name == "spike_test":
@@ -531,7 +532,8 @@ def run_qc_for_file(
     station_coords_file = resolve_config_path("station_coords", prof)
     location_file = resolve_config_path("location_config", prof)
     station_climatology_file = resolve_config_path("station_climatology", prof)
-    station_depth_file = resolve_config_path("station_depth_classification", prof)
+    station_classification_file = resolve_config_path("station_classification", prof)
+    normalization = station_normalization(prof.paths.station_identity)
     sensor_specs_file = resolve_config_path("sensor_specs", prof)
     variable_sensor_file = resolve_config_path("variable_sensor_map", prof)
     spike_file = resolve_config_path("spike_thresholds", prof)
@@ -546,7 +548,7 @@ def run_qc_for_file(
     cruise_id = get_cruise_id(ds, prof.metadata)
     logger.debug("  Station ID: %s, Cruise ID: %s", station_id, cruise_id)
     
-    station_coords = resolve_coords_by_station_id(station_id, station_csv=station_coords_file)
+    station_coords = resolve_coords_by_station_id(station_id, station_coords_file, normalization)
     if station_coords:
         logger.debug("  Station coords: lat=%.4f, lon=%.4f", station_coords[0], station_coords[1])
     else:
@@ -559,8 +561,9 @@ def run_qc_for_file(
     clim_config = get_climatology_config_for_file(
         ds,
         limits_json_path=station_climatology_file,
-        classification_json_path=station_depth_file,
+        classification_json_path=station_classification_file,
         metadata=prof.metadata,
+        normalization=normalization,
     )
     clim_config = {**(clim_config or {}), **(climatology_overrides or {})}
 
@@ -635,7 +638,7 @@ def run_qc_for_all(
     profile: DatasetProfile | None = None,
 ) -> QCRunSummary:
     """
-    Run QC for all SFER_CTD cruise directories (one level deep).
+    Run QC for all cruise directories under the data root (one level deep).
 
     Each subdirectory of *base_dir* is expected to be a cruise folder (e.g.
     ``WS24139/``) containing ``.nc`` files named ``cruiseID_station.nc``.
@@ -733,9 +736,11 @@ def run_single_test(
     ds = load_nc_file(nc_path)
 
     station_id = get_station_id(ds, prof.metadata)
+    normalization = station_normalization(prof.paths.station_identity)
     station_coords = resolve_coords_by_station_id(
         station_id,
-        station_csv=resolve_config_path("station_coords", prof),
+        resolve_config_path("station_coords", prof),
+        normalization,
     )
 
     dynamic_ranges = resolve_gross_ranges(
@@ -747,8 +752,9 @@ def run_single_test(
     clim_config = get_climatology_config_for_file(
         ds,
         limits_json_path=resolve_config_path("station_climatology", prof),
-        classification_json_path=resolve_config_path("station_depth_classification", prof),
+        classification_json_path=resolve_config_path("station_classification", prof),
         metadata=prof.metadata,
+        normalization=normalization,
     )
     clim_config = {**(clim_config or {}), **(climatology_overrides or {})}
 

@@ -26,18 +26,26 @@ def test_review_loads_and_saves_both_directory_layouts(review, tmp_path, nested)
     navigator = review.FileNavigator(root)
     assert navigator.get_folders() == [folder]
     assert navigator.get_files(folder) == [source.name]
-    loaded = review.load_and_analyze_file(root, folder, source.name)
+    layout = review.ProfileLayout(depth_names=("depth",), sample_dimension="z")
+    settings = review.SoakSettings()
+    loaded = review.load_and_analyze_file(
+        root, folder, source.name, layout=layout, settings=settings
+    )
     assert "error" not in loaded
     assert loaded["total_scans"] == 600
 
     output = tmp_path / "output"
-    result = review.save_trimmed_netcdf(root, output, folder, source.name, 100, 500)
+    result = review.save_trimmed_netcdf(
+        root, output, folder, source.name, 100, 500, layout=layout
+    )
     assert result["ok"], result
     with xr.open_dataset(output / folder / source.name) as saved:
         assert saved.sizes["z"] == 400
     assert source.read_bytes() == before
 
-    app = review.create_app(root, output, output / "review_progress.json")
+    app = review.create_app(
+        root, output, output / "review_progress.json", layout=layout, settings=settings
+    )
     client = app.server.test_client()
     assert client.get("/").status_code == 200
     layout = client.get("/_dash-layout")

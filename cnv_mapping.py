@@ -27,11 +27,15 @@ CF_STANDARD_NAME_VOCABULARY = (
     f"CF Standard Name Table v{CF_STANDARD_NAME_TABLE_VERSION}"
 )
 _CF_STANDARD_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-_REQUIRED_FIELDS = {
-    "time": {"source_name": "timeS", "target_name": "time"},
+TIME_SOURCES = ("timeS", "timeQ", "timeM", "timeJ")
+VERTICAL_SOURCES = ("depSM", "depSF", "prDM")
+PRESSURE_SOURCES = frozenset({"prDM"})
+TIME_SCALE_SECONDS = {"timeS": 1.0, "timeQ": 1.0, "timeM": 60.0, "timeJ": 86400.0}
+_COORDINATE_FIELDS = {
     "longitude": {"source_name": "longitude", "target_name": "longitude"},
     "latitude": {"source_name": "latitude", "target_name": "latitude"},
 }
+_STRUCTURAL_SOURCES = set(TIME_SOURCES) | set(VERTICAL_SOURCES) | {"longitude", "latitude"}
 
 
 @dataclass(frozen=True)
@@ -205,8 +209,11 @@ def read_cnv_header(path: Path | str, *, require_coordinates: bool = True) -> tu
         raise ValueError(f"{source.name}: nquan does not match column declarations")
     if header_counts.get("nvalues", 0) < 1:
         raise ValueError(f"{source.name}: CNV file has no declared data rows")
-    if counts["timeS"] != 1:
-        raise ValueError(f"{source.name}: required source 'timeS' must occur exactly once")
+    if not any(counts[name] == 1 for name in TIME_SOURCES):
+        raise ValueError(
+            f"{source.name}: required time source "
+            f"({'|'.join(TIME_SOURCES)}) must occur exactly once"
+        )
     if require_coordinates:
         try:
             resolve_header_coordinates([column.source_name for column in ordered], header_lines)
@@ -332,11 +339,11 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
     sensor_parse_status: Counter[str] = Counter()
     sensor_files: dict[str, set[Path]] = defaultdict(set)
     sensor_max_occurrences: Counter[str] = Counter()
-    vertical_files = 0
+    time_counts: Counter[str] = Counter()
+    vertical_counts: Counter[str] = Counter()
     inspected_files = 0
     conversion_issues = []
     coordinate_sources: Counter[str] = Counter()
-    fixed_sources = {"timeS", "longitude", "latitude"}
     for path in paths:
         try:
             columns = read_cnv_header(path, require_coordinates=False)
@@ -359,10 +366,14 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             conversion_issues.append({"source": str(path), "reason": str(exc)})
         else:
             coordinate_sources["data_columns" if per_file["latitude"] else "nmea_header"] += 1
-        if per_file["depSM"] == 1:
-            vertical_files += 1
+        for name in TIME_SOURCES:
+            if per_file[name] == 1:
+                time_counts[name] += 1
+        for name in VERTICAL_SOURCES:
+            if per_file[name] == 1:
+                vertical_counts[name] += 1
         for column in columns:
-            if column.source_name in fixed_sources:
+            if column.source_name in _STRUCTURAL_SOURCES:
                 continue
             item = observed[column.source_name]
             item["files"].add(path)
@@ -379,10 +390,31 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
     if not inspected_files:
         raise ValueError("no valid CNV headers were found")
 
-    vertical_source = "depSM" if vertical_files == inspected_files else None
+    time_source = next(
+        (name for name in TIME_SOURCES if time_counts[name] == inspected_files),
+        None,
+    )
+    vertical_source = next(
+        (name for name in VERTICAL_SOURCES if vertical_counts[name] == inspected_files),
+        None,
+    )
+    if time_source is None:
+        conversion_issues.append({
+            "reason": (
+                "no shared time source; inspect-cnv accepts exactly one of "
+                f"{', '.join(TIME_SOURCES)} in every file"
+            ),
+        })
+    if vertical_source is None:
+        conversion_issues.append({
+            "reason": (
+                "no shared vertical source; inspect-cnv accepts exactly one of "
+                f"{', '.join(VERTICAL_SOURCES)} in every file"
+            ),
+        })
     science_variables: dict[str, object] = {}
     for source_name in sorted(observed, key=str.casefold):
-        if source_name == vertical_source:
+        if source_name in _STRUCTURAL_SOURCES:
             continue
         item = observed[source_name]
         descriptions = sorted(item["descriptions"])
@@ -422,7 +454,10 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
                 for sensor_type in sorted(sensor_files, key=str.casefold)
             },
         },
-        "required_fields": _REQUIRED_FIELDS,
+        "required_fields": {
+            "time": {"source_name": time_source, "target_name": "time"},
+            **_COORDINATE_FIELDS,
+        },
         "vertical_field": {
             "source_name": vertical_source,
             "source_occurrence": 1,
@@ -454,14 +489,23 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
     available_sensor_tags = set(sensor_inventory)
 
     required = _object(data.get("required_fields"), "required_fields")
-    if required != _REQUIRED_FIELDS:
+    if set(required) != {"time", "longitude", "latitude"}:
+        raise ValueError("required_fields must map time, longitude, and latitude")
+    required_fields: dict[str, SourceCandidate] = {}
+    for role, expected in (("longitude", _COORDINATE_FIELDS["longitude"]), ("latitude", _COORDINATE_FIELDS["latitude"])):
+        item = _object(required.get(role), f"required_fields.{role}")
+        if item != expected:
+            raise ValueError(f"required_fields.{role} must map {expected['source_name']}")
+        required_fields[role] = SourceCandidate(expected["source_name"], 1)
+    time_item = _object(required.get("time"), "required_fields.time")
+    time_source = _nonempty_string(time_item.get("source_name"), "required_fields.time.source_name")
+    if time_source not in TIME_SOURCES:
         raise ValueError(
-            "required_fields must map timeS, longitude, and latitude exactly"
+            f"required_fields.time.source_name must be one of {', '.join(TIME_SOURCES)}"
         )
-    required_fields = {
-        role: SourceCandidate(str(item["source_name"]), 1)
-        for role, item in _REQUIRED_FIELDS.items()
-    }
+    if _nonempty_string(time_item.get("target_name"), "required_fields.time.target_name") != "time":
+        raise ValueError("required_fields.time.target_name must be 'time'")
+    required_fields["time"] = SourceCandidate(time_source, 1)
 
     vertical = _object(data.get("vertical_field"), "vertical_field")
     vertical_source = _nonempty_string(
@@ -475,6 +519,10 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
     )
     if vertical_target != "depth":
         raise ValueError("vertical_field.target_name must be 'depth'")
+    if vertical_source not in VERTICAL_SOURCES:
+        raise ValueError(
+            f"vertical_field.source_name must be one of {', '.join(VERTICAL_SOURCES)}"
+        )
 
     science_data = _object(data.get("science_variables"), "science_variables")
     structural_sources = {

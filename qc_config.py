@@ -12,31 +12,24 @@ import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+import numpy as np
 import xarray as xr
 
 from dataset_profile import CONFIG_TEMPLATE_DIR, MetadataConfig
-from station_names import normalize_reference_station
+from station_classification import load_station_classification
+from station_identity import StationNormalization
 
 # CONFIG FILE PATHS
-# Defaults come from the shared template. Datasets select their own paths
-# through a dataset profile.
+# Generic defaults come from the shared template. Station references
+# (coordinates, classes, climatology) have no default: datasets select
+# their own paths through a dataset profile.
 
 CONFIG_DIR = CONFIG_TEMPLATE_DIR
 
 # Standard variable name → data variable names
 VARIABLE_MAPPING_JSON = CONFIG_DIR / "qc_variable_mapping.json"
 
-# Station coordinates: ground truth lat/lon for each station (for location test)
-STATION_COORDS_CSV = CONFIG_DIR / "location_test" / "Station_Mean_Coords.csv"
 LOCATION_CONFIG_JSON = CONFIG_DIR / "location_test" / "location_config.json"
-
-# Station climatology: limit tables keyed by cast type (deep vs shallow)
-STATION_CLIMATOLOGY_JSON = CONFIG_DIR / "climatology_test" / "station_climatology_config.json"
-
-# Station → deep_cast vs shallow_cast membership (separate from limit values)
-STATION_DEPTH_CLASSIFICATION_JSON = (
-    CONFIG_DIR / "climatology_test" / "station_depth_classification.json"
-)
 
 # Sensor specs: sensor-specific gross range limits by unit
 SENSOR_SPECS_JSON = CONFIG_DIR / "gross_range_test" / "sensor_specs.json"
@@ -131,9 +124,9 @@ TEST_CATEGORIES = {
 }
 
 
-def load_station_climatology_config(json_path: Path | str = STATION_CLIMATOLOGY_JSON) -> Dict[str, Any]:
+def load_station_climatology_config(json_path: Path | str) -> Dict[str, Any]:
     """
-    Load the station climatology limits JSON (deep_cast_limits / shallow_cast_limits only).
+    Load the station climatology limits JSON, keyed by station class name.
     """
     path = Path(json_path)
     with path.open("r", encoding="utf-8") as f:
@@ -223,61 +216,40 @@ def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict
     }
 
 
-def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLASSIFICATION_JSON) -> Dict[str, Any]:
-    """
-    Load station → deep_cast / shallow_cast membership lists.
-    """
-    path = Path(json_path)
-    with path.open("r", encoding="utf-8") as f:
-        root = json.load(f)
-    if not isinstance(root, dict):
-        raise ValueError(f"Station depth classification must be a JSON object: {path}")
-    return root
+def _finite_stat(values: object, reducer) -> Optional[float]:
+    if values is None:
+        return None
+    array = np.asarray(values, dtype=float)
+    finite = array[np.isfinite(array)]
+    return float(reducer(finite)) if finite.size else None
 
 
 def get_climatology_config_for_file(
     ds: xr.Dataset,
-    limits_json_path: Path | str = STATION_CLIMATOLOGY_JSON,
-    classification_json_path: Path | str | None = None,
+    limits_json_path: Path | str,
+    classification_json_path: Path | str,
     metadata: MetadataConfig | None = None,
+    normalization: StationNormalization = StationNormalization(),
 ) -> Optional[Mapping[str, Iterable[Mapping[str, float]]]]:
     """
-    Resolve climatology limits for the file based on station ID.
+    Resolve climatology limits for the file from its station class.
 
-    Station membership (which stations are deep vs shallow) comes from
-    *classification_json_path* (default: ``STATION_DEPTH_CLASSIFICATION_JSON``).
-    Limit tables come from *limits_json_path* (default: ``STATION_CLIMATOLOGY_JSON``).
+    The class comes from the explicit station lists in *classification_json_path*,
+    then from the first rule matching the cast maximum depth and mean position.
+    Limit tables in *limits_json_path* are keyed by class name.
     """
-    from qc_data_loader import get_station_id
+    from qc_data_loader import get_lon_lat, get_station_id, _metadata_or_default
 
-    station_id = get_station_id(ds, metadata)
-    if not station_id:
-        return None
-
-    limits_root = load_station_climatology_config(limits_json_path)
-    class_path = (
-        Path(classification_json_path)
-        if classification_json_path is not None
-        else STATION_DEPTH_CLASSIFICATION_JSON
+    meta = _metadata_or_default(metadata)
+    classification = load_station_classification(classification_json_path, normalization)
+    depth_name = next((name for name in meta.depth if name in ds.variables), None)
+    longitude, latitude = get_lon_lat(ds, meta)
+    class_name = classification.classify(
+        get_station_id(ds, meta),
+        max_depth=_finite_stat(ds[depth_name].values if depth_name else None, np.max),
+        latitude=_finite_stat(None if latitude is None else latitude.values, np.mean),
+        longitude=_finite_stat(None if longitude is None else longitude.values, np.mean),
     )
-    classification = load_station_depth_classification(class_path)
-
-    sid = normalize_reference_station(str(station_id))
-
-    # Match stored underscore IDs to dotted reference station names.
-    def _contains_station(stations: Iterable[str], target: str) -> bool:
-        return any(normalize_reference_station(str(s)) == target for s in stations)
-
-    station_type_priority = [
-        ("deep_cast", "deep_cast_limits"),
-        ("shallow_cast", "shallow_cast_limits"),
-    ]
-
-    for list_key, limits_key in station_type_priority:
-        stations = classification.get(list_key) or []
-        if stations and _contains_station(stations, sid):
-            limits = limits_root.get(limits_key)
-            if limits:
-                return limits
-
-    return None
+    if class_name is None:
+        return None
+    return load_station_climatology_config(limits_json_path).get(class_name) or None

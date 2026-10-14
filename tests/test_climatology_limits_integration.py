@@ -10,18 +10,21 @@ import pytest
 import xarray as xr
 from ioos_qc.qartod import ClimatologyConfig
 
-from dataset_profile import DatasetProfile, OutputConfig, default_profile
+from dataset_profile import PRESETS_DIR, DatasetProfile, OutputConfig, load_dataset_profile
 from qc_config import (
     QC_FLAGS,
-    STATION_CLIMATOLOGY_JSON,
     get_climatology_config_for_file,
     load_station_climatology_config,
 )
+from station_identity import StationNormalization
 from qc_runner import _get_depth_for_var, _get_time_for_var, run_qc_for_file
 from qc_tests.climatology_test import climatology_test
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CLIM_JSON = STATION_CLIMATOLOGY_JSON
+SFER_PRESET = PRESETS_DIR / "sfer_aoml"
+CLIM_JSON = SFER_PRESET / "climatology_test" / "station_climatology_config.json"
+CLASS_JSON = SFER_PRESET / "climatology_test" / "station_classification.json"
+SFER_NORMALIZATION = StationNormalization(strip_leading_zeros=True, decimal_separator="_")
 
 SAMPLES = {
     "shallow_station_1": REPO_ROOT / "datasets/SFER_QC/WS0603/WS0603_1.nc",
@@ -42,7 +45,7 @@ def _rule_key_order(rule: dict) -> list[str]:
 
 @pytest.fixture
 def profile():
-    return default_profile()
+    return load_dataset_profile(SFER_PRESET / "dataset_profile.json")
 
 
 @pytest.fixture
@@ -51,16 +54,16 @@ def limits_root():
 
 
 def test_climatology_json_loads_and_rule_key_order(limits_root):
-    assert "deep_cast_limits" in limits_root
-    assert "shallow_cast_limits" in limits_root
-    rule = limits_root["deep_cast_limits"]["sea_water_temperature"][0]
+    assert "deep_cast" in limits_root
+    assert "shallow_cast" in limits_root
+    rule = limits_root["deep_cast"]["sea_water_temperature"][0]
     assert _rule_key_order(rule) == ["zspan", "tspan", "vspan", "period"]
-    assert "oxygen_saturation" not in limits_root["deep_cast_limits"]
-    assert "oxygen_saturation" not in limits_root["shallow_cast_limits"]
+    assert "oxygen_saturation" not in limits_root["deep_cast"]
+    assert "oxygen_saturation" not in limits_root["shallow_cast"]
 
 
 def test_climatology_config_builds_in_ioos_qc(limits_root):
-    for cast_key in ("deep_cast_limits", "shallow_cast_limits"):
+    for cast_key in ("deep_cast", "shallow_cast"):
         for var_name, rules in limits_root[cast_key].items():
             cfg = ClimatologyConfig()
             for rule in rules:
@@ -82,7 +85,9 @@ def test_get_climatology_config_for_sample_files(profile, sample_name, nc_path):
         clim = get_climatology_config_for_file(
             ds,
             limits_json_path=CLIM_JSON,
+            classification_json_path=CLASS_JSON,
             metadata=profile.metadata,
+            normalization=SFER_NORMALIZATION,
         )
         assert clim is not None, f"No climatology config resolved for {sample_name}"
         for var in CLIMATOLOGY_VARS:
@@ -98,7 +103,13 @@ def test_climatology_test_runs_on_sample_files(profile, sample_name, nc_path):
         pytest.skip(f"Sample file not found: {nc_path}")
     ds = xr.open_dataset(nc_path)
     try:
-        clim = get_climatology_config_for_file(ds, limits_json_path=CLIM_JSON, metadata=profile.metadata)
+        clim = get_climatology_config_for_file(
+            ds,
+            limits_json_path=CLIM_JSON,
+            classification_json_path=CLASS_JSON,
+            metadata=profile.metadata,
+            normalization=SFER_NORMALIZATION,
+        )
         assert clim is not None
         for var in CLIMATOLOGY_VARS:
             if var not in ds:

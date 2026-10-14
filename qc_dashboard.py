@@ -14,6 +14,7 @@ import xarray as xr
 from dataset_profile import REPO_ROOT, DatasetProfile, default_profile, resolve_config_path
 from qc_config import QC_FLAGS, get_climatology_config_for_file, load_location_config
 from qc_data_loader import flatten_mapping, get_coord_for_var, get_lon_lat, get_scalar_var, get_station_id, load_mapping
+from station_identity import station_normalization
 from station_resolver import resolve_coords_by_station_id
 
 FLAG_ORDER = ("PASS", "NOT_EVALUATED", "SUSPECT", "FAIL", "MISSING")
@@ -488,7 +489,8 @@ def _location_info_for_file(
     station_id = get_station_id(ds, profile.metadata)
     expected = resolve_coords_by_station_id(
         station_id,
-        station_csv=resolve_config_path("station_coords", profile),
+        resolve_config_path("station_coords", profile),
+        station_normalization(profile.paths.station_identity),
     )
     if actual_lon is None and actual_lat is None and expected is None:
         return None
@@ -651,8 +653,9 @@ def _resolve_climatology_limits(
     clim_config = get_climatology_config_for_file(
         ds,
         limits_json_path=resolve_config_path("station_climatology", profile),
-        classification_json_path=resolve_config_path("station_depth_classification", profile),
+        classification_json_path=resolve_config_path("station_classification", profile),
         metadata=profile.metadata,
+        normalization=station_normalization(profile.paths.station_identity),
     )
     if not clim_config:
         return None
@@ -740,12 +743,13 @@ def _format_coord(lat: object, lon: object) -> str:
 
 def adjacent_file(files: Iterable[Path], current: Path | str | None, direction: int) -> str | None:
     """Return the previous/next file path string within a cruise file list."""
-    paths = [str(path) for path in files]
+    paths = [Path(path).as_posix() for path in files]
     if not paths:
         return None
-    if current not in paths:
+    current_key = None if current is None else Path(current).as_posix()
+    if current_key not in paths:
         return paths[0]
-    idx = paths.index(str(current))
+    idx = paths.index(current_key)
     next_idx = idx + direction
     if 0 <= next_idx < len(paths):
         return paths[next_idx]
@@ -964,7 +968,7 @@ def create_app(data_root: Path | str | None = None, profile: DatasetProfile | No
                 children=[
                     html.Div(
                         [
-                            html.P("SFER CTD", className="eyebrow"),
+                            html.P(prof.display_name, className="eyebrow"),
                             html.H1("QC result viewer"),
                         ]
                     ),

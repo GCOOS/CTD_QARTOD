@@ -7,15 +7,18 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from dataset_profile import OutputConfig, default_profile
+from dataset_profile import PRESETS_DIR, OutputConfig, default_profile
 from qc_config import (
     QC_FLAGS,
     RATE_OF_CHANGE_THRESHOLDS_JSON,
     SPIKE_THRESHOLDS_JSON,
-    STATION_COORDS_CSV,
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
+from station_identity import StationNormalization
+
+STATION_COORDS_CSV = PRESETS_DIR / "sfer_aoml" / "location_test" / "Station_Mean_Coords.csv"
+SFER_NORMALIZATION = StationNormalization(strip_leading_zeros=True, decimal_separator="_")
 from qc_runner import _run_common_tests, run_qc_for_all, run_qc_for_directory
 from qc_runner import run_qc_for_file, run_single_test
 from station_resolver import load_station_coords, resolve_coords_by_station_id
@@ -46,7 +49,9 @@ def test_run_common_tests_writes_expected_qc_vars(minimal_profile_ds):
     spike_thr = load_spike_thresholds(SPIKE_THRESHOLDS_JSON)
     roc_thr = load_rate_of_change_thresholds(RATE_OF_CHANGE_THRESHOLDS_JSON)
 
-    expected = resolve_coords_by_station_id("1", station_csv=STATION_COORDS_CSV)
+    expected = resolve_coords_by_station_id(
+        "1", station_csv=STATION_COORDS_CSV, normalization=SFER_NORMALIZATION
+    )
     if expected is None:
         pytest.skip("station 1 not in coords csv")
 
@@ -328,7 +333,7 @@ def test_run_qc_for_all_processes_files_in_sorted_order(tmp_path: Path, monkeypa
     seen: list[str] = []
     monkeypatch.setattr(
         "qc_runner.run_qc_for_file",
-        lambda path, **kwargs: seen.append(str(Path(path).relative_to(tmp_path))),
+        lambda path, **kwargs: seen.append(Path(path).relative_to(tmp_path).as_posix()),
     )
 
     run_qc_for_all(tmp_path, profile=_profile(tmp_path, tmp_path / "output"))

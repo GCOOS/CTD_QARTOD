@@ -10,14 +10,15 @@ from typing import Any, Mapping
 
 from dataset_profile import DatasetProfile, resolve_config_path
 from qc_config import ALL_CATEGORIES
-from station_resolver import normalize_station_coord
+from station_classification import parse_station_classification
+from station_identity import StationNormalization, station_normalization
 
 REQUIRED_QC_PATHS = (
     "variable_mapping",
     "station_coords",
     "location_config",
     "station_climatology",
-    "station_depth_classification",
+    "station_classification",
     "sensor_specs",
     "variable_sensor_map",
     "spike_thresholds",
@@ -78,7 +79,7 @@ def _validate_variable_mapping(root: Mapping[str, Any]) -> set[str]:
     return set(owner)
 
 
-def _validate_station_coords(path: Path) -> None:
+def _validate_station_coords(path: Path, normalization: StationNormalization) -> None:
     with path.open("r", encoding="utf-8", newline="") as file:
         reader = csv.DictReader(file)
         required = {"station", "lat_mean", "lon_mean"}
@@ -87,7 +88,7 @@ def _validate_station_coords(path: Path) -> None:
 
         stations: set[str] = set()
         for line_number, row in enumerate(reader, start=2):
-            station = normalize_station_coord(row.get("station") or "")
+            station = normalization.key(row.get("station") or "")
             if not station:
                 raise ValueError(f"station_coords line {line_number} has no station")
             if station in stations:
@@ -115,32 +116,18 @@ def _validate_location(root: Mapping[str, Any]) -> None:
         raise ValueError("location_config.tolerance must be positive or null")
 
 
-def _validate_station_classes(root: Mapping[str, Any]) -> None:
-    classes: dict[str, set[str]] = {}
-    for name in ("deep_cast", "shallow_cast"):
-        values = root.get(name, [])
-        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-            raise ValueError(f"station_depth_classification.{name} must be a list")
-        normalized = [normalize_station_coord(value) for value in values]
-        if len(normalized) != len(set(normalized)):
-            raise ValueError(f"station_depth_classification.{name} has duplicates")
-        classes[name] = set(normalized)
-
-    overlap = sorted(classes["deep_cast"] & classes["shallow_cast"])
-    if overlap:
-        raise ValueError(
-            "station_depth_classification deep_cast and shallow_cast overlap: "
-            + ", ".join(overlap)
-        )
-
-
-def _validate_climatology(root: Mapping[str, Any], variables: set[str]) -> None:
-    unknown = sorted(set(root) - {"deep_cast_limits", "shallow_cast_limits"})
+def _validate_climatology(
+    root: Mapping[str, Any], variables: set[str], class_names: tuple[str, ...]
+) -> None:
+    unknown = sorted(set(root) - set(class_names))
     if unknown:
-        raise ValueError(f"station_climatology has unknown keys: {', '.join(unknown)}")
+        raise ValueError(f"station_climatology has limits for unknown classes: {', '.join(unknown)}")
+    missing = [name for name in class_names if name not in root]
+    if missing:
+        raise ValueError(f"station_climatology has no limits for classes: {', '.join(missing)}")
 
-    for cast_name in ("deep_cast_limits", "shallow_cast_limits"):
-        limits = root.get(cast_name, {})
+    for cast_name in class_names:
+        limits = root[cast_name]
         if not isinstance(limits, dict):
             raise ValueError(f"station_climatology.{cast_name} must be an object")
         for variable, records in limits.items():
@@ -280,17 +267,19 @@ def validate_qc_profile(profile: DatasetProfile) -> dict[str, Path]:
         if mode == "run":
             raise ValueError(f"{test_name} run mode is not implemented")
 
+    normalization = station_normalization(profile.paths.station_identity)
     mapping = _json_object(paths["variable_mapping"], "variable_mapping")
     variables = _validate_variable_mapping(mapping)
-    _validate_station_coords(paths["station_coords"])
+    _validate_station_coords(paths["station_coords"], normalization)
     _validate_location(_json_object(paths["location_config"], "location_config"))
-    _validate_station_classes(
-        _json_object(
-            paths["station_depth_classification"], "station_depth_classification"
-        )
+    classification = parse_station_classification(
+        _json_object(paths["station_classification"], "station_classification"),
+        normalization,
     )
     _validate_climatology(
-        _json_object(paths["station_climatology"], "station_climatology"), variables
+        _json_object(paths["station_climatology"], "station_climatology"),
+        variables,
+        classification.class_names,
     )
     sensors = _validate_sensor_specs(
         _json_object(paths["sensor_specs"], "sensor_specs")

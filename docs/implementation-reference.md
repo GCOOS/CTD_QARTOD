@@ -200,7 +200,7 @@ Individual tests return `QCTestResult` objects with:
 - **Sensor identifiers and limits**: edit `config/<dataset>/gross_range_test/sensor_specs.json` (`identifiers.long_names` is used for sensor matching)
 - **Location tolerance**: edit `config/<dataset>/location_test/location_config.json`
 - **Test-to-category mapping**: edit `TEST_CATEGORIES` in `qc_config.py`
-- **Climatology limits**: edit `config/<dataset>/climatology_test/station_climatology_config.json`. **Station deep vs shallow**: edit `config/<dataset>/climatology_test/station_depth_classification.json`. Programmatic runners can still pass `climatology_overrides`.
+- **Climatology limits**: edit `config/<dataset>/climatology_test/station_climatology_config.json`, keyed by class name. **Station classes**: edit `config/<dataset>/climatology_test/station_classification.json` (`classes` lists first, then ordered `rules` for max depth or bbox).
 - **Gap/syntax mode and ERDDAP generation**: edit `qc_test_modes` and `erddap` in the selected dataset profile. Selecting `run` for a placeholder currently fails preflight until a real implementation is added, preventing false evaluation.
 
 ### Station resolution logic
@@ -211,11 +211,9 @@ Individual tests return `QCTestResult` objects with:
 
 ### Climatology resolution logic
 
-- Station ID (same as above) is looked up in `config/<dataset>/climatology_test/station_depth_classification.json`: lists `deep_cast` and `shallow_cast` station IDs (case-insensitive match; trailing `.0` is stripped).
-- **Deep** is checked before **shallow** if a station were ever listed twice (should not happen).
-- The matching list selects either `deep_cast_limits` or `shallow_cast_limits` from `config/<dataset>/climatology_test/station_climatology_config.json` (variable name → list of rule dicts for `ioos_qc`).
-- If the station appears in neither list, or the chosen limits block is missing or empty, climatology is not applied (flags stay NOT_EVALUATED for that test).
-- `shallow_stable` is no longer used; only deep vs shallow cast types are supported.
+- Station ID is looked up in `config/<dataset>/climatology_test/station_classification.json` using the dataset's station normalization. An explicit class list wins; otherwise the first matching rule (cast max depth and/or bbox) is used.
+- The class name selects the matching object in `config/<dataset>/climatology_test/station_climatology_config.json` (variable name → list of rule dicts for `ioos_qc`).
+- If no class matches, or that class has no limits, climatology is not applied (flags stay NOT_EVALUATED for that test).
 
 ### Output naming
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import xarray as xr
 
+from station_identity import StationNormalization
 from qc_config import (
     FLAT_LINE_CONFIG_JSON,
     LOCATION_CONFIG_JSON,
@@ -128,11 +129,11 @@ def test_test_categories_keys_match_pipeline():
 
 def test_get_climatology_config_for_file(tmp_path: Path):
     limits = {
-        "deep_cast_limits": {
+        "deep_cast": {
             "sea_water_temperature": [{"tspan": (1, 12), "vspan": (0.0, 50.0), "period": "month"}]
         }
     }
-    classification = {"deep_cast": ["stn_a"], "shallow_cast": []}
+    classification = {"classes": {"deep_cast": {"stations": ["stn_a"]}}, "rules": []}
     lim_path = tmp_path / "lim.json"
     cls_path = tmp_path / "cls.json"
     lim_path.write_text(json.dumps(limits), encoding="utf-8")
@@ -154,11 +155,16 @@ def test_climatology_matches_dotted_station_reference(
 ):
     limits_path = tmp_path / "limits.json"
     classes_path = tmp_path / "classes.json"
-    limits_path.write_text(json.dumps({"deep_cast_limits": {"sea_water_temperature": [{}]}}))
-    classes_path.write_text(json.dumps({"deep_cast": [reference_station], "shallow_cast": []}))
+    limits_path.write_text(json.dumps({"deep_cast": {"sea_water_temperature": [{}]}}))
+    classes_path.write_text(json.dumps({"classes": {"deep_cast": {"stations": [reference_station]}}, "rules": []}))
     ds = xr.Dataset({"station": xr.DataArray(stored_station)})
 
-    config = get_climatology_config_for_file(ds, limits_path, classes_path)
+    config = get_climatology_config_for_file(
+        ds,
+        limits_path,
+        classes_path,
+        normalization=StationNormalization(strip_leading_zeros=True, decimal_separator="_"),
+    )
 
     assert config is not None
     assert "sea_water_temperature" in config

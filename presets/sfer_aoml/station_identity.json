@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "cruise_pattern": "(?P<cruise>(?P<platform>WS|WB|SAV|SV|HG)(?:(?<=HG)\\d{2,5}|(?<!HG)\\d{4,5})[A-Za-z]?)",
+  "cruise_folder_pattern": "{cruise}_cnv",
+  "filename_patterns": [
+    {
+      "name": "cruise_station",
+      "pattern": "{cruise}(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._-]*)"
+    }
+  ],
+  "exclusion_patterns": [
+    "(deck|dunk|wettest|test|tst|recast|surface|do_up)"
+  ],
+  "station_shape": "(?:\\d+(?:[._-]\\d+)?[A-Za-z]*|[A-Za-z]+\\d*(?:[._]\\d+)?[A-Za-z]?|[A-Za-z]+-\\d+)",
+  "strip_run_number": true,
+  "uppercase_cruise": true,
+  "normalize": {
+    "strip_leading_zeros": true,
+    "decimal_separator": "_"
+  },
+  "aliases": {
+    "21": "21LK",
+    "21-5": "21_5",
+    "57-1": "57_1",
+    "57-2": "57_2",
+    "57-3": "57_3",
+    "mrv2": "MR-2",
+    "54b": "54-2"
+  },
+  "overrides": {}
+}

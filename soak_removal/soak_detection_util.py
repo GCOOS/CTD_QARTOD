@@ -1,11 +1,15 @@
 """
 CTD surface-soak detection and station classification (numpy-only).
 
-Used by sfer_ctd_remove_surface_soak.py, comprehensive_analysis.py, and validation scripts.
+Used by remove_surface_soak.py, review_app.py, and validation scripts.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, fields
+import json
+import math
+from pathlib import Path
 import warnings
 
 import numpy as np
@@ -13,8 +17,7 @@ import numpy as np
 warnings.filterwarnings("ignore")
 
 __all__ = [
-    "SHALLOW_STABLE_KEEP_LAST_N",
-    "PRE_SOAK_DEPTH_THRESHOLD_M",
+    "SoakSettings",
     "classify_station",
     "detect_descent_start_v4",
     "detect_shallow_descent",
@@ -22,13 +25,40 @@ __all__ = [
     "first_index_depth_at_least",
     "get_shallow_stable_keep_start_index",
     "get_soak_removal_index",
+    "load_soak_settings",
 ]
 
-# For shallow_stable stations: keep only the last N scans (discard everything before).
-SHALLOW_STABLE_KEEP_LAST_N = 250
 
-# Before soak algorithms run, discard all scans before depth first reaches this (m, positive down).
-PRE_SOAK_DEPTH_THRESHOLD_M = 2.0
+@dataclass(frozen=True)
+class SoakSettings:
+    """Dataset-owned soak thresholds (depths in metres, positive down)."""
+
+    # Before soak algorithms run, discard all scans before depth first reaches this.
+    pre_trim_depth_m: float = 2.0
+    # For shallow_stable casts: keep only the last N scans (discard everything before).
+    shallow_stable_keep_last_n: int = 250
+    # Cast depth-range class boundaries used by ``classify_station``.
+    shallow_stable_max_range_m: float = 1.5
+    transition_max_range_m: float = 3.0
+    shallow_cast_max_range_m: float = 10.0
+
+
+def load_soak_settings(path: Path | str) -> SoakSettings:
+    source = Path(path)
+    data = json.loads(source.read_text(encoding="utf-8"))
+    expected = {field.name for field in fields(SoakSettings)}
+    if not isinstance(data, dict) or set(data) != expected:
+        raise ValueError(f"soak_config must define exactly: {', '.join(sorted(expected))} ({source})")
+    keep = data["shallow_stable_keep_last_n"]
+    if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
+        raise ValueError("soak_config shallow_stable_keep_last_n must be a positive integer")
+    for name in expected - {"shallow_stable_keep_last_n"}:
+        value = data[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"soak_config {name} must be a nonnegative number")
+    if not data["shallow_stable_max_range_m"] <= data["transition_max_range_m"] <= data["shallow_cast_max_range_m"]:
+        raise ValueError("soak_config range boundaries must be ordered shallow_stable <= transition <= shallow_cast")
+    return SoakSettings(**data)
 
 
 def first_global_deepest_exclusive_end(depth_data: np.ndarray) -> int:
@@ -68,17 +98,17 @@ def first_index_depth_at_least(depth_data: np.ndarray, depth_m: float) -> int:
     return int(np.argmax(hit))
 
 
-def get_shallow_stable_keep_start_index(total_scans: int) -> int:
+def get_shallow_stable_keep_start_index(total_scans: int, keep_last_n: int) -> int:
     """
     For shallow_stable stations, return the scan index from which to keep data.
-    We keep only the last SHALLOW_STABLE_KEEP_LAST_N points (default 500).
+    We keep only the last *keep_last_n* points.
     Data before this index is considered surface soak and discarded.
 
     Returns:
         Start index (inclusive). Keep scans [start_idx, total_scans).
-        If total_scans <= SHALLOW_STABLE_KEEP_LAST_N, returns 0 (keep all).
+        If total_scans <= keep_last_n, returns 0 (keep all).
     """
-    return max(0, total_scans - SHALLOW_STABLE_KEEP_LAST_N)
+    return max(0, total_scans - keep_last_n)
 
 
 def detect_shallow_descent(depth_data: np.ndarray, verbose: bool = False) -> dict:
@@ -233,14 +263,15 @@ def detect_shallow_descent(depth_data: np.ndarray, verbose: bool = False) -> dic
 
 
 def _soak_removal_index_core(
-    depth_data: np.ndarray, station_type: str, verbose: bool = False
+    depth_data: np.ndarray, station_type: str, settings: SoakSettings, verbose: bool = False
 ) -> dict:
     """
-    Soak removal on a single depth segment (no 2 m pre-trim).
+    Soak removal on a single depth segment (no pre-trim).
 
     ``keep_from_idx`` is relative to the start of ``depth_data``.
     """
     n = len(depth_data)
+    keep_last_n = settings.shallow_stable_keep_last_n
     result: dict = {
         "keep_from_idx": 0,
         "method": None,
@@ -253,8 +284,8 @@ def _soak_removal_index_core(
         if detection["detected"]:
             descent_start = detection["descent_start_idx"]
             leftover_count = n - descent_start
-            if leftover_count < SHALLOW_STABLE_KEEP_LAST_N:
-                result["keep_from_idx"] = get_shallow_stable_keep_start_index(n)
+            if leftover_count < keep_last_n:
+                result["keep_from_idx"] = get_shallow_stable_keep_start_index(n, keep_last_n)
                 result["method"] = "fallback_keep_last_500"
                 result["detected"] = False
                 result["fallback_reason"] = f"descent_detected_but_leftover_{leftover_count}_lt_500"
@@ -263,7 +294,7 @@ def _soak_removal_index_core(
                 result["method"] = f"shallow_descent_{detection['method']}"
                 result["detected"] = True
         else:
-            result["keep_from_idx"] = get_shallow_stable_keep_start_index(n)
+            result["keep_from_idx"] = get_shallow_stable_keep_start_index(n, keep_last_n)
             result["method"] = "fallback_keep_last_500"
             result["detected"] = False
             result["fallback_reason"] = detection.get("reason", "unknown")
@@ -282,7 +313,7 @@ def _soak_removal_index_core(
                 result["method"] = f"shallow_descent_{shallow_detection['method']}"
                 result["detected"] = True
             else:
-                result["keep_from_idx"] = get_shallow_stable_keep_start_index(n)
+                result["keep_from_idx"] = get_shallow_stable_keep_start_index(n, keep_last_n)
                 result["method"] = "fallback_keep_last_500"
                 result["detected"] = False
 
@@ -291,6 +322,7 @@ def _soak_removal_index_core(
 
 def get_soak_removal_index(
     depth_data: np.ndarray,
+    settings: SoakSettings,
     station_type: str | None = None,
     verbose: bool = False,
 ) -> dict:
@@ -298,16 +330,17 @@ def get_soak_removal_index(
     Scan index (in original profile coordinates) from which to keep data.
 
     Pipeline:
-        1. Drop all scans before the first point where depth >= ``PRE_SOAK_DEPTH_THRESHOLD_M``
-           (2 m by default). If the profile never reaches that depth, no cut.
+        1. Drop all scans before the first point where depth >= ``settings.pre_trim_depth_m``.
+           If the profile never reaches that depth, no cut.
         2. Classify station on the remaining segment (unless ``station_type`` is passed).
         3. Run soak removal (_soak_removal_index_core) on that segment.
         4. Map the result back to indices in the original ``depth_data``.
 
     Args:
         depth_data: Full depth series (positive downward).
+        settings: Dataset soak thresholds.
         station_type: Optional ``shallow_stable`` / ``shallow_cast`` / ``deep_cast``.
-            If None, computed with ``classify_station`` on the post-2 m segment.
+            If None, computed with ``classify_station`` on the post-trim segment.
         verbose: Print debug info.
 
     Returns:
@@ -316,21 +349,21 @@ def get_soak_removal_index(
             ``keep_until_idx`` — exclusive end index; keep scans ``[keep_from_idx, keep_until_idx)``.
                 Set to the scan after the **first** global maximum depth (finite values only).
                 If that deepest point lies at or before ``keep_from_idx``, falls back to ``n_full``.
-            ``pre_depth_trim_idx`` — first index at or above 2 m (0 if no pre-trim)
+            ``pre_depth_trim_idx`` — first index at or below the pre-trim depth (0 if no pre-trim)
             ``post_pretrim_keep_from_idx`` — soak cut relative to post-trim segment
             ``station_type`` — type used for soak logic
             ``method``, ``detected``, optional ``fallback_reason``
     """
     n_full = int(len(depth_data))
-    pre_idx = first_index_depth_at_least(depth_data, PRE_SOAK_DEPTH_THRESHOLD_M)
+    pre_idx = first_index_depth_at_least(depth_data, settings.pre_trim_depth_m)
     trimmed = depth_data[pre_idx:]
 
     if station_type is None:
-        stype = classify_station(trimmed)
+        stype = classify_station(trimmed, settings)
     else:
         stype = station_type
 
-    core = _soak_removal_index_core(trimmed, stype, verbose=verbose)
+    core = _soak_removal_index_core(trimmed, stype, settings, verbose=verbose)
     keep_inner = int(core["keep_from_idx"])
     keep_from_full = pre_idx + keep_inner
     keep_from_full = max(0, min(keep_from_full, n_full))
@@ -352,7 +385,7 @@ def get_soak_removal_index(
     }
     if pre_idx > 0:
         cm = core.get("method") or "unknown"
-        out["method"] = f"pretrim_{PRE_SOAK_DEPTH_THRESHOLD_M:g}m_then_{cm}"
+        out["method"] = f"pretrim_{settings.pre_trim_depth_m:g}m_then_{cm}"
     return out
 
 
@@ -526,29 +559,27 @@ def detect_descent_start_v4(depth_data: np.ndarray, verbose: bool = False) -> di
     return result
 
 
-def classify_station(depth_data: np.ndarray) -> str:
+def classify_station(depth_data: np.ndarray, settings: SoakSettings) -> str:
     """
-    Classify station type based on comprehensive analysis.
-    
-    NEW LOGIC:
-    - depth_range < 1.5m: shallow_stable (no detection needed; keep only last 500 scans)
-    - 1.5m <= depth_range < 3m: check if descent detected
-      - If yes: treat as shallow_cast
-      - If no: treat as shallow_stable
-    - depth_range >= 3m: shallow_cast or deep_cast (use detection algorithm)
+    Classify the cast for soak removal from its depth range.
+
+    - range < shallow_stable_max_range_m: shallow_stable (keep only the last N scans)
+    - range < transition_max_range_m: shallow_cast if a descent is detected, else shallow_stable
+    - range < shallow_cast_max_range_m: shallow_cast
+    - otherwise: deep_cast
     """
     depth_range = np.max(depth_data) - np.min(depth_data)
     
-    if depth_range < 1.5:
+    if depth_range < settings.shallow_stable_max_range_m:
         return "shallow_stable"  # Definitely no cast
-    elif depth_range < 3.0:
+    elif depth_range < settings.transition_max_range_m:
         # Transition zone - check for actual descent
         detection = detect_descent_start_v4(depth_data)
         if detection["detected"]:
             return "shallow_cast"  # Has descent, treat as cast
         else:
             return "shallow_stable"  # No descent detected
-    elif depth_range < 10.0:
+    elif depth_range < settings.shallow_cast_max_range_m:
         return "shallow_cast"
     else:
         return "deep_cast"
