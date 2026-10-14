@@ -150,5 +150,11 @@ def prepare_dataset_qc(profile):
     saved = load_dataset_profile(profile.profile_path)
     if any(saved.paths.get(key) is not None for key in qc_keys):
         return saved
+    destination = saved.profile_path.parent
+    for key in GENERATED_SETTINGS:
+        target = destination / CONFIG_LAYOUT[key]
+        if target.is_file():
+            target.unlink()
+    (destination / "limit_report.json").unlink(missing_ok=True)
     generate_limits(saved, activate=True)
     return load_dataset_profile(profile.profile_path)

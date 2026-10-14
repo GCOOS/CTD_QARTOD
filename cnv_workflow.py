@@ -5,7 +5,7 @@ import re
 import shutil
 
 from cnv_mapping import _atomic_json, discover_cnv_files, inspect_cnv
-from dataset_profile import CONFIG_LAYOUT, REPO_ROOT, reference_file
+from dataset_profile import CONFIG_LAYOUT, REPO_ROOT, load_dataset_profile, reference_file
 from station_identity import IdentityError, load_station_identity, resolve_identity
 
 COPIED_SETTINGS = ("station_identity", "soak_config")
@@ -48,7 +48,12 @@ def prepare_profile(input_path, *, preset=None, root=REPO_ROOT, profile_path=Non
             profile_path = root / profile_path
     config = profile_path.parent
     if profile_path.exists():
-        return profile_path
+        try:
+            load_dataset_profile(profile_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            profile_path.unlink()
+        else:
+            return profile_path
     paths = {}
     for key in COPIED_SETTINGS:
         target = config / CONFIG_LAYOUT[key]

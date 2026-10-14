@@ -360,7 +360,7 @@ def _run_convert_cnv(args: argparse.Namespace) -> None:
         "Conversion report: %s",
         args.report or profile.data_root / "conversion_report.json",
     )
-    if counts["converted"]:
+    if counts["converted"] or any(profile.data_root.glob("*/*.nc")):
         from qc_limit_generation import prepare_dataset_qc
         prepared = prepare_dataset_qc(profile)
         logger.info("Dataset-owned QC settings: %s", prepared.paths.sensor_specs)

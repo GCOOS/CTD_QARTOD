@@ -310,7 +310,10 @@ def load_dataset_profile(path: Path | str = DEFAULT_PROFILE_PATH) -> DatasetProf
         data = json.load(f)
     if not isinstance(data, Mapping):
         raise ValueError(f"Dataset profile must be a JSON object: {profile_path}")
-    return DatasetProfile.from_mapping(data, base_dir=REPO_ROOT, profile_path=profile_path)
+    try:
+        return DatasetProfile.from_mapping(data, base_dir=REPO_ROOT, profile_path=profile_path)
+    except ValueError as exc:
+        raise ValueError(f"{profile_path}: {exc}") from exc
 
 
 @lru_cache(maxsize=1)

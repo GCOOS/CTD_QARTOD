@@ -367,6 +367,19 @@ def test_cli_prepare_profile_preserves_edits_and_existing_outputs(tmp_path, over
         assert ds.attrs['creator_name'] == 'Reviewed dataset creator'
 
 
+def test_prepare_profile_replaces_unloadable_stale_profile(tmp_path):
+    source = _cnv(tmp_path / "input" / "WS24258_Stn.1.cnv")
+    profile_path = prepare_sfer_profile(source, root=tmp_path)
+    mapping = (profile_path.parent / "cnv_mapping.json").read_bytes()
+    profile_path.write_text(json.dumps({"data_root": str(tmp_path / "output")}))
+
+    assert prepare_sfer_profile(source, root=tmp_path) == profile_path
+    profile = load_dataset_profile(profile_path)
+    assert profile.display_name == "SFER CTD"
+    assert profile.dataset_id_prefix == "SFER_CTD_"
+    assert (profile_path.parent / "cnv_mapping.json").read_bytes() == mapping
+
+
 def test_cli_prepare_profile_rejects_missing_input_before_writes(tmp_path):
     from main import main
 
@@ -431,6 +444,21 @@ def test_dataset_limits_apply_to_all_casts_and_preserve_time(tmp_path):
     manifest = json.loads((profile.output.directory / 'qc_run_manifest.json').read_text())
     assert 'file_overrides' not in manifest['configuration']
     assert json.loads(profile.paths.sensor_specs.read_text())['sensors']['sea_water_temperature']['ranges']['degree_Celsius']['max'] == 11
+
+
+def test_prepare_dataset_qc_replaces_unreferenced_leftover_settings(tmp_path):
+    source = _cnv(tmp_path / "input" / "WS24258_Stn.1.cnv")
+    profile = load_dataset_profile(prepare_sfer_profile(source, root=tmp_path))
+    convert_sfer(source, profile.data_root, profile.paths.cnv_mapping)
+    leftover = profile.profile_path.parent / "qc_variable_mapping.json"
+    leftover.write_text('{"stale": true}\n')
+    (profile.profile_path.parent / "limit_report.json").write_text("{}\n")
+
+    profile = prepare_dataset_qc(profile)
+
+    assert json.loads(leftover.read_text()) != {"stale": True}
+    assert "temperature" in json.loads(profile.paths.variable_mapping.read_text())
+    assert profile.paths.station_classification.is_file()
 
 
 def test_initialization_preserves_existing_setting_before_any_writes(tmp_path):
