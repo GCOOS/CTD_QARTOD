@@ -6,6 +6,9 @@
   "beam_attenuation": [
     "beam_attenuation"
   ],
+  "beam_transmission": [
+    "beam_transmission"
+  ],
   "turbidity": [
     "sea_water_turbidity"
   ],

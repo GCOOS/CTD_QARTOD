@@ -60,7 +60,9 @@ def test_conflicting_cruise_and_test_cast_need_review():
 def test_catalog_matches_beam_aliases_and_preserves_par_units():
     for code, description in [('xmiss', 'Beam Transmission, Chelsea/Seatech [%]'),
                               ('CStarTr0', 'Beam Transmission, WET Labs C-Star [%]')]:
-        assert match_entry(code, [description], ['%'])['target'] == 'beam_transmission'
+        entry = match_entry(code, [description], ['%'])
+        assert entry['target'] == 'beam_transmission'
+        assert entry['qc_category'] == 'beam_transmission'
     assert normalize_unit('Watts/m^2') == 'W m-2'
     assert normalize_unit('umol photons/m^2/sec') == 'umol m-2 s-1'
     assert normalize_unit(None) is None

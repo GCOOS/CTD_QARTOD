@@ -36,6 +36,17 @@ def test_validation_rejects_missing_required_file(tmp_path: Path):
         validate_qc_profile(profile)
 
 
+def test_validation_rejects_unknown_variable_category(tmp_path: Path):
+    profile = _replace_json(
+        load_dataset_profile(DEFAULT_PROFILE_PATH),
+        tmp_path,
+        "variable_mapping",
+        {"temperature": ["sea_water_temperature"], "not_a_category": ["mystery"]},
+    )
+    with pytest.raises(ValueError, match="unknown categories: not_a_category"):
+        validate_qc_profile(profile)
+
+
 def test_validation_rejects_duplicate_variable_categories(tmp_path: Path):
     profile = _replace_json(
         load_dataset_profile(DEFAULT_PROFILE_PATH),

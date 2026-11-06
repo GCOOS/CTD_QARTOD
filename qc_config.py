@@ -72,6 +72,7 @@ ALL_CATEGORIES = frozenset({
     "in_water_radiance_irradiance",
     "above_water_radiance_irradiance",
     "beam_attenuation",
+    "beam_transmission",
     "turbidity",
     "PAR",
     "chlorophyll",

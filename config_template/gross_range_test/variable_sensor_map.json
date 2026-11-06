@@ -14,6 +14,7 @@
   "CDOM": "cdom_fluorometer",
   "sea_water_turbidity": "turbidity_meter",
   "beam_attenuation": "transmissometer",
+  "beam_transmission": "transmissometer",
   "sea_water_salinity": "derived_salinity",
   "sea_water_salinity_2": "derived_salinity"
 }

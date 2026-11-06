@@ -10,6 +10,7 @@ import pytest
 
 from dataset_profile import load_dataset_profile
 from qc_config import (
+    ALL_CATEGORIES,
     load_rate_of_change_thresholds,
     load_flat_line_config,
     load_location_config,
@@ -63,7 +64,8 @@ def test_template_loaders_accept_templates():
     assert profile.netcdf_fixed_global_attributes["institution"].startswith("NOAA")
     assert profile.netcdf_fixed_global_attributes["publisher_email"] == "data@gcoos.org"
     mapping = load_mapping(TEMPLATE_ROOT / "qc_variable_mapping.json")
-    assert "temperature" in mapping
+    assert set(mapping) == ALL_CATEGORIES
+    assert "beam_transmission" in mapping["beam_transmission"]
     assert load_sensor_specs(
         TEMPLATE_ROOT / "gross_range_test" / "sensor_specs.json"
     )

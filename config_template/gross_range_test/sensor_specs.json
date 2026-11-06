@@ -92,7 +92,8 @@
         "long_names": ["Transmissometer"]
       },
       "ranges": {
-        "m-1": { "min": 0, "max": 5 }
+        "m-1": { "min": 0, "max": 5 },
+        "%": { "min": 0, "max": 100 }
       }
     },
     "derived_salinity": {
