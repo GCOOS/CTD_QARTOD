@@ -15,7 +15,7 @@ import tempfile
 import numpy as np
 import xarray as xr
 
-from cnv_catalog import catalog, normalize_unit
+from cnv_catalog import catalog, catalog_cf_attributes, normalize_unit
 from cnv_coordinates import resolve_header_coordinates
 from cnv_metadata import FIXED_DEFAULTS, publication_metadata, validate_ownership
 from station_names import STATION_ALIASES
@@ -26,7 +26,6 @@ from cnv_mapping import (
     CnvSensor,
     DERIVED_SENSOR_TAG,
     SourceCandidate,
-    cf_standard_name_url,
     discover_cnv_files,
     load_cnv_mapping,
     parse_cnv_sensors,
@@ -435,7 +434,7 @@ def _build_dataset(
             time[None, :],
             {
                 "long_name": "Elapsed Time in Seconds",
-                "standard_name": "time",
+                **catalog_cf_attributes(mapping.coordinates["time"], "time"),
                 "axis": "T",
                 "units": f"seconds since {cast.start_time.isoformat()}",
                 "calendar": "proleptic_gregorian",
@@ -450,7 +449,7 @@ def _build_dataset(
             depth[None, :],
             {
                 "long_name": "Depth",
-                "standard_name": "depth",
+                **catalog_cf_attributes(mapping.coordinates["depth"], "depth"),
                 "units": depth_units,
                 "positive": "down",
                 "axis": "Z",
@@ -464,8 +463,8 @@ def _build_dataset(
             coordinate_dims,
             latitude if header_coordinates is not None else latitude[None, :],
             {
-                "standard_name": "latitude",
                 "long_name": "Latitude",
+                **catalog_cf_attributes(mapping.coordinates["latitude"], "latitude"),
                 "units": "degrees_north",
                 "axis": "Y",
                 **({"source_header": "NMEA Latitude"} if header_coordinates is not None else {}),
@@ -476,8 +475,8 @@ def _build_dataset(
             coordinate_dims,
             longitude if header_coordinates is not None else longitude[None, :],
             {
-                "standard_name": "longitude",
                 "long_name": "Longitude",
+                **catalog_cf_attributes(mapping.coordinates["longitude"], "longitude"),
                 "units": "degrees_east",
                 "axis": "X",
                 **({"source_header": "NMEA Longitude"} if header_coordinates is not None else {}),
@@ -560,12 +559,6 @@ def _build_dataset(
         data[destination] = (("profile", "z"), values[None, :], attributes)
 
     dataset = xr.Dataset(data_vars=data)
-    for variable in dataset.variables.values():
-        standard_name = variable.attrs.get("standard_name")
-        if standard_name is not None:
-            variable.attrs["standard_name_url"] = cf_standard_name_url(
-                str(standard_name)
-            )
     profile_variables = [
         "profile",
         "depth",

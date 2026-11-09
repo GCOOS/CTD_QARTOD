@@ -314,6 +314,11 @@ def test_cli_prepare_profile_creates_configuration_without_conversion(tmp_path, 
     profile = load_dataset_profile(profile_path)
     assert profile.paths.cnv_mapping == profile_path.parent / 'cnv_mapping.json'
     assert profile.paths.cnv_mapping.is_file()
+    mapping = json.loads(profile.paths.cnv_mapping.read_text(encoding='utf-8'))
+    assert mapping['science_variables']['t090C']['standard_name'] == 'sea_water_temperature'
+    assert mapping['science_variables']['t090C']['standard_name_url'] == ''
+    assert mapping['coordinates']['time']['standard_name'] == 'time'
+    assert mapping['coordinates']['longitude']['standard_name'] == 'longitude'
     assert not (tmp_path / 'output').exists()
     assert not (profile_path.parent / 'limit_report.json').exists()
     assert profile.paths.sensor_specs is None
@@ -499,7 +504,14 @@ def test_cli_inspection_writes_lean_mapping(tmp_path):
     main(['inspect-cnv', str(source), '--output', str(destination)])
     payload = json.loads(destination.read_text())
     assert payload['schema_version'] == 5
-    assert all(set(item) == {'observed', 'mapped_to'} for item in payload['science_variables'].values())
+    assert payload['coordinates']['latitude']['standard_name'] == 'latitude'
+    for item in payload['science_variables'].values():
+        if item['mapped_to'] is None:
+            assert set(item) == {'observed', 'mapped_to'}
+        else:
+            assert set(item) == {
+                'observed', 'mapped_to', 'standard_name', 'standard_name_url',
+            }
 
 
 def test_new_dataset_limits_use_config_template_not_live_walton(tmp_path, monkeypatch):

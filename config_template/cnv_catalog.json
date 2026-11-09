@@ -37,6 +37,24 @@
     "seconds": "s",
     "s": "s"
   },
+  "coordinates": {
+    "time": {
+      "standard_name": "time",
+      "standard_name_url": ""
+    },
+    "latitude": {
+      "standard_name": "latitude",
+      "standard_name_url": ""
+    },
+    "longitude": {
+      "standard_name": "longitude",
+      "standard_name_url": ""
+    },
+    "depth": {
+      "standard_name": "depth",
+      "standard_name_url": ""
+    }
+  },
   "variables": {
     "sea_water_temperature": {
       "sources": [
@@ -49,6 +67,7 @@
         "degree_Celsius"
       ],
       "standard_name": "sea_water_temperature",
+      "standard_name_url": "",
       "ioos_category": "Temperature",
       "ncei_name": "WATER TEMPERATURE",
       "sensor_tag": "TemperatureSensor",
@@ -68,6 +87,7 @@
         "S m-1"
       ],
       "standard_name": "sea_water_electrical_conductivity",
+      "standard_name_url": "",
       "ioos_category": "Salinity",
       "ncei_name": "CONDUCTIVITY",
       "sensor_tag": "ConductivitySensor",
@@ -86,6 +106,7 @@
         "dbar"
       ],
       "standard_name": "sea_water_pressure",
+      "standard_name_url": "",
       "ioos_category": "Pressure",
       "sensor_tag": "PressureSensor",
       "aliases": [
@@ -103,6 +124,7 @@
         "1"
       ],
       "standard_name": "sea_water_practical_salinity",
+      "standard_name_url": "",
       "ioos_category": "Salinity",
       "sensor_tag": "derived",
       "aliases": [
@@ -120,6 +142,7 @@
         "kg m-3"
       ],
       "standard_name": "sea_water_sigma_t",
+      "standard_name_url": "",
       "ioos_category": "Salinity",
       "sensor_tag": "derived",
       "aliases": [
@@ -136,6 +159,7 @@
         "kg m-3"
       ],
       "standard_name": "sea_water_density",
+      "standard_name_url": "",
       "ioos_category": "Salinity",
       "sensor_tag": "derived",
       "aliases": [
@@ -152,6 +176,8 @@
       "units": [
         "%"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Optical Properties",
       "sensor_by_source": {
         "xmiss": "TransChelseaSeatechWetlabCStarSensor",
@@ -168,12 +194,13 @@
       "units": [
         "m-1"
       ],
+      "standard_name": "volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water",
+      "standard_name_url": "",
       "ioos_category": "Optical Properties",
       "sensor_by_source": {
         "bat": "TransChelseaSeatechWetlabCStarSensor",
         "CStarAt0": "WET_LabsCStar"
-      },
-      "standard_name": "volume_beam_attenuation_coefficient_of_radiative_flux_in_sea_water"
+      }
     },
     "dissolved_oxygen": {
       "sources": [
@@ -186,6 +213,8 @@
         "ml l-1",
         "mg l-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Dissolved O2",
       "sensor_tag": "OxygenSensor",
       "qc_units": [
@@ -204,6 +233,8 @@
       "units": [
         "ml l-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Dissolved O2",
       "sensor_tag": "derived",
       "aliases": [
@@ -220,6 +251,8 @@
       "units": [
         "mg l-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "derived",
       "ioos_category": "Dissolved O2"
     },
@@ -232,6 +265,8 @@
       "units": [
         "V"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "OxygenSensor"
     },
     "photosynthetically_available_radiation": {
@@ -244,6 +279,8 @@
         "W m-2",
         "umol m-2 s-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "PAR_BiosphericalLicorChelseaSensor",
       "aliases": [
         "par"
@@ -258,6 +295,8 @@
       "units": [
         "umol m-2 s-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "SPAR_Sensor",
       "aliases": [
         "surface_par"
@@ -272,6 +311,8 @@
       "units": [
         "mg m-3"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Ocean Color",
       "sensor_tag": "FluoroWetlabECO_AFL_FL_Sensor"
     },
@@ -282,6 +323,8 @@
       "description": "^Fluorescence, Seapoint",
       "long_name": "Seapoint Fluorescence",
       "units": [],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "FluoroSeapointSensor"
     },
     "chlorophyll_concentration": {
@@ -293,11 +336,12 @@
       "units": [
         "mg m-3"
       ],
+      "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water",
+      "standard_name_url": "",
       "ioos_category": "Ocean Color",
       "sensor_by_source": {
         "wetStar": "FluoroWetlabWetstarSensor"
-      },
-      "standard_name": "mass_concentration_of_chlorophyll_a_in_sea_water"
+      }
     },
     "CDOM": {
       "sources": [
@@ -308,6 +352,8 @@
       "units": [
         "mg m-3"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Optical Properties",
       "sensor_tag": "FluoroWetlabCDOM_Sensor",
       "aliases": [
@@ -323,6 +369,8 @@
       "units": [
         "NTU"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "ioos_category": "Optical Properties",
       "sensor_tag": "TurbidityMeter",
       "aliases": [
@@ -338,6 +386,8 @@
       "units": [
         "m"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "AltimeterSensor"
     },
     "descent_rate": {
@@ -349,6 +399,8 @@
       "units": [
         "m s-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "derived"
     },
     "sound_velocity": {
@@ -360,6 +412,8 @@
       "units": [
         "m s-1"
       ],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "derived"
     },
     "flag": {
@@ -369,6 +423,8 @@
       "description": "(?i)flag",
       "long_name": "Sea-Bird Source Flag (not QARTOD)",
       "units": [],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "derived"
     },
     "pump_status": {
@@ -378,6 +434,8 @@
       "description": "(?i)pump",
       "long_name": "Pump Status",
       "units": [],
+      "standard_name": "",
+      "standard_name_url": "",
       "sensor_tag": "derived"
     }
   }

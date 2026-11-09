@@ -2,18 +2,67 @@
 
 The catalog does not convert numbers or infer units missing from a header.
 """
+from collections.abc import Mapping
 from functools import lru_cache
 import json
+import logging
 from pathlib import Path
 import re
 
 CATALOG_PATH = Path(__file__).parent / "config_template" / "cnv_catalog.json"
 TEMPLATE_MAPPING_PATH = Path(__file__).parent / "config_template" / "qc_variable_mapping.json"
+CF_ATTRIBUTE_KEYS = ("standard_name", "standard_name_url")
+COORDINATE_NAMES = ("time", "latitude", "longitude", "depth")
+
+logger = logging.getLogger(__name__)
+_empty_cf_warnings: set[tuple[str, str]] = set()
 
 
 @lru_cache(maxsize=1)
 def catalog() -> dict:
     return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+def cf_placeholders(definition: Mapping[str, object]) -> dict[str, str]:
+    """Return editable standard_name / standard_name_url strings, empty if unset."""
+    placeholders: dict[str, str] = {}
+    for key in CF_ATTRIBUTE_KEYS:
+        value = definition.get(key)
+        placeholders[key] = value.strip() if isinstance(value, str) else ""
+    return placeholders
+
+
+def catalog_cf_attributes(definition: Mapping[str, object], target: str) -> dict[str, str]:
+    """Copy non-empty CF name attributes; never synthesize a URL."""
+    attributes: dict[str, str] = {}
+    for key in CF_ATTRIBUTE_KEYS:
+        value = definition.get(key)
+        if isinstance(value, str) and value.strip():
+            attributes[key] = value.strip()
+            continue
+        token = (target, key)
+        if token not in _empty_cf_warnings:
+            _empty_cf_warnings.add(token)
+            logger.warning(
+                "%s is empty for %s; omitting the attribute",
+                key,
+                target,
+            )
+    return attributes
+
+
+def catalog_coordinate_placeholders() -> dict[str, dict[str, str]]:
+    """Seed per-dataset coordinate CF placeholders from the shared catalog."""
+    coordinates = catalog().get("coordinates")
+    if not isinstance(coordinates, dict):
+        raise ValueError("cnv_catalog.json coordinates must be an object")
+    placeholders: dict[str, dict[str, str]] = {}
+    for name in COORDINATE_NAMES:
+        definition = coordinates.get(name)
+        if not isinstance(definition, dict):
+            raise ValueError(f"cnv_catalog.json coordinates.{name} is required")
+        placeholders[name] = cf_placeholders(definition)
+    return placeholders
 
 
 def normalize_unit(value: str | None) -> str | None:

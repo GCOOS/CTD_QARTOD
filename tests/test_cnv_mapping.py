@@ -102,7 +102,11 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
             "descriptions": ["Temperature [ITS-90, deg C]"],
         },
         "mapped_to": "sea_water_temperature",
+        "standard_name": "sea_water_temperature",
+        "standard_name_url": "",
     }
+    assert mapping["coordinates"]["time"]["standard_name"] == "time"
+    assert mapping["coordinates"]["time"]["standard_name_url"] == ""
     assert json.loads(output.read_text(encoding="utf-8")) == mapping
 
 
@@ -165,6 +169,8 @@ def test_mapping_ignores_processing_suffix_differences(tmp_path: Path):
             ],
         },
         "mapped_to": "sea_water_temperature",
+        "standard_name": "sea_water_temperature",
+        "standard_name_url": "",
     }
 
 
@@ -218,6 +224,43 @@ def test_dataset_mapping_cannot_duplicate_catalog_definitions(tmp_path, field, v
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match="definitions belong in cnv_catalog"):
         load_cnv_mapping(path)
+
+
+def test_catalog_cf_attributes_omit_empty_values(caplog):
+    import logging
+
+    from cnv_catalog import _empty_cf_warnings, catalog_cf_attributes
+
+    _empty_cf_warnings.clear()
+    with caplog.at_level(logging.WARNING):
+        attrs = catalog_cf_attributes(
+            {"standard_name": "time", "standard_name_url": "  "},
+            "time",
+        )
+    assert attrs == {"standard_name": "time"}
+    assert "standard_name_url is empty for time" in caplog.text
+    assert "standard_name is empty for time" not in caplog.text
+
+
+def test_conversion_uses_mapping_standard_name_url(tmp_path):
+    from cnv_converter import convert_cnv
+    import xarray as xr
+
+    source = _cnv(tmp_path / "WS24258_Stn.001.cnv")
+    path = tmp_path / "mapping.json"
+    data = inspect_cnv(source, path)
+    data["science_variables"]["t090C"]["standard_name_url"] = (
+        "https://example.org/sea_water_temperature"
+    )
+    data["coordinates"]["time"]["standard_name_url"] = "https://example.org/time"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    report = convert_cnv(source, tmp_path / "output", path)
+    assert report["counts"]["converted"] == 1
+    with xr.open_dataset(tmp_path / "output/WS24258/WS24258_1.nc", decode_cf=False) as ds:
+        assert ds.sea_water_temperature.attrs["standard_name_url"] == (
+            "https://example.org/sea_water_temperature"
+        )
+        assert ds.time.attrs["standard_name_url"] == "https://example.org/time"
 
 
 def test_conversion_resolves_current_catalog_without_reinspection(tmp_path, monkeypatch):

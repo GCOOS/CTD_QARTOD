@@ -88,10 +88,12 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
         assert dataset["sea_water_temperature"].attrs["source_name"] == "t090C"
         assert dataset["sea_water_temperature"].attrs["units"] == "degree_Celsius"
         assert dataset["sea_water_temperature"].attrs["source_units"] == "deg C"
-        assert dataset["sea_water_temperature"].attrs["standard_name_url"] == (
-            "https://cfconventions.org/Data/cf-standard-names/94/build/"
-            "cf-standard-name-table.html#sea_water_temperature"
-        )
+        assert dataset["sea_water_temperature"].attrs["standard_name"] == "sea_water_temperature"
+        assert "standard_name_url" not in dataset["sea_water_temperature"].attrs
+        assert dataset["time"].attrs["standard_name"] == "time"
+        assert "standard_name_url" not in dataset["time"].attrs
+        assert dataset["latitude"].attrs["standard_name"] == "latitude"
+        assert dataset["longitude"].attrs["standard_name"] == "longitude"
         assert dataset["sea_water_temperature_2"].attrs["source_occurrence"] == 2
         assert dataset["sea_water_temperature"].attrs["instrument"] == "instrument1"
         assert dataset["sea_water_temperature_2"].attrs["instrument"] == "instrument2"

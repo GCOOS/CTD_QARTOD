@@ -12,7 +12,16 @@ import re
 import tempfile
 import xml.etree.ElementTree as ET
 
-from cnv_catalog import catalog, match_entry, source_entry
+from cnv_catalog import (
+    CF_ATTRIBUTE_KEYS,
+    COORDINATE_NAMES,
+    catalog,
+    catalog_cf_attributes,
+    catalog_coordinate_placeholders,
+    cf_placeholders,
+    match_entry,
+    source_entry,
+)
 from cnv_coordinates import resolve_header_coordinates
 
 
@@ -26,7 +35,6 @@ CF_STANDARD_NAME_TABLE_VERSION = 94
 CF_STANDARD_NAME_VOCABULARY = (
     f"CF Standard Name Table v{CF_STANDARD_NAME_TABLE_VERSION}"
 )
-_CF_STANDARD_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _REQUIRED_FIELDS = {
     "time": {"source_name": "timeS", "target_name": "time"},
     "longitude": {"source_name": "longitude", "target_name": "longitude"},
@@ -82,6 +90,7 @@ class CnvMapping:
     vertical_field: SourceCandidate
     vertical_target: str
     science_variables: Mapping[str, ScienceVariableMapping]
+    coordinates: Mapping[str, Mapping[str, str]]
 
 
 def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -279,18 +288,6 @@ def read_cnv_sensors(
     return parse_cnv_sensors(header_lines)
 
 
-def cf_standard_name_url(standard_name: str) -> str:
-    """Return the pinned CF table URL for one human-reviewed standard name."""
-
-    if not _CF_STANDARD_NAME_RE.fullmatch(standard_name):
-        raise ValueError(f"invalid CF standard_name syntax: {standard_name!r}")
-    return (
-        "https://cfconventions.org/Data/cf-standard-names/"
-        f"{CF_STANDARD_NAME_TABLE_VERSION}/build/"
-        f"cf-standard-name-table.html#{standard_name}"
-    )
-
-
 def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     if path.exists():
         raise FileExistsError(f"refusing to overwrite existing {path}")
@@ -388,7 +385,7 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
         descriptions = sorted(item["descriptions"])
         units = sorted(item["units"])
         entry = match_entry(source_name, descriptions, units)
-        science_variables[source_name] = {
+        record = {
             "observed": {
                 "file_count": len(item["files"]),
                 "max_occurrences_per_file": item["max_occurrences_per_file"],
@@ -398,6 +395,9 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             },
             "mapped_to": entry["target"] if entry else None,
         }
+        if entry is not None:
+            record.update(cf_placeholders(entry))
+        science_variables[source_name] = record
         if entry is None:
             conversion_issues.append({
                 "source_name": source_name,
@@ -428,6 +428,7 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
             "source_occurrence": 1,
             "target_name": "depth",
         },
+        "coordinates": catalog_coordinate_placeholders(),
         "science_variables": science_variables,
     }
     _atomic_json(Path(output_path), payload)
@@ -488,7 +489,7 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
                 f"science_variables.{source_name} reuses a structural source"
             )
         item = _object(raw_value, f"science_variables.{source_name}")
-        unexpected = set(item) - {"observed", "mapped_to", "ignore"}
+        unexpected = set(item) - {"observed", "mapped_to", "ignore", *CF_ATTRIBUTE_KEYS}
         if unexpected:
             raise ValueError(f"science_variables.{source_name}: definitions belong in cnv_catalog.json, not {sorted(unexpected)}")
         ignored = item.get("ignore", False)
@@ -508,11 +509,10 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
             definition = catalog()["variables"].get(target_name)
             if definition is None:
                 raise ValueError(f"science_variables.{source_name}: unknown catalog target {target_name!r}")
-            attributes = {key: value for key in
-                          ("long_name", "standard_name", "ioos_category", "ncei_name")
-                          if (value := definition.get(key)) is not None}
-            if attributes.get("standard_name"):
-                cf_standard_name_url(attributes["standard_name"])
+            attributes = {key: value for key in ("long_name", "ioos_category", "ncei_name")
+                          if (value := definition.get(key))}
+            cf_source = item if any(key in item for key in CF_ATTRIBUTE_KEYS) else definition
+            attributes.update(catalog_cf_attributes(cf_source, target_name))
             sensor_tag = definition.get("sensor_by_source", {}).get(source_name, definition.get("sensor_tag"))
             if sensor_tag != DERIVED_SENSOR_TAG and sensor_tag not in available_sensor_tags:
                 sensor_tag = None
@@ -523,10 +523,32 @@ def load_cnv_mapping(path: Path | str) -> CnvMapping:
             sensor_tag=sensor_tag,
         )
 
+    if "coordinates" in data:
+        raw_coordinates = _object(data.get("coordinates"), "coordinates")
+        unexpected_coordinates = set(raw_coordinates) - set(COORDINATE_NAMES)
+        if unexpected_coordinates:
+            raise ValueError(
+                f"coordinates has unknown variables: {sorted(unexpected_coordinates)}"
+            )
+        coordinates = {}
+        for name in COORDINATE_NAMES:
+            if name not in raw_coordinates:
+                raise ValueError(f"coordinates.{name} is required")
+            item = _object(raw_coordinates[name], f"coordinates.{name}")
+            unexpected = set(item) - set(CF_ATTRIBUTE_KEYS)
+            if unexpected:
+                raise ValueError(
+                    f"coordinates.{name}: only {list(CF_ATTRIBUTE_KEYS)} may be set, not {sorted(unexpected)}"
+                )
+            coordinates[name] = cf_placeholders(item)
+    else:
+        coordinates = catalog_coordinate_placeholders()
+
     return CnvMapping(
         source_path=source_path,
         required_fields=required_fields,
         vertical_field=SourceCandidate(vertical_source, vertical_occurrence),
         vertical_target=vertical_target,
         science_variables=science_variables,
+        coordinates=coordinates,
     )

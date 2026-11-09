@@ -47,6 +47,20 @@ def test_template_json_parses(rel_path: str):
         json.load(f)
 
 
+def test_catalog_has_cf_name_placeholders():
+    catalog = json.loads((TEMPLATE_ROOT / "cnv_catalog.json").read_text(encoding="utf-8"))
+    for name, entry in catalog["variables"].items():
+        assert isinstance(entry.get("standard_name"), str), name
+        assert isinstance(entry.get("standard_name_url"), str), name
+    for name in ("time", "latitude", "longitude", "depth"):
+        entry = catalog["coordinates"][name]
+        assert isinstance(entry.get("standard_name"), str), name
+        assert isinstance(entry.get("standard_name_url"), str), name
+    assert catalog["coordinates"]["time"]["standard_name"] == "time"
+    assert catalog["coordinates"]["latitude"]["standard_name"] == "latitude"
+    assert catalog["coordinates"]["longitude"]["standard_name"] == "longitude"
+
+
 def test_template_station_coords_csv():
     path = TEMPLATE_ROOT / "location_test" / "Station_Mean_Coords.csv"
     assert path.exists()
