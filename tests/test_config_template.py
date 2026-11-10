@@ -52,6 +52,10 @@ def test_catalog_has_cf_name_placeholders():
     for name, entry in catalog["variables"].items():
         assert isinstance(entry.get("standard_name"), str), name
         assert isinstance(entry.get("standard_name_url"), str), name
+        sources = entry["sources"]
+        patterns = entry["description"]
+        assert isinstance(patterns, list) and len(patterns) == len(sources), name
+        assert all(isinstance(pattern, str) and pattern for pattern in patterns), name
     for name in ("time", "latitude", "longitude", "depth"):
         entry = catalog["coordinates"][name]
         assert isinstance(entry.get("standard_name"), str), name

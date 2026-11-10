@@ -15,7 +15,7 @@ import tempfile
 import numpy as np
 import xarray as xr
 
-from cnv_catalog import catalog, catalog_cf_attributes, normalize_unit
+from cnv_catalog import catalog, catalog_cf_attributes, normalize_unit, source_description_pattern
 from cnv_coordinates import resolve_header_coordinates
 from cnv_metadata import FIXED_DEFAULTS, publication_metadata, validate_ownership
 from station_names import STATION_ALIASES
@@ -543,7 +543,10 @@ def _build_dataset(
         }
         unit = normalize_unit(source_column.units)
         definition = catalog()["variables"][specification.target_name]
-        if not re.search(definition["description"], source_column.description):
+        pattern = source_description_pattern(
+            definition, candidate.name, target=specification.target_name
+        )
+        if not re.search(pattern, source_column.description):
             raise _format_error(cast.source_path, f"{candidate.name}: source description conflicts with catalog target {specification.target_name!r}")
         if unit is not None:
             if unit not in definition["units"]:

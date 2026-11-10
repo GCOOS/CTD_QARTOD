@@ -69,6 +69,81 @@ def test_catalog_matches_beam_aliases_and_preserves_par_units():
     assert match_entry('t090C', ['Potential Temperature [deg C]'], ['deg C']) is None
 
 
+def test_per_source_description_matches_only_its_own_header(monkeypatch):
+    from copy import deepcopy
+    import cnv_catalog
+
+    definition = deepcopy(cnv_catalog.catalog()["variables"]["sea_water_temperature"])
+    definition["description"] = ["^Temperature, Primary", "^Temperature, Secondary"]
+    monkeypatch.setitem(cnv_catalog.catalog()["variables"], "sea_water_temperature", definition)
+    primary = "Temperature, Primary [ITS-90, deg C]"
+    secondary = "Temperature, Secondary [ITS-90, deg C]"
+    assert match_entry("t090C", [primary], ["deg C"])["target"] == "sea_water_temperature"
+    assert match_entry("t190C", [secondary], ["deg C"])["target"] == "sea_water_temperature"
+    assert match_entry("t090C", [secondary], ["deg C"]) is None
+    assert match_entry("t190C", [primary], ["deg C"]) is None
+    definition["description"] = "^Temperature, Primary"
+    with pytest.raises(ValueError, match="aligned with sources"):
+        match_entry("t090C", [primary], ["deg C"])
+
+
+def test_conversion_writes_shared_long_name_and_source_descriptions(tmp_path, monkeypatch):
+    from copy import deepcopy
+    import cnv_catalog
+
+    definition = deepcopy(cnv_catalog.catalog()["variables"]["sea_water_temperature"])
+    definition["description"] = ["^Temperature, Primary", "^Temperature, Secondary"]
+    monkeypatch.setitem(cnv_catalog.catalog()["variables"], "sea_water_temperature", definition)
+    source = tmp_path / "input" / "WS24258_Stn.001.cnv"
+    columns = [
+        ("timeS", "Time, Elapsed [seconds]"),
+        ("latitude", "Latitude [deg]"),
+        ("longitude", "Longitude [deg]"),
+        ("depSM", "Depth [salt water, m]"),
+        ("t090C", "Temperature, Primary [ITS-90, deg C]"),
+        ("t190C", "Temperature, Secondary [ITS-90, deg C]"),
+        ("flag", "Sea-Bird source flag"),
+    ]
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "\n".join([
+            "* Sea-Bird SBE 9 Data File:",
+            "* FileName = C:\\source\\different.hex",
+            f"# nquan = {len(columns)}",
+            "# nvalues = 2",
+            *(f"# name {index} = {name}: {description}" for index, (name, description) in enumerate(columns)),
+            "# interval = seconds: 1",
+            "# start_time = Sep 18 2024 12:21:12 [System UTC, header]",
+            "# bad_flag = -9.990e-29",
+            '# <Sensors count="2" >',
+            '#   <sensor Channel="1"><TemperatureSensor><SerialNumber>T1</SerialNumber></TemperatureSensor></sensor>',
+            '#   <sensor Channel="2"><TemperatureSensor><SerialNumber>T2</SerialNumber></TemperatureSensor></sensor>',
+            "# </Sensors>",
+            "*END*",
+            "0 27.1 -82.1 1 10 11 0",
+            "1 27.2 -82.2 2 12 13 0",
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    mapping = tmp_path / "mapping.json"
+    data = inspect_cnv(source, mapping)
+    data["science_variables"]["flag"].update({"ignore": True, "mapped_to": None})
+    mapping.write_text(json.dumps(data), encoding="utf-8")
+    report = convert_cnv(source, tmp_path / "output", mapping)
+    assert report["counts"]["converted"] == 1
+    with xr.open_dataset(tmp_path / "output/WS24258/WS24258_1.nc", decode_cf=False) as dataset:
+        assert dataset["sea_water_temperature"].attrs["long_name"] == "Sea Water Temperature"
+        assert dataset["sea_water_temperature_2"].attrs["long_name"] == "Sea Water Temperature"
+        assert dataset["sea_water_temperature"].attrs["source_description"] == (
+            "Temperature, Primary [ITS-90, deg C]"
+        )
+        assert dataset["sea_water_temperature_2"].attrs["source_description"] == (
+            "Temperature, Secondary [ITS-90, deg C]"
+        )
+        assert dataset["sea_water_temperature"].attrs["source_name"] == "t090C"
+        assert dataset["sea_water_temperature_2"].attrs["source_name"] == "t190C"
+
+
 def test_walton_measurements_remain_distinct_from_qc_categories():
     from cnv_catalog import source_entry, template_categories
     temperature = source_entry('t090C')

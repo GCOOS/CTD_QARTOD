@@ -91,9 +91,38 @@ def source_entry(source: str) -> dict | None:
                  if source in entry["sources"]), None)
 
 
+def source_description_pattern(definition: Mapping[str, object], source: str, *, target: str | None = None) -> str:
+    """Return the description pattern aligned with one catalog source."""
+    label = target or str(definition.get("target") or source)
+    sources = definition.get("sources")
+    patterns = definition.get("description")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or not all(isinstance(item, str) and item for item in sources)
+    ):
+        raise ValueError(f"catalog sources for {label} must be a list of names")
+    if (
+        not isinstance(patterns, list)
+        or len(patterns) != len(sources)
+        or not all(isinstance(item, str) and item for item in patterns)
+    ):
+        raise ValueError(
+            f"catalog description for {label} must be a list of patterns aligned with sources"
+        )
+    try:
+        index = list(sources).index(source)
+    except ValueError as exc:
+        raise ValueError(f"catalog {label} has no description for source {source!r}") from exc
+    return patterns[index]
+
+
 def match_entry(source: str, descriptions: list[str], units: list[str]) -> dict | None:
     entry = source_entry(source)
-    if entry is None or not all(re.search(entry["description"], text) for text in descriptions):
+    if entry is None:
+        return None
+    pattern = source_description_pattern(entry, source)
+    if not all(re.search(pattern, text) for text in descriptions):
         return None
     if not all(normalize_unit(unit) in entry["units"] for unit in units):
         return None
