@@ -26,8 +26,8 @@
     "product_version": "v1.0"
   },
   "netcdf_fixed_global_attributes": {
-    "publisher_name": "Gulf of Mexico Coastal Ocean Observing System (GCOOS)",
-    "publisher_institution": "Gulf of Mexico Coastal Ocean Observing System (GCOOS)",
+    "publisher_name": "Gulf of America Coastal Ocean Observing System (GCOOS)",
+    "publisher_institution": "Gulf of America Coastal Ocean Observing System (GCOOS)",
     "publisher_email": "data@gcoos.org",
     "publisher_url": "https://gcoos.org",
     "publisher_type": "group",
