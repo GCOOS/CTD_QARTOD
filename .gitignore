@@ -15,3 +15,8 @@ scripts/
 GenerateDatasetsXml.xml
 /cnv_data
 /config/*/
+.cursorindexingignore
+.specstory/
+.venv/
+.vscode/
+HG26193.zip

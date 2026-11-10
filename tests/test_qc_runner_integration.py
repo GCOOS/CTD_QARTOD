@@ -7,12 +7,10 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from dataset_profile import OutputConfig, default_profile
+from dataset_profile import OutputConfig, default_profile, resolve_config_path
 from qc_config import (
     QC_FLAGS,
-    RATE_OF_CHANGE_THRESHOLDS_JSON,
-    SPIKE_THRESHOLDS_JSON,
-    STATION_COORDS_CSV,
+    load_flat_line_config,
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
@@ -40,13 +38,16 @@ def _profile(data_root: Path, output_root: Path, **path_overrides):
 
 
 def test_run_common_tests_writes_expected_qc_vars(minimal_profile_ds):
-    if not STATION_COORDS_CSV.exists():
+    station_coords = resolve_config_path("station_coords")
+    if not station_coords.exists():
         pytest.skip("Station_Mean_Coords.csv missing")
 
-    spike_thr = load_spike_thresholds(SPIKE_THRESHOLDS_JSON)
-    roc_thr = load_rate_of_change_thresholds(RATE_OF_CHANGE_THRESHOLDS_JSON)
+    spike_thr = load_spike_thresholds(resolve_config_path("spike_thresholds"))
+    roc_thr = load_rate_of_change_thresholds(
+        resolve_config_path("rate_of_change_thresholds")
+    )
 
-    expected = resolve_coords_by_station_id("1", station_csv=STATION_COORDS_CSV)
+    expected = resolve_coords_by_station_id("1", station_csv=station_coords)
     if expected is None:
         pytest.skip("station 1 not in coords csv")
 
@@ -67,6 +68,7 @@ def test_run_common_tests_writes_expected_qc_vars(minimal_profile_ds):
         location_tolerance=0.05,
         spike_thresholds=spike_thr,
         rate_of_change_thresholds=roc_thr,
+        flat_line_config=load_flat_line_config(resolve_config_path("flat_line_config")),
     )
     for suffix in (
         "gap",
@@ -328,7 +330,7 @@ def test_run_qc_for_all_processes_files_in_sorted_order(tmp_path: Path, monkeypa
     seen: list[str] = []
     monkeypatch.setattr(
         "qc_runner.run_qc_for_file",
-        lambda path, **kwargs: seen.append(str(Path(path).relative_to(tmp_path))),
+        lambda path, **kwargs: seen.append(Path(path).relative_to(tmp_path).as_posix()),
     )
 
     run_qc_for_all(tmp_path, profile=_profile(tmp_path, tmp_path / "output"))

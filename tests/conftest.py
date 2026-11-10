@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from qc_config import VARIABLE_MAPPING_JSON
+from dataset_profile import CONFIG_TEMPLATE_DIR
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -65,9 +65,10 @@ def minimal_profile_ds() -> xr.Dataset:
 
 @pytest.fixture
 def walton_mapping_path() -> Path:
-    if not VARIABLE_MAPPING_JSON.exists():
-        pytest.skip(f"missing {VARIABLE_MAPPING_JSON}")
-    return VARIABLE_MAPPING_JSON
+    path = CONFIG_TEMPLATE_DIR / "qc_variable_mapping.json"
+    if not path.exists():
+        pytest.skip(f"missing {path}")
+    return path
 
 
 def pytest_configure(config):

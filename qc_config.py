@@ -14,42 +14,11 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 import xarray as xr
 
-from dataset_profile import CONFIG_TEMPLATE_DIR, MetadataConfig
+from dataset_profile import MetadataConfig
 from station_names import normalize_reference_station
 
-# CONFIG FILE PATHS
-# Defaults come from the shared template. Datasets select their own paths
-# through a dataset profile.
-
-CONFIG_DIR = CONFIG_TEMPLATE_DIR
-
-# Standard variable name → data variable names
-VARIABLE_MAPPING_JSON = CONFIG_DIR / "qc_variable_mapping.json"
-
-# Station coordinates: ground truth lat/lon for each station (for location test)
-STATION_COORDS_CSV = CONFIG_DIR / "location_test" / "Station_Mean_Coords.csv"
-LOCATION_CONFIG_JSON = CONFIG_DIR / "location_test" / "location_config.json"
-
-# Station climatology: limit tables keyed by cast type (deep vs shallow)
-STATION_CLIMATOLOGY_JSON = CONFIG_DIR / "climatology_test" / "station_climatology_config.json"
-
-# Station → deep_cast vs shallow_cast membership (separate from limit values)
-STATION_DEPTH_CLASSIFICATION_JSON = (
-    CONFIG_DIR / "climatology_test" / "station_depth_classification.json"
-)
-
-# Sensor specs: sensor-specific gross range limits by unit
-SENSOR_SPECS_JSON = CONFIG_DIR / "gross_range_test" / "sensor_specs.json"
-
-# Variable-sensor map: maps variables to their sensors
-VARIABLE_SENSOR_MAP_JSON = CONFIG_DIR / "gross_range_test" / "variable_sensor_map.json"
-
-# Per-variable spike and rate-of-change thresholds
-SPIKE_THRESHOLDS_JSON = CONFIG_DIR / "spike_test" / "spike_thresholds.json"
-RATE_OF_CHANGE_THRESHOLDS_JSON = (
-    CONFIG_DIR / "rate_of_change_test" / "rate_of_change_thresholds.json"
-)
-FLAT_LINE_CONFIG_JSON = CONFIG_DIR / "flat_line_test" / "flat_line_config.json"
+# Every QC limit file is selected by the dataset profile and passed in
+# explicitly; this module holds no configuration paths of its own.
 
 # ERDDAP implementation constants. Dataset paths and policy live in the profile.
 _DATASETS_DIR = Path(__file__).parent / "datasets"
@@ -132,7 +101,7 @@ TEST_CATEGORIES = {
 }
 
 
-def load_station_climatology_config(json_path: Path | str = STATION_CLIMATOLOGY_JSON) -> Dict[str, Any]:
+def load_station_climatology_config(json_path: Path | str) -> Dict[str, Any]:
     """
     Load the station climatology limits JSON (deep_cast_limits / shallow_cast_limits only).
     """
@@ -160,14 +129,12 @@ def _load_variable_thresholds_json(json_path: Path | str) -> Dict[str, Any]:
     return root
 
 
-def load_spike_thresholds(json_path: Path | str = SPIKE_THRESHOLDS_JSON) -> Dict[str, Any]:
+def load_spike_thresholds(json_path: Path | str) -> Dict[str, Any]:
     """Load per-variable spike test thresholds (suspect_threshold, fail_threshold)."""
     return _load_variable_thresholds_json(json_path)
 
 
-def load_rate_of_change_thresholds(
-    json_path: Path | str = RATE_OF_CHANGE_THRESHOLDS_JSON,
-) -> Dict[str, Any]:
+def load_rate_of_change_thresholds(json_path: Path | str) -> Dict[str, Any]:
     """Load per-variable rate-of-change thresholds (threshold = max |Δvalue| per adjacent sample)."""
     return _load_variable_thresholds_json(json_path)
 
@@ -182,9 +149,7 @@ def _finite_float(value: object, label: str) -> float:
     return number
 
 
-def load_location_config(
-    json_path: Path | str = LOCATION_CONFIG_JSON,
-) -> Dict[str, Optional[float]]:
+def load_location_config(json_path: Path | str) -> Dict[str, Optional[float]]:
     """Load location-test config; an explicit null tolerance disables the test."""
     path = Path(json_path)
     with path.open("r", encoding="utf-8") as f:
@@ -201,7 +166,7 @@ def load_location_config(
     return {"tolerance": tolerance}
 
 
-def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict[str, Any]:
+def load_flat_line_config(json_path: Path | str) -> Dict[str, Any]:
     """Load and validate the global flat-line test config."""
     path = Path(json_path)
     with path.open("r", encoding="utf-8") as f:
@@ -224,7 +189,7 @@ def load_flat_line_config(json_path: Path | str = FLAT_LINE_CONFIG_JSON) -> Dict
     }
 
 
-def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLASSIFICATION_JSON) -> Dict[str, Any]:
+def load_station_depth_classification(json_path: Path | str) -> Dict[str, Any]:
     """
     Load station → deep_cast / shallow_cast membership lists.
     """
@@ -238,16 +203,15 @@ def load_station_depth_classification(json_path: Path | str = STATION_DEPTH_CLAS
 
 def get_climatology_config_for_file(
     ds: xr.Dataset,
-    limits_json_path: Path | str = STATION_CLIMATOLOGY_JSON,
-    classification_json_path: Path | str | None = None,
+    limits_json_path: Path | str,
+    classification_json_path: Path | str,
     metadata: MetadataConfig | None = None,
 ) -> Optional[Mapping[str, Iterable[Mapping[str, float]]]]:
     """
     Resolve climatology limits for the file based on station ID.
 
     Station membership (which stations are deep vs shallow) comes from
-    *classification_json_path* (default: ``STATION_DEPTH_CLASSIFICATION_JSON``).
-    Limit tables come from *limits_json_path* (default: ``STATION_CLIMATOLOGY_JSON``).
+    *classification_json_path*. Limit tables come from *limits_json_path*.
     """
     from qc_data_loader import get_station_id
 
@@ -256,12 +220,7 @@ def get_climatology_config_for_file(
         return None
 
     limits_root = load_station_climatology_config(limits_json_path)
-    class_path = (
-        Path(classification_json_path)
-        if classification_json_path is not None
-        else STATION_DEPTH_CLASSIFICATION_JSON
-    )
-    classification = load_station_depth_classification(class_path)
+    classification = load_station_depth_classification(classification_json_path)
 
     sid = normalize_reference_station(str(station_id))
 

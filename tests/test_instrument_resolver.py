@@ -7,12 +7,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from dataset_profile import resolve_config_path
 from instrument_resolver import (
     extract_instruments,
     load_sensor_specs,
     resolve_gross_ranges,
 )
-from qc_config import SENSOR_SPECS_JSON, VARIABLE_SENSOR_MAP_JSON
 
 
 def test_extract_instruments_empty():
@@ -35,8 +35,8 @@ def test_extract_instruments_reads_long_name():
 
 
 def test_resolve_gross_ranges_with_project_configs():
-    specs = SENSOR_SPECS_JSON
-    vmap = VARIABLE_SENSOR_MAP_JSON
+    specs = resolve_config_path("sensor_specs")
+    vmap = resolve_config_path("variable_sensor_map")
     if not specs.exists() or not vmap.exists():
         pytest.skip("config json missing")
 

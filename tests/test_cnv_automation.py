@@ -32,16 +32,19 @@ from test_cnv_converter import _cnv
     ('HG26193_Stn.057.1_068.cnv', ('HG26193', '57_1')),
     ('HG26193_Stn.21LK_088.cnv', ('HG26193', '21LK')),
     ('HG12_Stv.057-2_069.cnv', ('HG12', '57_2')),
-    ('HG26193_Stn.TB1_7.cnv', ('HG26193', 'TB1')),
+    ('HG12_Stv.057-2.cnv', ('HG12', '57')),
+    ('HG12_Stv.057-12_069.cnv', ('HG12', '57')),
+    ('HG26193_Stn.TB1_7.cnv', ('HG26193', 'TB1_7')),
     ('HG26193_Stn.TB1_1234.cnv', ('HG26193', 'TB1')),
     ('WB22215_Stn.TB1_003.cnv', ('WB22215', 'TB1')),
     ('WS24258_Stn.009.5.cnv', ('WS24258', '9_5')),
     ('WS24258_Stn.009.5_2.cnv', ('WS24258', '9_5')),
     ('WS24258_Stn.057.1_068.cnv', ('WS24258', '57_1')),
-    ('WS20278_Stn.9_5.cnv', ('WS20278', '9')),
+    ('WS20278_Stn.9_5.cnv', ('WS20278', '9_5')),
     ('WS24258_Stn.054b.cnv', ('WS24258', '54-2')),
     ('WS24258_Stn.021.cnv', ('WS24258', '21LK')),
-    ('WS24258_Stn.021-5.cnv', ('WS24258', '21_5')),
+    ('WS24258_Stn.021-5.cnv', ('WS24258', '21LK')),
+    ('WS24258_Stn.021_5.cnv', ('WS24258', '21_5')),
     ('WS24258_Stn.MRv2.cnv', ('WS24258', 'MR-2')),
     ('WS24258_Stn.021LK.cnv', ('WS24258', '21LK')),
     ('WS2425A_Stn.001.cnv', ('WS2425A', '1')),
@@ -152,13 +155,10 @@ def test_walton_measurements_remain_distinct_from_qc_categories():
     concentration = source_entry('wetStar')
     assert temperature['target'] == 'sea_water_temperature'
     assert temperature['qc_category'] == 'temperature'
-    assert seapoint['target'] == 'seapoint_fluorescence'
-    assert seapoint['qc_category'] is None
-    assert fluorescence['target'] == 'chlorophyll_fluorescence'
-    assert concentration['target'] == 'chlorophyll_concentration'
-    assert fluorescence['qc_category'] == concentration['qc_category'] == 'chlorophyll'
-    assert fluorescence['target'] in template_categories()['chlorophyll']
-    assert concentration['target'] in template_categories()['chlorophyll']
+    for entry in (seapoint, fluorescence, concentration):
+        assert entry['target'] == 'chlorophyll_fluorescence'
+        assert entry['qc_category'] == 'chlorophyll'
+    assert 'chlorophyll_fluorescence' in template_categories()['chlorophyll']
 
 
 def test_inspection_supports_header_inventory_without_coordinates(tmp_path):
@@ -391,7 +391,9 @@ def test_cli_prepare_profile_creates_configuration_without_conversion(tmp_path, 
     assert profile.paths.cnv_mapping.is_file()
     mapping = json.loads(profile.paths.cnv_mapping.read_text(encoding='utf-8'))
     assert mapping['science_variables']['t090C']['standard_name'] == 'sea_water_temperature'
-    assert mapping['science_variables']['t090C']['standard_name_url'] == ''
+    assert mapping['science_variables']['t090C']['standard_name_url'] == (
+        'http://mmisw.org/ont/ioos/parameter/water_temperature'
+    )
     assert mapping['coordinates']['time']['standard_name'] == 'time'
     assert mapping['coordinates']['longitude']['standard_name'] == 'longitude'
     assert not (tmp_path / 'output').exists()

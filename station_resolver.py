@@ -12,14 +12,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from qc_config import STATION_COORDS_CSV
 from station_names import normalize_reference_station as normalize_station_coord
 
 
 @lru_cache(maxsize=None)
-def load_station_coords(csv_path: Path | str = STATION_COORDS_CSV) -> Dict[str, Tuple[float, float]]:
+def load_station_coords(csv_path: Path | str) -> Dict[str, Tuple[float, float]]:
     """
-    Load station -> (lat, lon) from STATION_COORDS_CSV.
+    Load station -> (lat, lon) from the dataset's station coordinates CSV.
     """
     coords: Dict[str, Tuple[float, float]] = {}
     path = Path(csv_path)
@@ -42,7 +41,7 @@ def load_station_coords(csv_path: Path | str = STATION_COORDS_CSV) -> Dict[str, 
 
 def resolve_coords_by_station_id(
     station_id: str | None,
-    station_csv: Path | str = STATION_COORDS_CSV,
+    station_csv: Path | str,
 ) -> Optional[Tuple[float, float]]:
     """
     Resolve expected (lat, lon) for a station ID.

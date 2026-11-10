@@ -469,7 +469,9 @@ def _run_single_test_for_var(
         )
 
     if test_name == "flat_line_test":
-        flat_cfg = dict(flat_line_config or load_flat_line_config())
+        if not flat_line_config:
+            raise ValueError("flat_line_test requires the dataset flat_line_config")
+        flat_cfg = dict(flat_line_config)
         aligned_data, moved_axis = align_for_profile_tests(
             test_data_var,
             test_data_var.dims,

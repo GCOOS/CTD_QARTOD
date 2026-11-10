@@ -89,9 +89,13 @@ def test_conversion_maps_duplicate_sources_then_suffixes_destination(tmp_path: P
         assert dataset["sea_water_temperature"].attrs["units"] == "degree_Celsius"
         assert dataset["sea_water_temperature"].attrs["source_units"] == "deg C"
         assert dataset["sea_water_temperature"].attrs["standard_name"] == "sea_water_temperature"
-        assert "standard_name_url" not in dataset["sea_water_temperature"].attrs
+        assert dataset["sea_water_temperature"].attrs["standard_name_url"] == (
+            "http://mmisw.org/ont/ioos/parameter/water_temperature"
+        )
         assert dataset["time"].attrs["standard_name"] == "time"
-        assert "standard_name_url" not in dataset["time"].attrs
+        assert dataset["time"].attrs["standard_name_url"] == (
+            "https://mmisw.org/ont/ioos/parameter/time"
+        )
         assert dataset["latitude"].attrs["standard_name"] == "latitude"
         assert dataset["longitude"].attrs["standard_name"] == "longitude"
         assert dataset["sea_water_temperature_2"].attrs["source_occurrence"] == 2
@@ -170,7 +174,7 @@ def test_recursive_conversion_numbers_only_identical_station_ids(tmp_path: Path)
 
 @pytest.mark.parametrize("filename,cruise,station", [
     ("WS24258_Stn.009.5_2.cnv", "WS24258", "9_5"),
-    ("WS20278_Stn.9_5.cnv", "WS20278", "9"),
+    ("WS20278_Stn.9_5.cnv", "WS20278", "9_5"),
     ("WB22215_Stn.TB1_1234.cnv", "WB22215", "TB1"),
     ("HG12_Stv.057-2_069.cnv", "HG12", "57_2"),
 ])
@@ -186,6 +190,38 @@ def test_running_number_is_not_part_of_station_id_for_other_cruises(
     target = tmp_path / "output" / cruise / f"{cruise}_{station}.nc"
     with xr.open_dataset(target) as dataset:
         assert set(dataset["station"].values.ravel()) == {station}
+
+
+def test_casts_resolving_to_same_station_get_repeat_suffixes_by_start_time(tmp_path: Path):
+    root = tmp_path / "input"
+    # Filename order differs from time order; 021, 021-5 and 021_005 are all station 21LK.
+    _cnv(root / "WS24258_Stn.021.cnv", start_time="Sep 18 2024 14:00:00")
+    _cnv(root / "WS24258_Stn.021-5.cnv", start_time="Sep 18 2024 12:00:00")
+    _cnv(root / "WS24258_Stn.021_005.cnv", start_time="Sep 18 2024 16:00:00")
+    # A single-digit underscore suffix is a different station and must not be a repeat.
+    _cnv(root / "WS24258_Stn.021_5.cnv", start_time="Sep 18 2024 13:00:00")
+    mapping = _ready_mapping(root, tmp_path / "mapping.json")
+    output = tmp_path / "output"
+
+    report = convert_cnv(root, output, mapping)
+
+    assert report["counts"] == {"cnv_discovered": 4, "converted": 4, "failed": 0}
+    by_source = {
+        Path(record["source"]).name: record for record in report["records"]
+    }
+    assert by_source["WS24258_Stn.021-5.cnv"]["output_stem"] == "WS24258_21LK"
+    assert by_source["WS24258_Stn.021.cnv"]["output_stem"] == "WS24258_21LK-2"
+    assert by_source["WS24258_Stn.021_005.cnv"]["output_stem"] == "WS24258_21LK-3"
+    assert by_source["WS24258_Stn.021_5.cnv"]["output_stem"] == "WS24258_21_5"
+    assert sorted(path.name for path in (output / "WS24258").glob("*.nc")) == [
+        "WS24258_21LK-2.nc",
+        "WS24258_21LK-3.nc",
+        "WS24258_21LK.nc",
+        "WS24258_21_5.nc",
+    ]
+    for stem, station in (("WS24258_21LK-2", "21LK"), ("WS24258_21_5", "21_5")):
+        with xr.open_dataset(output / "WS24258" / f"{stem}.nc") as dataset:
+            assert set(dataset["station"].values.ravel()) == {station}
 
 
 def test_conversion_rejects_mapping_that_still_needs_review(tmp_path: Path):

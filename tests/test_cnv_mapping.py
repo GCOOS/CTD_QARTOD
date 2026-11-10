@@ -9,6 +9,8 @@ import pytest
 
 from cnv_mapping import inspect_cnv, load_cnv_mapping
 
+WATER_TEMPERATURE_URL = "http://mmisw.org/ont/ioos/parameter/water_temperature"
+
 
 def _cnv(
     path: Path,
@@ -103,10 +105,12 @@ def test_inspect_cnv_collects_recursive_source_inventory(tmp_path: Path):
         },
         "mapped_to": "sea_water_temperature",
         "standard_name": "sea_water_temperature",
-        "standard_name_url": "",
+        "standard_name_url": WATER_TEMPERATURE_URL,
     }
     assert mapping["coordinates"]["time"]["standard_name"] == "time"
-    assert mapping["coordinates"]["time"]["standard_name_url"] == ""
+    assert mapping["coordinates"]["time"]["standard_name_url"] == (
+        "https://mmisw.org/ont/ioos/parameter/time"
+    )
     assert json.loads(output.read_text(encoding="utf-8")) == mapping
 
 
@@ -122,6 +126,7 @@ def test_inspect_cnv_accepts_one_file(tmp_path: Path):
     assert loaded.science_variables["t090C"].attributes == {
         "long_name": "Sea Water Temperature",
         "standard_name": "sea_water_temperature",
+        "standard_name_url": WATER_TEMPERATURE_URL,
         "ioos_category": "Temperature",
         "ncei_name": "WATER TEMPERATURE",
     }
@@ -170,7 +175,7 @@ def test_mapping_ignores_processing_suffix_differences(tmp_path: Path):
         },
         "mapped_to": "sea_water_temperature",
         "standard_name": "sea_water_temperature",
-        "standard_name_url": "",
+        "standard_name_url": WATER_TEMPERATURE_URL,
     }
 
 

@@ -35,7 +35,7 @@ from cnv_mapping import (
 
 _CRUISE_RE = r"(?:(?:WS|WB|SV|SAV)\d{4,5}|HG\d{2,5})[A-Za-z]?"
 _FILENAME_RE = re.compile(
-    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._]*)(?:-[0-9]+)?\.cnv$",
+    rf"^(?P<cruise>{_CRUISE_RE})(?:[_. -]?(?:Stn|Sta|Stv)[._ ]*|[_-])(?P<station>[A-Za-z0-9][A-Za-z0-9._]*)(?:-(?P<dash>[0-9]+)(?:_(?P<running>[0-9]+))?)?\.cnv$",
     re.IGNORECASE,
 )
 _NUMERIC_STATION_RE = re.compile(r"^(?P<number>\d+)(?P<suffix>.*)$")
@@ -108,8 +108,17 @@ def filename_identity(path: Path | str) -> tuple[str, str]:
     cruise = match.group("cruise").upper()
     station = match.group("station")
     station_part, separator, running_number = station.rpartition("_")
-    if separator and re.fullmatch(r"\d+", running_number):
+    # A running order number is 2+ digits, or any digits after a dotted fraction
+    # (009.5_2); a single digit after a plain token (021_5) is part of the station.
+    if separator and re.fullmatch(r"\d+", running_number) and (
+        len(running_number) > 1 or "." in station_part
+    ):
         station = station_part
+    # A dash marks a duplicate cast and is dropped, except a single digit after
+    # the dash followed by a running number (057-2_069) is part of the station.
+    dash_number, running = match.group("dash"), match.group("running")
+    if dash_number and len(dash_number) == 1 and running:
+        station = f"{station}_{dash_number}"
     station = _station_id(station)
     station = STATION_ALIASES.get(station.lower(), station)
     station = station.replace(".", "_")

@@ -10,8 +10,6 @@ from typing import Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
 import xarray as xr
 
-from qc_config import SENSOR_SPECS_JSON, VARIABLE_SENSOR_MAP_JSON
-
 
 InstrumentInfo = Dict[str, str]
 GrossRangeConfig = Dict[str, Dict[str, Tuple[float, float]]]
@@ -23,7 +21,7 @@ def _load_json(path: Path) -> dict:
         return json.load(f)
 
 
-def load_sensor_specs(specs_path: Path | str = SENSOR_SPECS_JSON) -> Mapping[str, dict]:
+def load_sensor_specs(specs_path: Path | str) -> Mapping[str, dict]:
     """
     Load sensor specifications (identifiers + unit-aware ranges).
     """
@@ -31,7 +29,7 @@ def load_sensor_specs(specs_path: Path | str = SENSOR_SPECS_JSON) -> Mapping[str
     return data.get("sensors", {})
 
 
-def load_variable_sensor_map(map_path: Path | str = VARIABLE_SENSOR_MAP_JSON) -> VariableSensorMap:
+def load_variable_sensor_map(map_path: Path | str) -> VariableSensorMap:
     """
     Load variable -> sensor mapping.
     """
@@ -113,8 +111,8 @@ def _find_unit_range(
 
 def resolve_gross_ranges(
     ds: xr.Dataset,
-    specs_path: Path | str = SENSOR_SPECS_JSON,
-    variable_map_path: Path | str = VARIABLE_SENSOR_MAP_JSON,
+    specs_path: Path | str,
+    variable_map_path: Path | str,
 ) -> Dict[str, Dict[str, Tuple[float, float]]]:
     """
     Extract instruments and build unit-aware gross range config.

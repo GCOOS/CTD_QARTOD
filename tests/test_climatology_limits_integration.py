@@ -10,10 +10,9 @@ import pytest
 import xarray as xr
 from ioos_qc.qartod import ClimatologyConfig
 
-from dataset_profile import DatasetProfile, OutputConfig, default_profile
+from dataset_profile import DatasetProfile, OutputConfig, default_profile, resolve_config_path
 from qc_config import (
     QC_FLAGS,
-    STATION_CLIMATOLOGY_JSON,
     get_climatology_config_for_file,
     load_station_climatology_config,
 )
@@ -21,7 +20,8 @@ from qc_runner import _get_depth_for_var, _get_time_for_var, run_qc_for_file
 from qc_tests.climatology_test import climatology_test
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CLIM_JSON = STATION_CLIMATOLOGY_JSON
+CLIM_JSON = resolve_config_path("station_climatology")
+CLASS_JSON = resolve_config_path("station_depth_classification")
 
 SAMPLES = {
     "shallow_station_1": REPO_ROOT / "datasets/SFER_QC/WS0603/WS0603_1.nc",
@@ -82,6 +82,7 @@ def test_get_climatology_config_for_sample_files(profile, sample_name, nc_path):
         clim = get_climatology_config_for_file(
             ds,
             limits_json_path=CLIM_JSON,
+            classification_json_path=CLASS_JSON,
             metadata=profile.metadata,
         )
         assert clim is not None, f"No climatology config resolved for {sample_name}"
@@ -98,7 +99,12 @@ def test_climatology_test_runs_on_sample_files(profile, sample_name, nc_path):
         pytest.skip(f"Sample file not found: {nc_path}")
     ds = xr.open_dataset(nc_path)
     try:
-        clim = get_climatology_config_for_file(ds, limits_json_path=CLIM_JSON, metadata=profile.metadata)
+        clim = get_climatology_config_for_file(
+            ds,
+            limits_json_path=CLIM_JSON,
+            classification_json_path=CLASS_JSON,
+            metadata=profile.metadata,
+        )
         assert clim is not None
         for var in CLIMATOLOGY_VARS:
             if var not in ds:

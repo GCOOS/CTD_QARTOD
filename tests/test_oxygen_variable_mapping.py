@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qc_config import ALL_CATEGORIES, TEST_CATEGORIES, VARIABLE_MAPPING_JSON
+from dataset_profile import resolve_config_path
+from qc_config import ALL_CATEGORIES, TEST_CATEGORIES
 from qc_data_loader import get_variable_category, load_mapping
 from qc_runner import _should_run_test
 
@@ -12,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_oxygen_variables_use_split_categories():
-    mapping = load_mapping(VARIABLE_MAPPING_JSON)
+    mapping = load_mapping(resolve_config_path("variable_mapping"))
     assert get_variable_category("dissolved_oxygen", mapping) == "oxygen_dissolved_oxygen"
     assert get_variable_category("oxygen_saturation", mapping) == "oxygen_saturation"
     assert get_variable_category("oxygen_saturation_2", mapping) == "oxygen_saturation"

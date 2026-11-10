@@ -341,8 +341,8 @@
       "units": [
         "mg m-3"
       ],
-      "standard_name": "",
-      "standard_name_url": "",
+      "standard_name": "cdom",
+      "standard_name_url": "http://mmisw.org/ont/ioos/parameter/cdom",
       "ioos_category": "Optical Properties",
       "sensor_tag": "FluoroWetlabCDOM_Sensor",
       "aliases": [
@@ -360,8 +360,8 @@
       "units": [
         "NTU"
       ],
-      "standard_name": "",
-      "standard_name_url": "",
+      "standard_name": "sea_water_turbidity",
+      "standard_name_url": "http://mmisw.org/ont/cf/parameter/sea_water_turbidity",
       "ioos_category": "Optical Properties",
       "sensor_tag": "TurbidityMeter",
       "aliases": [

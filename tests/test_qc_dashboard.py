@@ -139,13 +139,14 @@ def test_flag_summary_counts_known_flags() -> None:
 
 
 def test_adjacent_file_moves_within_current_cruise() -> None:
-    files = [Path("A/one.nc"), Path("A/two.nc"), Path("A/three.nc")]
+    one, two, three = (Path("A") / name for name in ("one.nc", "two.nc", "three.nc"))
+    files = [one, two, three]
 
-    assert adjacent_file(files, "A/two.nc", -1) == "A/one.nc"
-    assert adjacent_file(files, "A/two.nc", 1) == "A/three.nc"
-    assert adjacent_file(files, "A/one.nc", -1) == "A/one.nc"
-    assert adjacent_file(files, "A/three.nc", 1) == "A/three.nc"
-    assert adjacent_file(files, None, 1) == "A/one.nc"
+    assert adjacent_file(files, str(two), -1) == str(one)
+    assert adjacent_file(files, str(two), 1) == str(three)
+    assert adjacent_file(files, str(one), -1) == str(one)
+    assert adjacent_file(files, str(three), 1) == str(three)
+    assert adjacent_file(files, None, 1) == str(one)
 
 
 def test_climatology_limits_match_depth_and_month() -> None:

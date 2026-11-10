@@ -384,8 +384,10 @@ was performed.
 
 Completing the run does not mean every test was evaluated or passed. PAR has no
 declared unit, so its gross-range test remains `NOT_EVALUATED` in all 31 casts.
-The filename converter maps `21` to `21LK`, `21-5` to `21_5`,
-`57-1` through `57-3` to `57_1` through `57_3`, and `MRv2` to `MR-2`.
+The filename converter maps `21` to `21LK` and `MRv2` to `MR-2`. A dash and
+number after the station (`021-5`) marks a duplicate cast of that station and
+is not part of the station name, except a single digit followed by a running
+number (`057-2_069`), which is station `57_2`.
 During both location and climatology QC, stored `9_5` uses the `9.5` reference
 and stored `57_2` uses `57.2`. The `MR-2` reference is the
 mean of five historical casts explicitly named `MR-2` under

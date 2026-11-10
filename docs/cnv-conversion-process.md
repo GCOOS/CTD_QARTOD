@@ -9,11 +9,18 @@ This guide describes the schema-5 workflow. For commands and full examples, see
 `python main.py convert-cnv /path/to/cnv` accepts a single CNV, a cruise folder,
 or a tree containing multiple cruises. The actual filename supplies cruise and
 station, not the embedded `FileName`. Numeric leading zeros are removed and
-source station aliases are applied: `054b` becomes `54-2`, and `057-2` becomes
-`57_2`. The aliases belong to filename conversion, not QC.
-A final underscore plus a running number of any length is discarded for any
-cruise; `HG26193_Stn.TB1_003.cnv` is station `TB1`, and
-`WS20278_Stn.9_5.cnv` is station `9`. Dots within station numbers become
+source station aliases are applied: `054b` becomes `54-2`, and `021` becomes
+`21LK`. A dash and number after the station marks a duplicate cast of that
+station and is dropped: `021-5` is station `21LK`. The exception is a single
+digit after the dash followed by a running number: `057-2_069` is station
+`57_2`, with the dash written as an underscore. Duplicates are named by cast
+start time (`_21LK`, `_21LK-2`, ...). The aliases
+belong to filename conversion, not QC.
+A final underscore plus a running number of two or more digits is discarded for
+any cruise; `HG26193_Stn.TB1_003.cnv` is station `TB1`. A single digit after
+an underscore is part of the station (`WS20278_Stn.9_5.cnv` is station `9_5`),
+unless the station already has a dotted fraction (`WS24258_Stn.009.5_2.cnv` is
+station `9_5`). Dots within station numbers become
 underscores, so `HG26193_Stn.009.5_080.cnv` is station `9_5`.
 Supported vessel prefixes include WS, WB, SV/SAV and HG; `HG12_Stv.057-2_069.cnv`
 is also accepted and becomes station `57_2`. Unresolved identities

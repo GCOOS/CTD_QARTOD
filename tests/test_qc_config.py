@@ -7,10 +7,6 @@ import pytest
 import xarray as xr
 
 from qc_config import (
-    FLAT_LINE_CONFIG_JSON,
-    LOCATION_CONFIG_JSON,
-    RATE_OF_CHANGE_THRESHOLDS_JSON,
-    SPIKE_THRESHOLDS_JSON,
     TEST_CATEGORIES,
     get_climatology_config_for_file,
     load_flat_line_config,
@@ -18,35 +14,6 @@ from qc_config import (
     load_rate_of_change_thresholds,
     load_spike_thresholds,
 )
-
-
-def test_load_spike_thresholds_flat_file():
-    if not SPIKE_THRESHOLDS_JSON.exists():
-        pytest.skip("spike_thresholds.json missing")
-    d = load_spike_thresholds(SPIKE_THRESHOLDS_JSON)
-    assert "sea_water_temperature" in d
-    assert "suspect_threshold" in d["sea_water_temperature"]
-
-
-def test_load_rate_of_change_thresholds_flat_file():
-    if not RATE_OF_CHANGE_THRESHOLDS_JSON.exists():
-        pytest.skip("rate_of_change_thresholds.json missing")
-    d = load_rate_of_change_thresholds(RATE_OF_CHANGE_THRESHOLDS_JSON)
-    assert "sea_water_temperature" in d
-    assert "threshold" in d["sea_water_temperature"]
-
-
-def test_load_flat_line_config_file():
-    if not FLAT_LINE_CONFIG_JSON.exists():
-        pytest.skip("flat_line_config.json missing")
-    d = load_flat_line_config(FLAT_LINE_CONFIG_JSON)
-    assert d == {"rep_cnt_suspect": 3, "rep_cnt_fail": 5, "eps": 0.0}
-
-
-def test_load_location_config_file():
-    if not LOCATION_CONFIG_JSON.exists():
-        pytest.skip("location_config.json missing")
-    assert load_location_config(LOCATION_CONFIG_JSON) == {"tolerance": 0.035}
 
 
 def test_load_spike_thresholds_rejects_legacy_variables_wrapper(tmp_path: Path):
@@ -101,13 +68,6 @@ def test_load_flat_line_config_rejects_invalid_repeat_order(tmp_path: Path):
     p.write_text(json.dumps({"rep_cnt_suspect": 6, "rep_cnt_fail": 3, "eps": 0.0}), encoding="utf-8")
     with pytest.raises(ValueError, match="rep_cnt_fail"):
         load_flat_line_config(p)
-
-
-def test_default_config_paths_exist():
-    assert SPIKE_THRESHOLDS_JSON.exists()
-    assert RATE_OF_CHANGE_THRESHOLDS_JSON.exists()
-    assert FLAT_LINE_CONFIG_JSON.exists()
-    assert LOCATION_CONFIG_JSON.exists()
 
 
 def test_test_categories_keys_match_pipeline():

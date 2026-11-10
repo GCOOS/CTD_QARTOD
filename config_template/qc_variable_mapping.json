@@ -16,7 +16,8 @@
     "photosynthetically_available_radiation"
   ],
   "chlorophyll": [
-    "chlorophyll_fluorescence"
+    "chlorophyll_fluorescence",
+    "chlorophyll_fluorescence_2"
   ],
   "CDOM": [
     "CDOM"
