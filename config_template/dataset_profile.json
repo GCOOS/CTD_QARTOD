@@ -39,6 +39,7 @@
     "publisher_country": "USA",
     "infoUrl": "https://www.aoml.noaa.gov/phod/sfp/index.php",
     "references": "https://ocean.floridamarine.org/FKNMS_WQPP/",
+    "qartod_references": "https://ioos.noaa.gov/project/qartod/, https://github.com/ioos/ioos-qartod",
     "contributor_role_vocabulary": "https://vocab.nerc.ac.uk/collection/G04/current/",
     "institution": "NOAA's Atlantic Oceanographic and Meteorological Laboratory/Ocean Chemistry and Ecosystems Division ",
     "platform_vocabulary": "https://mmisw.org/ont/ioos/platform",
