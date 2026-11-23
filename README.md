@@ -79,6 +79,41 @@ input can be a dataset root or a cruise folder containing NetCDF files directly.
 
 ## 4. Run QC
 
+### Inspect the test limits first
+
+The first conversion copies QC limits from `config_template/` into the
+dataset's own folder, `config/WS24258/`. Review them before running QC:
+
+| Folder in `config/WS24258/` | Contents |
+| --- | --- |
+| `gross_range_test/` | Valid min/max per variable (`sensor_specs.json`) |
+| `spike_test/` | Spike thresholds (`spike_thresholds.json`) |
+| `rate_of_change_test/` | Rate-of-change thresholds (`rate_of_change_thresholds.json`) |
+| `flat_line_test/` | Flat-line settings (`flat_line_config.json`) |
+| `climatology_test/` | Station climatology and depth classes |
+| `location_test/` | Station coordinates and location settings |
+
+`config/WS24258/limit_report.json` lists variables that got no gross-range
+limit because the template has none for their units.
+Edits made here are kept: later conversions never overwrite existing QC
+settings.
+
+**The rate-of-change test depends on the sample rate.** Its threshold is the
+largest allowed change between two adjacent samples, not a change per second.
+The values in `config_template/` are for **24 Hz** data. For data sampled more
+slowly, there is more time between samples, so scale the thresholds up
+linearly:
+
+```text
+threshold_new = threshold_24Hz × 24 / sample_rate_Hz
+```
+
+For example, 4 Hz data needs thresholds 6 times larger: temperature `0.4` →
+`2.4`, salinity `0.053` → `0.318`. For bin-averaged data, use the
+bin rate (for example, 1-m bins at a descent rate of 1 m/s is 1 Hz).
+
+### Run QC
+
 Choose one input. Both commands use the same profile and QC settings.
 
 **Original converted data:**

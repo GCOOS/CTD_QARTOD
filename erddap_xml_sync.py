@@ -114,7 +114,7 @@ def erddap_data_type(dtype: np.dtype) -> str:
 
 def safe_dataset_id(stem: str) -> str:
     """Convert file stem to a datasetID-safe token."""
-    return re.sub(r"[^A-Za-z0-9_]+", "_", stem)
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", stem)
 
 
 def prefixed_dataset_id(stem_or_id: str, dataset_id_prefix: str = "") -> str:

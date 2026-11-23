@@ -102,8 +102,8 @@ def _data_type(dtype: np.dtype) -> str:
 
 
 def _dataset_id(stem: str, prefix: str) -> str:
-    dataset_id = prefix + re.sub(r"[^A-Za-z0-9_]+", "_", stem)
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", dataset_id):
+    dataset_id = prefix + re.sub(r"[^A-Za-z0-9_-]+", "_", stem)
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", dataset_id):
         raise ValueError(f"Invalid ERDDAP datasetID generated from {stem!r}: {dataset_id!r}")
     return dataset_id
 
@@ -349,7 +349,7 @@ def generate_erddap_xml(
         if id_counts[base_id] > 1:
             relative_path = path.relative_to(data_root).as_posix()
             suffix = hashlib.sha256(relative_path.encode("utf-8")).hexdigest()[:8]
-            dataset_id = f"{base_id}_{suffix}"
+            dataset_id = f"{base_id}-{suffix}"
         dataset = _dataset_element(data_root, path, dataset_id, config, metadata)
         dataset_id = str(dataset.get("datasetID"))
         if dataset_id in dataset_ids:

@@ -75,7 +75,7 @@ def test_generate_erddap_xml_builds_standalone_dataset_from_netcdf(tmp_path):
     generated = root.find("dataset")
     assert generated is not None
     assert generated.get("type") == "EDDTableFromNcCFFiles"
-    assert generated.get("datasetID") == "ctd_cast_01"
+    assert generated.get("datasetID") == "ctd_cast-01"
     assert generated.findtext("fileDir") == "/data/erddap/qc/CRUISE_A/"
     assert generated.findtext("fileNameRegex") == r"cast\-01\.nc"
 
@@ -131,7 +131,7 @@ def test_generate_erddap_xml_disambiguates_sanitized_dataset_ids(tmp_path):
     data_root = tmp_path / "qc"
     cruise_dir = data_root / "CRUISE_A"
     cruise_dir.mkdir(parents=True)
-    for filename in ("cast-01.nc", "cast_01.nc"):
+    for filename in ("cast 01.nc", "cast_01.nc"):
         xr.Dataset({"time": ("z", np.array([0.0]))}).to_netcdf(cruise_dir / filename)
     config = ErddapConfig(
         output_xml=tmp_path / "datasets.xml",
