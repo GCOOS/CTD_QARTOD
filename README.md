@@ -1,6 +1,7 @@
 # CTD_QARTOD
 
 Pipeline contains:
+
 1. Convert CNV files
 2. Review/Remove surface soak
 3. run QC
@@ -28,7 +29,7 @@ In later terminal sessions, activate the existing environment with
 To review metadata and variable mapping before conversion, first run:
 
 ```bash
-python main.py convert-cnv cnv_data/WS24258 --prepare-profile
+python main.py convert-cnv cnv_data/WS24258 --prepare-profile--prepare-profile
 ```
 
 This creates missing `config/WS24258/dataset_profile.json` and `cnv_mapping.json`,
@@ -94,9 +95,8 @@ dataset's own folder, `config/WS24258/`. Review them before running QC:
 | `location_test/` | Station coordinates and location settings |
 
 `config/WS24258/limit_report.json` lists variables that got no gross-range
-limit because the template has none for their units.
-Edits made here are kept: later conversions never overwrite existing QC
-settings.
+limit because the template has none for their units. Edits made here are kept:
+later conversions never overwrite existing QC settings.
 
 **The rate-of-change test depends on the sample rate.** Its threshold is the
 largest allowed change between two adjacent samples, not a change per second.
@@ -109,8 +109,8 @@ threshold_new = threshold_24Hz × 24 / sample_rate_Hz
 ```
 
 For example, 4 Hz data needs thresholds 6 times larger: temperature `0.4` →
-`2.4`, salinity `0.053` → `0.318`. For bin-averaged data, use the
-bin rate (for example, 1-m bins at a descent rate of 1 m/s is 1 Hz).
+`2.4`, salinity `0.053` → `0.318`. For bin-averaged data, use the bin rate
+(for example, 1-m bins at a descent rate of 1 m/s is 1 Hz).
 
 ### Run QC
 
