@@ -344,7 +344,8 @@ def generate_erddap_xml(
     base_ids = [_dataset_id(path.stem, config.dataset_id_prefix) for path in paths]
     id_counts = Counter(base_ids)
     dataset_ids: set[str] = set()
-    for path, base_id in zip(paths, base_ids, strict=True):
+    for number, (path, base_id) in enumerate(zip(paths, base_ids, strict=True), start=1):
+        logger.debug("Reading %d/%d: %s", number, len(paths), path)
         dataset_id = base_id
         if id_counts[base_id] > 1:
             relative_path = path.relative_to(data_root).as_posix()
