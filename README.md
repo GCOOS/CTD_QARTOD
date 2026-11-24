@@ -29,7 +29,7 @@ In later terminal sessions, activate the existing environment with
 To review metadata and variable mapping before conversion, first run:
 
 ```bash
-python main.py convert-cnv cnv_data/WS24258 --prepare-profile--prepare-profile
+python main.py convert-cnv cnv_data/WS24258 --prepare-profile
 ```
 
 This creates missing `config/WS24258/dataset_profile.json` and `cnv_mapping.json`,
