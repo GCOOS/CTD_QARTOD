@@ -121,7 +121,7 @@ def filename_identity(path: Path | str) -> tuple[str, str]:
         station = f"{station}_{dash_number}"
     station = _station_id(station)
     station = STATION_ALIASES.get(station.lower(), station)
-    station = station.replace(".", "_")
+    station = station.replace(".", "_").upper()
     if re.search(r"(?i)(deck|dunk|wettest|test|tst|recast|surface|do_up)", station):
         raise _format_error(source, "test/recast filename needs explicit identity review")
     if not re.fullmatch(r"(?:\d+(?:[._-]\d+)?[A-Za-z]*|[A-Za-z]+\d*(?:[._]\d+)?[A-Za-z]?|[A-Za-z]+-\d+)", station):

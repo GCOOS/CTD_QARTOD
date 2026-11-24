@@ -19,6 +19,7 @@ from cnv_catalog import (
     catalog_cf_attributes,
     catalog_coordinate_placeholders,
     cf_placeholders,
+    is_ignored_source,
     match_entry,
     source_entry,
 )
@@ -384,7 +385,6 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
         item = observed[source_name]
         descriptions = sorted(item["descriptions"])
         units = sorted(item["units"])
-        entry = match_entry(source_name, descriptions, units)
         record = {
             "observed": {
                 "file_count": len(item["files"]),
@@ -393,8 +393,12 @@ def inspect_cnv(input_path: Path | str, output_path: Path | str) -> dict[str, ob
                 "missing_units": item["missing_units"],
                 "descriptions": descriptions,
             },
-            "mapped_to": entry["target"] if entry else None,
         }
+        if is_ignored_source(source_name):
+            science_variables[source_name] = {**record, "mapped_to": None, "ignore": True}
+            continue
+        entry = match_entry(source_name, descriptions, units)
+        record["mapped_to"] = entry["target"] if entry else None
         if entry is not None:
             record.update(cf_placeholders(entry))
         science_variables[source_name] = record

@@ -48,6 +48,8 @@ from test_cnv_converter import _cnv
     ('WS24258_Stn.MRv2.cnv', ('WS24258', 'MR-2')),
     ('WS24258_Stn.021LK.cnv', ('WS24258', '21LK')),
     ('WS2425A_Stn.001.cnv', ('WS2425A', '1')),
+    ('ws24258_stn.cw1.cnv', ('WS24258', 'CW1')),
+    ('ws24258_stn.021lk.cnv', ('WS24258', '21LK')),
 ])
 def test_identity_patterns_preserve_station_suffix(filename, identity):
     assert filename_identity(filename) == identity

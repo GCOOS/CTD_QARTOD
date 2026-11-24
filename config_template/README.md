@@ -50,7 +50,9 @@ gets its own `qc_variable_mapping.json`, per-test settings, and generated
 For schema-5 CNV mappings, an entry contains `observed` and `mapped_to` (a catalog
 key), not duplicated attributes or sensor tags. Unknown/conflicting sources use
 `mapped_to: null` and require a catalog correction or an explicit selection.
-Intentional exclusion uses `ignore: true` and `mapped_to: null`. Source values
+Intentional exclusion uses `ignore: true` and `mapped_to: null`. Sources listed in
+the catalog's `ignored_sources` (e.g. raw sensor voltages) are written that way
+automatically when a mapping is inspected. Source values
 are never rescaled, missing units are never guessed, and duplicate destinations
 receive `_2`, `_3`, etc. after mapping.
 

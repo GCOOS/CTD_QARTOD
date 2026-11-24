@@ -91,6 +91,18 @@ def source_entry(source: str) -> dict | None:
                  if source in entry["sources"]), None)
 
 
+def is_ignored_source(source: str) -> bool:
+    """Return whether the shared catalog excludes this CNV source by default."""
+    ignored = catalog()["ignored_sources"]
+    if not isinstance(ignored, list) or not all(isinstance(name, str) and name for name in ignored):
+        raise ValueError("cnv_catalog.json ignored_sources must be a list of source names")
+    if source not in ignored:
+        return False
+    if source_entry(source) is not None:
+        raise ValueError(f"cnv_catalog.json: {source} is both an ignored source and a variable source")
+    return True
+
+
 def source_description_pattern(definition: Mapping[str, object], source: str, *, target: str | None = None) -> str:
     """Return the description pattern aligned with one catalog source."""
     label = target or str(definition.get("target") or source)

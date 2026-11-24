@@ -17,12 +17,15 @@ def _cnv(
     *,
     duplicate_temperature: bool = False,
     include_conductivity: bool = False,
+    include_oxygen_voltage: bool = False,
     temperature_description: str = "Temperature [ITS-90, deg C]",
 ) -> Path:
     science = [
         ("depSM", "Depth [salt water, m]"),
         ("t090C", temperature_description),
     ]
+    if include_oxygen_voltage:
+        science.append(("sbeox0V", "Oxygen raw, SBE 43 [V]"))
     if duplicate_temperature:
         science.append(("t090C", temperature_description))
     if include_conductivity:
@@ -131,6 +134,30 @@ def test_inspect_cnv_accepts_one_file(tmp_path: Path):
         "ncei_name": "WATER TEMPERATURE",
     }
     assert loaded.science_variables["t090C"].sensor_tag == "TemperatureSensor"
+
+
+def test_inspection_ignores_catalog_ignored_sources(tmp_path: Path):
+    source = _cnv(tmp_path / "WS24258_Stn.054b.cnv", include_oxygen_voltage=True)
+    path = tmp_path / "mapping.json"
+
+    data = inspect_cnv(source, path)
+    loaded = load_cnv_mapping(path)
+
+    assert data["science_variables"]["sbeox0V"]["mapped_to"] is None
+    assert data["science_variables"]["sbeox0V"]["ignore"] is True
+    assert "sbeox0V" not in {
+        issue["source_name"] for issue in data["inspection"]["conversion_issues"]
+    }
+    assert loaded.science_variables["sbeox0V"].action == "ignore"
+
+
+def test_catalog_rejects_source_both_ignored_and_mapped(monkeypatch):
+    import cnv_catalog
+
+    monkeypatch.setitem(cnv_catalog.catalog(), "ignored_sources", ["t090C"])
+
+    with pytest.raises(ValueError, match="both an ignored source and a variable source"):
+        cnv_catalog.is_ignored_source("t090C")
 
 
 def test_mapping_requires_review_for_conflicting_descriptions(tmp_path: Path):

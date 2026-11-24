@@ -37,6 +37,9 @@
     "seconds": "s",
     "s": "s"
   },
+  "ignored_sources": [
+    "sbeox0V"
+  ],
   "coordinates": {
     "time": {
       "standard_name": "time",
