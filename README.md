@@ -153,6 +153,17 @@ python main.py erddap-xml --profile config/WS24258/dataset_profile.json
 The generated profile saves the XML to `output/erddap/ws24258_datasets.xml`.
 Deploying the NetCDF files and XML to an ERDDAP server is a separate step.
 
+The command reads every `.nc` file below the profile's `output.directory` (when
+`output.mode` is `duplicate`) or `data_root`, and prints nothing until the XML is
+written. Add `-v` to log each file as it is read:
+
+```bash
+python main.py erddap-xml --profile config/WS24258/dataset_profile.json -v
+```
+
+If the log stops at one file, that file is usually held open by another program
+(for example the QC dashboard or a NetCDF viewer); close it and rerun.
+
 ## Help
 
 ```bash
